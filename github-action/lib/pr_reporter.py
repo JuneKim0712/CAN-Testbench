@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CalSol Sticky PR Reporter Bot
-Aggregates Static Analysis results, HIL Unity test outcomes, Memory Footprints,
+Aggregates Static Analysis results, HIL Unity test outcomes,
 and Crash Backtraces into a single unified sticky comment on GitHub Pull Requests.
 """
 
@@ -41,23 +41,16 @@ def github_api_request(url, token, data=None, method="GET"):
         return None
 
 def find_reports(artifacts_dir):
-    size_reports = []
     test_reports = []
     crash_reports = []
 
     if not artifacts_dir or not os.path.exists(artifacts_dir):
-        return size_reports, test_reports, crash_reports
+        return test_reports, crash_reports
 
     for root, _, files in os.walk(artifacts_dir):
         for f in files:
             path = os.path.join(root, f)
-            if f.endswith("_size_summary.json") or f == "size_summary.json":
-                try:
-                    with open(path, "r", encoding="utf-8") as jf:
-                        size_reports.append(json.load(jf))
-                except Exception:
-                    pass
-            elif f.endswith("_test_results.json") or f == "test_results.json":
+            if f.endswith("_test_results.json") or f == "test_results.json":
                 try:
                     with open(path, "r", encoding="utf-8") as jf:
                         test_reports.append(json.load(jf))
@@ -70,9 +63,9 @@ def find_reports(artifacts_dir):
                 except Exception:
                     pass
 
-    return size_reports, test_reports, crash_reports
+    return test_reports, crash_reports
 
-def build_pr_comment(repo, run_id, commit_sha, jobs, size_reports, test_reports, crash_reports):
+def build_pr_comment(repo, run_id, commit_sha, jobs, test_reports, crash_reports):
     short_sha = commit_sha[:7] if commit_sha else "unknown"
     run_url = f"https://github.com/{repo}/actions/runs/{run_id}"
 
@@ -102,30 +95,13 @@ def build_pr_comment(repo, run_id, commit_sha, jobs, size_reports, test_reports,
             name = j.get("name", "").replace("Test ", "")
             conclusion = j.get("conclusion", "in_progress")
             badge = "🟢 Passed" if conclusion == "success" else ("🔴 Failed" if conclusion == "failure" else f"⚪ {conclusion}")
-            duration = "N/A"
-            if j.get("started_at") and j.get("completed_at"):
-                # Rough duration calculation if present
-                duration = "Completed"
+            duration = "Completed" if j.get("completed_at") else "Running"
             md.append(f"| `{name}` | `Physical HW` | {badge} | {duration} |")
         md.append("")
     else:
         md.append("*No hardware tests executed (e.g. documentation-only changes).*\n")
 
-    # 3. Memory Footprint Table
-    if size_reports:
-        md.append("### 📊 Memory & Footprint Utilization\n")
-        md.append("| Subsystem | DRAM (Data / BSS RAM) | IRAM | Flash (Code + Data) | Status |")
-        md.append("| :--- | :---: | :---: | :---: | :---: |")
-        for s in size_reports:
-            sub = s.get("subsystem", "unknown")
-            dram = f"{s.get('dram_used', 0) / 1024:.1f} KB / {s.get('dram_total', 0) / 1024:.1f} KB ({s.get('dram_pct', 0)}%)"
-            iram = f"{s.get('iram_used', 0) / 1024:.1f} KB / {s.get('iram_total', 0) / 1024:.1f} KB ({s.get('iram_pct', 0)}%)"
-            flash = f"{s.get('flash_used', 0) / 1024:.1f} KB ({s.get('flash_pct', 0)}%)"
-            stat = "🟢 Safe" if s.get("overall_status") == "OK" else ("🟡 Warning" if s.get("overall_status") == "WARNING" else "🔴 Critical")
-            md.append(f"| `{sub}` | `{dram}` | `{iram}` | `{flash}` | {stat} |")
-        md.append("")
-
-    # 4. Crash Reports if any
+    # 3. Crash Reports if any
     for cr in crash_reports:
         if cr.get("has_crashed"):
             md.append("### 💥 Decoded Crash Backtrace Detected\n")
@@ -188,10 +164,10 @@ def main():
     jobs = jobs_data.get("jobs", []) if jobs_data else []
 
     # Parse reports
-    size_reports, test_reports, crash_reports = find_reports(args.artifacts_dir)
-    print(f"[*] Found {len(size_reports)} size reports, {len(test_reports)} test reports, {len(crash_reports)} crash reports.")
+    test_reports, crash_reports = find_reports(args.artifacts_dir)
+    print(f"[*] Found {len(test_reports)} test reports, {len(crash_reports)} crash reports.")
 
-    comment_body = build_pr_comment(repo, run_id, commit_sha, jobs, size_reports, test_reports, crash_reports)
+    comment_body = build_pr_comment(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
     post_or_update_pr_comment(repo, pr_number, token, comment_body)
 
 if __name__ == "__main__":
