@@ -11,7 +11,7 @@ static const char *TAG = "PEDALS_TEST";
 static uint8_t calculate_throttle_percent(int raw_adc)
 {
     // Deadzone below 500
-    if (raw_adc <= 500) return 0;
+    if (raw_adc <= 500) return 1;
     // Saturation above 3500
     if (raw_adc >= 3500) return 100;
 
