@@ -9,9 +9,22 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-# 1. Target directory or binary
-TARGET="${1:-${REPO_ROOT}/examples/unit_test_app}"
+# 1. Resolve target directory or binary
+INPUT_TARGET="${1:-lights_fw/test}"
 PORT="${2}"
+
+if [ -d "${REPO_ROOT}/${INPUT_TARGET}" ]; then
+    TARGET="${REPO_ROOT}/${INPUT_TARGET}"
+elif [ -d "$INPUT_TARGET" ]; then
+    TARGET="$(cd "$INPUT_TARGET" && pwd)"
+elif [ -f "${REPO_ROOT}/${INPUT_TARGET}" ]; then
+    TARGET="${REPO_ROOT}/${INPUT_TARGET}"
+elif [ -f "$INPUT_TARGET" ]; then
+    TARGET="$INPUT_TARGET"
+else
+    echo "[-] Error: Target path not found: ${INPUT_TARGET}"
+    exit 1
+fi
 
 # 2. Source ESP-IDF if idf.py is not in PATH
 if ! command -v idf.py >/dev/null 2>&1; then
@@ -92,9 +105,6 @@ elif [ -f "$TARGET" ]; then
         tail -n 30 "$LOG_DIR/flash.log"
         exit 1
     fi
-else
-    echo "[-] Error: Target path not found: $TARGET"
-    exit 1
 fi
 
 # 6. Parse Unity test results over serial

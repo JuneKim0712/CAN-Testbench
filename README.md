@@ -1,6 +1,8 @@
-# CalSol CAN Testbench
+# CalSol CAN Testbench & CI Monorepo
 
-Automated continuous integration, remote hardware testbench flashing, Slack bot management, and Unity unit testing for the UC Berkeley Solar Vehicle Team (**CalSol**).
+Continuous integration, remote hardware testbench flashing, Slack bot management, and on-target Unity unit testing for the UC Berkeley Solar Vehicle Team (**CalSol**).
+
+Designed as the testing ground and prototype for [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW).
 
 ---
 
@@ -8,53 +10,63 @@ Automated continuous integration, remote hardware testbench flashing, Slack bot 
 
 ```text
 CAN_TestBench/
-├── .github/workflows/          # GitHub Actions CI/CD workflows for Raspberry Pi
-├── Slack_Bot/                  # Bench Pi Slack Bot Daemon (@bot commands)
-│   ├── bot.py                  # Slack Socket Mode bot (scan, flash, verify, who)
-│   ├── esp_fleet_bot.service   # Systemd service unit template
-│   ├── requirements.txt        # Python dependencies (slack-bolt, pyserial)
-│   └── Readme.md               # Slack bot documentation and token setup
+├── .github/workflows/          # Central GitHub Actions CI/CD workflows for Raspberry Pi
+│   └── unit-test.yml           # Multi-subsystem hardware test matrix & reusable workflow
 │
-├── server/                     # Raspberry Pi & CI Hardware Testbench Runner
-│   ├── cal-test.sh             # Automated build, flash, and test orchestrator
-│   ├── cal-flash.sh            # Hardware mutex flashing runner
-│   └── lib/
-│       └── unity_parser.py     # Serial monitor & GitHub Actions summary formatter
+├── components/                 # Shared vehicle components & libraries
+│   └── can_driver/             # Universal CalSol CAN hardware driver (CAN.h, CAN_driver.c)
 │
-├── examples/
-│   └── unit_test_app/          # Reference ESP32-S3 Unity unit testing project
+├── lights_fw/                  # Subsystem 1: Brakelights & Hazards
+│   ├── CMakeLists.txt          # Production ESP-IDF CMake
+│   ├── main/                   # Production firmware (I2C power, hazards, CAN loop)
+│   │   ├── CMakeLists.txt
+│   │   └── main.c
+│   └── test/                   # On-Target Unity unit tests
 │       ├── CMakeLists.txt
 │       └── main/
 │           ├── CMakeLists.txt
-│           └── test_main.c
+│           └── test_main.c     # Voltage conversion, state machine, and CAN assertions
 │
-└── unit-testing/
-    └── fw-lab-examples/        # Vehicle node firmware (brakelights, pedals, can_driver)
+├── pedals_fw/                  # Subsystem 2: Accelerator & Brake Plausibility
+│   ├── CMakeLists.txt          # Production ESP-IDF CMake
+│   ├── main/                   # Production firmware (Dual ADC pedals, CAN throttle)
+│   │   ├── CMakeLists.txt
+│   │   └── main.c
+│   └── test/                   # On-Target Unity unit tests
+│       ├── CMakeLists.txt
+│       └── main/
+│           ├── CMakeLists.txt
+│           └── test_main.c     # Throttle deadzones, plausibility cutoff rules, and CAN
+│
+├── server/                     # Raspberry Pi & CI Hardware Testbench Runner
+│   ├── cal-test.sh             # Automated build, flash, and test orchestrator
+│   ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
+│   └── lib/
+│       └── unity_parser.py     # Serial monitor & GitHub Actions summary table generator
+│
+└── Slack_Bot/                  # Bench Pi Slack Bot Daemon (@bot commands)
+    ├── bot.py
+    ├── esp_fleet_bot.service
+    ├── requirements.txt
+    └── Readme.md
 ```
 
 ---
 
-## 2. Automated Testing via GitHub Actions
+## 2. Running Hardware Unit Tests Locally
 
-When you push code or open a Pull Request, the GitHub Action automatically runs on the Raspberry Pi testbed (`stolerpi`):
-1. Checks out the code.
-2. Compiles your firmware targeting `esp32s3`.
-3. Flashes the connected ESP32-S3 over USB CDC at 921,600 baud.
-4. Executes Unity assertions on real silicon and reports test results directly in the GitHub PR summary.
+On the Raspberry Pi testbed (`stolerpi`):
+
+```bash
+# Test the lights subsystem
+./server/cal-test.sh lights_fw/test
+
+# Test the pedals subsystem
+./server/cal-test.sh pedals_fw/test
+```
 
 ---
 
-## 3. Slack Bot Integration (`Slack_Bot/`)
+## 3. Automated Testing via GitHub Actions
 
-A Slack-driven ESP board discovery and verification daemon that runs on the bench Raspberry Pi:
-
-| Slack Command | Action |
-|---|---|
-| `@bot boards` | List every ESP board plugged into the Pi (chip + MAC + port) |
-| `@bot flash <port>` | Build + flash + verify firmware on target port |
-| `@bot flash all` | Flash and verify on every connected board |
-| `@bot confirm <code>` | Approve a gated flash if another member is active on the Pi |
-| `@bot who` | Shows who is currently logged into the Pi |
-| `@bot status` | IDF version, git commit SHA, uptime, cached builds |
-
-See [Slack_Bot/Readme.md](Slack_Bot/Readme.md) for full setup instructions.
+Every push or Pull Request automatically runs the test matrix across all registered subsystems on real ESP32-S3 silicon connected to `stolerpi`. Results are posted directly to `$GITHUB_STEP_SUMMARY`.

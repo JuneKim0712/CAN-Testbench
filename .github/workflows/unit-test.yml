@@ -8,19 +8,35 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Target test directory or binary (default: examples/unit_test_app)'
-        required: false
-        default: 'examples/unit_test_app'
+        description: 'Target subsystem test directory'
+        required: true
+        default: 'lights_fw/test'
+        type: choice
+        options:
+          - 'lights_fw/test'
+          - 'pedals_fw/test'
+  workflow_call:
+    inputs:
+      target:
+        description: 'Target subsystem test directory'
+        required: true
+        type: string
+        default: 'lights_fw/test'
       port:
-        description: 'Target serial port (e.g. /dev/ttyACM0)'
+        description: 'Target serial port'
         required: false
+        type: string
         default: ''
 
 jobs:
   testbench:
-    name: Run On-Target Tests (Raspberry Pi)
+    name: Test ${{ matrix.subsystem || inputs.target || 'Subsystem' }}
     runs-on: [ self-hosted, linux, ARM64 ]
-    timeout-minutes: 5
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        subsystem: [ 'lights_fw/test', 'pedals_fw/test' ]
 
     steps:
       - name: Checkout Repository
@@ -31,15 +47,15 @@ jobs:
 
       - name: Run Hardware Unit Tests
         run: |
-          TARGET="${{ github.event.inputs.target || 'examples/unit_test_app' }}"
-          PORT="${{ github.event.inputs.port || '' }}"
+          TARGET="${{ inputs.target || matrix.subsystem }}"
+          PORT="${{ inputs.port || '' }}"
           ./server/cal-test.sh "$TARGET" "$PORT"
 
       - name: Dump Failure Logs
         if: failure()
         run: |
-          echo "### ⚠️ Build / Flash Debug Logs" >> $GITHUB_STEP_SUMMARY
-          echo "<details><summary>Click to view full failure log output</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Build / Flash Debug Logs for ${{ matrix.subsystem || inputs.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "<details><summary>Click to view failure log output</summary>" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
           if [ -f "server/.logs/build.log" ]; then
