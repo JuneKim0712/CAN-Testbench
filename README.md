@@ -1,120 +1,60 @@
 # CalSol CAN Testbench
 
-Testing infrastructure, remote flashing, Slack bot automation, and continuous validation for the UC Berkeley Solar Vehicle Team (**CalSol**).
+Automated continuous integration, remote hardware testbench flashing, Slack bot management, and Unity unit testing for the UC Berkeley Solar Vehicle Team (**CalSol**).
 
 ---
 
-## 1. Repository Architecture
-
-The repository contains three primary components:
+## 1. Repository Structure
 
 ```text
-CAN-Testbench/
+CAN_TestBench/
+├── .github/workflows/          # GitHub Actions CI/CD workflows for Raspberry Pi
 ├── Slack_Bot/                  # Bench Pi Slack Bot Daemon (@bot commands)
 │   ├── bot.py                  # Slack Socket Mode bot (scan, flash, verify, who)
 │   ├── esp_fleet_bot.service   # Systemd service unit template
 │   ├── requirements.txt        # Python dependencies (slack-bolt, pyserial)
 │   └── Readme.md               # Slack bot documentation and token setup
 │
-├── client/                     # Developer Workstation Side (Laptop / PC)
-│   ├── calsol.py               # Cross-platform CLI (Windows, macOS, Linux)
-│   ├── calsol.sh               # Bash wrapper for UNIX environments
-│   ├── config.json             # Remote host connection configuration
-│   └── vscode/tasks.json       # VS Code keyboard shortcuts & tasks
+├── server/                     # Raspberry Pi & CI Hardware Testbench Runner
+│   ├── cal-test.sh             # Automated build, flash, and test orchestrator
+│   ├── cal-flash.sh            # Hardware mutex flashing runner
+│   └── lib/
+│       └── unity_parser.py     # Serial monitor & GitHub Actions summary formatter
 │
-├── server/                     # Raspberry Pi Testbench Side (Host Server)
-│   ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
-│   ├── cal-test.sh             # Automated Unity test runner & serial parser
-│   ├── cal-status.sh           # Active hardware availability and lock inspector
-│   ├── cal-powercycle.sh       # USB hub power cycling via uhubctl
-│   └── udev/                   # Static device rules for connected boards
+├── examples/
+│   └── unit_test_app/          # Reference ESP32-S3 Unity unit testing project
+│       ├── CMakeLists.txt
+│       └── main/
+│           ├── CMakeLists.txt
+│           └── test_main.c
 │
-└── examples/
-    └── unit_test_app/          # Starter Unity unit test firmware for ESP32-S3
+└── unit-testing/
+    └── fw-lab-examples/        # Vehicle node firmware (brakelights, pedals, can_driver)
 ```
 
 ---
 
-## 2. Slack Bot Overview (`Slack_Bot/`)
+## 2. Automated Testing via GitHub Actions
 
-A Slack-driven ESP board discovery and verification daemon that runs continuously on the bench Raspberry Pi:
+When you push code or open a Pull Request, the GitHub Action automatically runs on the Raspberry Pi testbed (`stolerpi`):
+1. Checks out the code.
+2. Compiles your firmware targeting `esp32s3`.
+3. Flashes the connected ESP32-S3 over USB CDC at 921,600 baud.
+4. Executes Unity assertions on real silicon and reports test results directly in the GitHub PR summary.
+
+---
+
+## 3. Slack Bot Integration (`Slack_Bot/`)
+
+A Slack-driven ESP board discovery and verification daemon that runs on the bench Raspberry Pi:
 
 | Slack Command | Action |
 |---|---|
 | `@bot boards` | List every ESP board plugged into the Pi (chip + MAC + port) |
 | `@bot flash <port>` | Build + flash + verify firmware on target port |
 | `@bot flash all` | Flash and verify on every connected board |
-| `@bot confirm <code>` | Approve a gated flash if another member is SSH'd into the Pi |
+| `@bot confirm <code>` | Approve a gated flash if another member is active on the Pi |
 | `@bot who` | Shows who is currently logged into the Pi |
 | `@bot status` | IDF version, git commit SHA, uptime, cached builds |
 
-See [Slack_Bot/Readme.md](Slack_Bot/Readme.md) for full configuration, Slack API scopes, and systemd service setup.
-
----
-
-## 3. Quickstart: Developer (Client Side)
-
-1. **Clone this repository on your laptop:**
-   ```bash
-   git clone https://github.com/CalSol/CAN_TestBench.git
-   cd CAN_TestBench
-   ```
-
-2. **Configure your connection in `client/config.json`:**
-   ```json
-   {
-     "host": "stolerpi",
-     "remote_user": "<your_pi_username>",
-     "default_board": "steering"
-   }
-   ```
-
-3. **Check testbench status:**
-   ```bash
-   python client/calsol.py status
-   ```
-
-4. **Flash firmware remotely from your workstation:**
-   ```bash
-   python client/calsol.py flash <board_name> --binary path/to/firmware.bin
-   ```
-
-5. **Run automated on-target Unity unit tests:**
-   ```bash
-   python client/calsol.py test <board_name> --binary path/to/unit_tests.bin
-   ```
-
-6. **Monitor live serial console output:**
-   ```bash
-   python client/calsol.py monitor <board_name>
-   ```
-
----
-
-## 4. Quickstart: Raspberry Pi Host (Server Side)
-
-1. **Clone / Sync on the Raspberry Pi (`stolerpi`):**
-   ```bash
-   git clone https://github.com/CalSol/CAN_TestBench.git ~/CAN_TestBench
-   ```
-
-2. **Make scripts executable and link them:**
-   ```bash
-   chmod +x ~/CAN-Testbench/server/*.sh
-   sudo ln -sf ~/CAN-Testbench/server/cal-flash.sh /usr/local/bin/cal-flash
-   sudo ln -sf ~/CAN-Testbench/server/cal-test.sh /usr/local/bin/cal-test
-   sudo ln -sf ~/CAN-Testbench/server/cal-status.sh /usr/local/bin/cal-status
-   sudo ln -sf ~/CAN-Testbench/server/cal-powercycle.sh /usr/local/bin/cal-powercycle
-   ```
-
-3. **Install persistent `udev` device mappings:**
-   ```bash
-   sudo ~/CAN-Testbench/server/udev/setup-udev.sh
-   ```
-
----
-
-## 5. Hardware Safety & Multi-User Arbitration
-
-* **Hardware Mutex (`flock`):** The server-side flashing engine locks each target board's serial port with `flock`. If another developer is currently testing or flashing a board, concurrent attempts are held safely in a queue or cleanly rejected rather than corrupting flash memory.
-* **USB Power-Cycling:** Hung or frozen boards can be hard-reset without physical access using `python client/calsol.py powercycle`.
+See [Slack_Bot/Readme.md](Slack_Bot/Readme.md) for full setup instructions.

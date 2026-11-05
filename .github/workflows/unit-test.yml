@@ -1,0 +1,54 @@
+name: CalSol Hardware Unit Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target test directory or binary (default: examples/unit_test_app)'
+        required: false
+        default: 'examples/unit_test_app'
+      port:
+        description: 'Target serial port (e.g. /dev/ttyACM0)'
+        required: false
+        default: ''
+
+jobs:
+  testbench:
+    name: Run On-Target Tests (Raspberry Pi)
+    runs-on: [ self-hosted, linux, ARM64 ]
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Make Scripts Executable
+        run: chmod +x server/*.sh server/lib/*.py
+
+      - name: Run Hardware Unit Tests
+        run: |
+          TARGET="${{ github.event.inputs.target || 'examples/unit_test_app' }}"
+          PORT="${{ github.event.inputs.port || '' }}"
+          ./server/cal-test.sh "$TARGET" "$PORT"
+
+      - name: Dump Failure Logs
+        if: failure()
+        run: |
+          echo "### ⚠️ Build / Flash Debug Logs" >> $GITHUB_STEP_SUMMARY
+          echo "<details><summary>Click to view full failure log output</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          if [ -f "server/.logs/build.log" ]; then
+            echo "=== BUILD LOG ==="
+            tail -n 40 server/.logs/build.log
+          fi
+          if [ -f "server/.logs/flash.log" ]; then
+            echo "=== FLASH LOG ==="
+            tail -n 40 server/.logs/flash.log
+          fi
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY

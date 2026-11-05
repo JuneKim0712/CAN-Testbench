@@ -1,7 +1,0 @@
-{
-  "host": "stolerpi",
-  "remote_user": "<your_username>",
-  "staging_dir": "~/calsol/staging",
-  "default_board": "steering",
-  "baud_rate": 921600
-}

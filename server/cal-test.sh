@@ -1,51 +1,103 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# CalSol Testbench Server: On-Target Unity Unit Test Runner (Concise Mode)
-# Pure Bash orchestrator that delegates serial parsing to lib/unity_parser.py
+# CalSol Testbench: Automated On-Target Unit Test Runner
+# Designed for both GitHub Actions (CI) and local terminal execution.
 # ==============================================================================
 
 set -e
 
-BOARD="$1"
-TEST_BIN="$2"
-
-if [ -z "$BOARD" ] || [ -z "$TEST_BIN" ]; then
-    echo "Usage: $0 <board_name> <test_binary_path>"
-    exit 1
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FLASH_RUNNER="${SCRIPT_DIR}/cal-flash.sh"
-[ ! -f "$FLASH_RUNNER" ] && FLASH_RUNNER="$(command -v cal-flash || echo "")"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-if [ -z "$FLASH_RUNNER" ] || [ ! -f "$FLASH_RUNNER" ]; then
-    echo "[-] Error: cal-flash runner not found."
-    exit 1
-fi
+# 1. Target directory or binary
+TARGET="${1:-${REPO_ROOT}/examples/unit_test_app}"
+PORT="${2}"
 
-# 1. Flash the test binary via cal-flash
-"$FLASH_RUNNER" "$BOARD" "$TEST_BIN"
-
-# 2. Resolve device path
-DEVICE=""
-for dev_candidate in "/dev/${BOARD}" "/dev/esp32_${BOARD}" "/dev/calsol_${BOARD}"; do
-    if [ -e "$dev_candidate" ]; then
-        DEVICE="$dev_candidate"
-        break
+# 2. Source ESP-IDF if idf.py is not in PATH
+if ! command -v idf.py >/dev/null 2>&1; then
+    if [ -f "/opt/esp-idf/export.sh" ]; then
+        source /opt/esp-idf/export.sh >/dev/null 2>&1
+    elif [ -f "${HOME}/esp/esp-idf/export.sh" ]; then
+        source "${HOME}/esp/esp-idf/export.sh" >/dev/null 2>&1
+    else
+        echo "[-] Error: idf.py not found and could not locate export.sh in /opt/esp-idf or ~/esp/esp-idf."
+        exit 1
     fi
-done
+fi
 
-if [ -z "$DEVICE" ]; then
-    echo "[-] Error: Device for '$BOARD' not found in /dev"
+# 3. Auto-detect serial port if not provided
+if [ -z "$PORT" ]; then
+    for candidate in "/dev/steering" "/dev/esp32_johnathan" "/dev/bms" "/dev/esp32_ahmed" "/dev/ttyACM0" "/dev/ttyACM1"; do
+        if [ -e "$candidate" ]; then
+            PORT="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "$PORT" ]; then
+    echo "[-] Error: No ESP32 serial device found in /dev."
     exit 1
 fi
 
-# 3. Call modular Python Unity parser
-PARSER_BIN="${SCRIPT_DIR}/lib/unity_parser.py"
-if [ ! -f "$PARSER_BIN" ]; then
-    echo "[-] Error: unity_parser.py not found at $PARSER_BIN"
+BOARD_NAME="$(basename "$PORT")"
+LOG_DIR="${SCRIPT_DIR}/.logs"
+mkdir -p "$LOG_DIR"
+
+# 4. Mutex lock on the hardware device to prevent concurrent flashing
+LOCK_DIR="/tmp/calsol_locks"
+mkdir -p "$LOCK_DIR"
+LOCK_FILE="${LOCK_DIR}/${BOARD_NAME}.lock"
+exec 200>"$LOCK_FILE"
+if ! flock -w 15 200; then
+    echo "[-] ERROR: Board '${BOARD_NAME}' is currently in use by another process!"
     exit 1
 fi
 
-echo "[*] Running Unity tests on ${BOARD}..."
-python3 "$PARSER_BIN" --port "$DEVICE" --timeout 12
+echo "=================================================="
+echo " CalSol Hardware Testbench: ${BOARD_NAME}"
+echo " Target: ${TARGET}"
+echo "=================================================="
+
+# 5. Build & Flash
+if [ -d "$TARGET" ]; then
+    cd "$TARGET"
+    printf "[*] Building firmware... "
+    [ ! -f "sdkconfig" ] && idf.py set-target esp32s3 > "$LOG_DIR/build.log" 2>&1
+    if idf.py build > "$LOG_DIR/build.log" 2>&1; then
+        echo "OK"
+    else
+        echo "FAILED"
+        echo "=== Build Error Log ==="
+        tail -n 30 "$LOG_DIR/build.log"
+        exit 1
+    fi
+
+    printf "[*] Flashing %s (921600 baud)... " "$BOARD_NAME"
+    if idf.py -p "$PORT" -b 921600 flash > "$LOG_DIR/flash.log" 2>&1; then
+        echo "OK"
+    else
+        echo "FAILED"
+        echo "=== Flash Error Log ==="
+        tail -n 30 "$LOG_DIR/flash.log"
+        exit 1
+    fi
+elif [ -f "$TARGET" ]; then
+    printf "[*] Flashing pre-built binary %s... " "$BOARD_NAME"
+    if esptool.py --port "$PORT" --baud 921600 write_flash 0x10000 "$TARGET" > "$LOG_DIR/flash.log" 2>&1; then
+        echo "OK"
+    else
+        echo "FAILED"
+        echo "=== Flash Error Log ==="
+        tail -n 30 "$LOG_DIR/flash.log"
+        exit 1
+    fi
+else
+    echo "[-] Error: Target path not found: $TARGET"
+    exit 1
+fi
+
+# 6. Parse Unity test results over serial
+PARSER="${SCRIPT_DIR}/lib/unity_parser.py"
+echo "[*] Monitoring Unity test output..."
+python3 "$PARSER" --port "$PORT" --timeout 12
