@@ -1,15 +1,17 @@
-# CalSol CAN Testbench
+# CalSol CAN Testbench Infrastructure
 
-Testing infrastructure, Slack bot automation, continuous integration, and automated on-target Unity unit testing for the UC Berkeley Solar Vehicle Team (**CalSol**).
+Testbench runner scripts, Raspberry Pi Slack bot daemon, and reusable GitHub Actions CI logic for the UC Berkeley Solar Vehicle Team (**CalSol**).
 
 ---
 
 ## 1. Repository Structure
 
+This repository contains the infrastructure and server-side automation deployed on the bench Raspberry Pi (`stolerpi`):
+
 ```text
 CAN_TestBench/
-├── .github/workflows/          # GitHub Actions CI/CD workflows for Raspberry Pi
-│   └── unit-test.yml           # Automated hardware testbench workflow
+├── .github/workflows/          # Reusable GitHub Actions CI/CD workflows
+│   └── unit-test.yml           # Reusable workflow logic for calling repos (e.g. Gen11-FW)
 │
 ├── Slack_Bot/                  # Bench Pi Slack Bot Daemon (@bot commands)
 │   ├── bot.py                  # Slack Socket Mode bot (scan, flash, verify, who)
@@ -17,39 +19,45 @@ CAN_TestBench/
 │   ├── requirements.txt        # Python dependencies (slack-bolt, pyserial)
 │   └── Readme.md               # Slack bot documentation and token setup
 │
-├── server/                     # Raspberry Pi & CI Hardware Testbench Engine
-│   ├── cal-test.sh             # Automated build, flash, and test orchestrator
-│   ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
-│   └── lib/
-│       └── unity_parser.py     # Serial monitor & GitHub Actions summary generator
-│
-└── unit-testing/
-    └── fw-lab-examples/        # Firmware lab code & test suites
-        ├── components/can_driver/ # Shared TWAI/CAN bus driver
-        ├── brakelights/        # Brakelights ECU firmware & test suite
-        │   ├── main/main.c     # Production brakelights firmware
-        │   └── test/           # Hardware unit test suite
-        └── pedals/             # Pedals ECU firmware & test suite
-            ├── main/main.c     # Production throttle firmware
-            └── test/           # Hardware unit test suite
+└── server/                     # Raspberry Pi Testbench Engine
+    ├── cal-test.sh             # Automated build, flash, and test orchestrator
+    ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
+    ├── lib/
+    │   └── unity_parser.py     # Serial monitor & GitHub Actions summary generator
+    └── README.md
 ```
 
 ---
 
-## 2. Running Hardware Unit Tests Locally
+## 2. Using the Reusable GitHub Action Workflow
 
-On the Raspberry Pi testbed (`stolerpi`):
+To use this hardware testbench in another repository (e.g., [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW) or firmware testing grounds):
+
+Add `.github/workflows/testbench.yml` to your repository:
+
+```yaml
+name: Hardware Testbench
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  run-testbench:
+    uses: CalSol/CAN_TestBench/.github/workflows/unit-test.yml@main
+    with:
+      target: 'path/to/your/test_project'  # Path to the ESP-IDF project containing test_main.c
+```
+
+---
+
+## 3. Running Testbench Scripts Locally on the Pi
+
+On `stolerpi`:
 
 ```bash
-# Test the brakelights subsystem
-./server/cal-test.sh unit-testing/fw-lab-examples/brakelights/test
-
-# Test the pedals subsystem
-./server/cal-test.sh unit-testing/fw-lab-examples/pedals/test
+# Build, flash, and run Unity tests on target
+./server/cal-test.sh path/to/project_dir [port]
 ```
-
----
-
-## 3. Automated Testing via GitHub Actions
-
-Every push or Pull Request automatically runs the test matrix across all registered subsystems on real ESP32-S3 silicon connected to `stolerpi`. Results are posted directly to `$GITHUB_STEP_SUMMARY`.

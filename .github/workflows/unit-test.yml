@@ -1,27 +1,28 @@
-name: CalSol Hardware Unit Tests
+name: CalSol Hardware Testbench Runner
+
+# Reusable workflow logic for CalSol hardware CI
+# NOTE: push/pull_request triggers are disabled in this repo to prevent
+# automatic runs here. Other repositories (e.g. Gen11-FW, JuneKim0712)
+# call this workflow via workflow_call.
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
-    inputs:
-      target:
-        description: 'Target subsystem test directory'
-        required: true
-        default: 'unit-testing/fw-lab-examples/brakelights/test'
-        type: choice
-        options:
-          - 'unit-testing/fw-lab-examples/brakelights/test'
-          - 'unit-testing/fw-lab-examples/pedals/test'
   workflow_call:
     inputs:
       target:
-        description: 'Target subsystem test directory'
+        description: 'Target test directory in calling repository'
         required: true
         type: string
-        default: 'unit-testing/fw-lab-examples/brakelights/test'
+      port:
+        description: 'Target serial port on Raspberry Pi'
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target test directory'
+        required: true
+        type: string
       port:
         description: 'Target serial port'
         required: false
@@ -30,41 +31,41 @@ on:
 
 jobs:
   testbench:
-    name: Test ${{ matrix.subsystem || inputs.target || 'Subsystem' }}
+    name: Run Hardware Test (${{ inputs.target }})
     runs-on: [ self-hosted, linux, ARM64 ]
     timeout-minutes: 8
-    strategy:
-      fail-fast: false
-      matrix:
-        subsystem: [ 'unit-testing/fw-lab-examples/brakelights/test', 'unit-testing/fw-lab-examples/pedals/test' ]
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Calling Repository
         uses: actions/checkout@v4
 
-      - name: Make Scripts Executable
-        run: chmod +x server/*.sh server/lib/*.py
+      - name: Checkout Testbench Runner Engine
+        uses: actions/checkout@v4
+        with:
+          repository: CalSol/CAN_TestBench
+          path: .calsol_testbench
 
-      - name: Run Hardware Unit Tests
+      - name: Make Scripts Executable
+        run: chmod +x .calsol_testbench/server/*.sh .calsol_testbench/server/lib/*.py
+
+      - name: Execute On-Target Hardware Test
         run: |
-          TARGET="${{ inputs.target || matrix.subsystem }}"
-          PORT="${{ inputs.port || '' }}"
-          ./server/cal-test.sh "$TARGET" "$PORT"
+          .calsol_testbench/server/cal-test.sh "${{ inputs.target }}" "${{ inputs.port }}"
 
       - name: Dump Failure Logs
         if: failure()
         run: |
-          echo "### ⚠️ Build / Flash Debug Logs for ${{ matrix.subsystem || inputs.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Build / Flash Debug Logs for ${{ inputs.target }}" >> $GITHUB_STEP_SUMMARY
           echo "<details><summary>Click to view failure log output</summary>" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
-          if [ -f "server/.logs/build.log" ]; then
+          if [ -f ".calsol_testbench/server/.logs/build.log" ]; then
             echo "=== BUILD LOG ==="
-            tail -n 40 server/.logs/build.log
+            tail -n 40 .calsol_testbench/server/.logs/build.log
           fi
-          if [ -f "server/.logs/flash.log" ]; then
+          if [ -f ".calsol_testbench/server/.logs/flash.log" ]; then
             echo "=== FLASH LOG ==="
-            tail -n 40 server/.logs/flash.log
+            tail -n 40 .calsol_testbench/server/.logs/flash.log
           fi
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "</details>" >> $GITHUB_STEP_SUMMARY
