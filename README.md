@@ -35,11 +35,13 @@ CAN_TestBench/
 
 ---
 
-## 2. Using the Reusable GitHub Action Workflow
+## 2. Guide: Implementing Hardware CI in Your Own Repository
 
-To use this hardware testbench in another repository (e.g., [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW) or firmware testing grounds):
+To integrate automated Hardware-in-the-Loop (HIL) testing on physical ESP32-S3 silicon into your own repository (such as [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW) or a subsystem testing repo):
 
-Add `.github/workflows/testbench.yml` to your repository:
+### Option 1: Reusable Workflow (Quickest Setup)
+
+Add `.github/workflows/hardware-test.yml` to your repository:
 
 ```yaml
 name: Hardware Testbench
@@ -49,13 +51,31 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   run-testbench:
+    name: Run On-Target ESP32 Test
     uses: CalSol/CAN_TestBench/.github/workflows/unit-test.yml@main
     with:
       target: 'path/to/your/test_project'  # Path to the ESP-IDF project containing test_main.c
+      # port: '/dev/esp32_johnathan'       # Optional port override; defaults to testbench.json or auto-detection
 ```
+
+### Option 2: Monorepo Dynamic Matrix (Path-Filtered)
+
+For repositories containing multiple vehicle ECUs (like `Gen11-FW`), use path filtering so that only modified subsystems are compiled and tested on their designated microcontrollers:
+
+1. **Add `testbench.json` to each subsystem folder:**
+   ```json
+   {
+     "name": "steering_fw",
+     "target": "steering_fw/test",
+     "port": "/dev/steering",
+     "timeout": 12
+   }
+   ```
+2. **Configure dynamic matrix dispatch:** Refer to the comprehensive [Step-by-Step Integration Guide](github-action/README.md#6-guide-implementing-hardware-ci-in-your-own-repository) for the full workflow template, configuration schema, runner setup, and local Pi debugging instructions.
 
 ---
 
@@ -65,5 +85,5 @@ On `stolerpi`:
 
 ```bash
 # Build, flash, and run Unity tests on target
-./github-action/cal-test.sh path/to/project_dir [port]
+./github-action/cal-test.sh path/to/project_dir [port] [timeout]
 ```
