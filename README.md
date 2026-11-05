@@ -1,6 +1,6 @@
 # CalSol CAN Testbench Infrastructure
 
-Testbench runner scripts, Raspberry Pi Slack bot daemon, and reusable GitHub Actions CI logic for the UC Berkeley Solar Vehicle Team (**CalSol**).
+Testbench runner scripts, Raspberry Pi Slack bot daemon, firmware lab examples, and reusable GitHub Actions CI logic for the UC Berkeley Solar Vehicle Team (**CalSol**).
 
 ---
 
@@ -13,18 +13,24 @@ CAN_TestBench/
 ├── .github/workflows/          # Reusable GitHub Actions CI/CD workflows
 │   └── unit-test.yml           # Reusable workflow logic for calling repos (e.g. Gen11-FW)
 │
-├── Slack_Bot/                  # Bench Pi Slack Bot Daemon (@bot commands)
+├── Slack_Bot/                  # Bench Pi Slack Bot Daemon (@bot commands - Jonathan Ji)
 │   ├── bot.py                  # Slack Socket Mode bot (scan, flash, verify, who)
 │   ├── esp_fleet_bot.service   # Systemd service unit template
 │   ├── requirements.txt        # Python dependencies (slack-bolt, pyserial)
 │   └── Readme.md               # Slack bot documentation and token setup
 │
-└── server/                     # Raspberry Pi Testbench Engine
-    ├── cal-test.sh             # Automated build, flash, and test orchestrator
-    ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
-    ├── lib/
-    │   └── unity_parser.py     # Serial monitor & GitHub Actions summary generator
-    └── README.md
+├── server/                     # Raspberry Pi Testbench Engine
+│   ├── cal-test.sh             # Automated build, flash, and test orchestrator
+│   ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
+│   ├── lib/
+│   │   └── unity_parser.py     # Serial monitor & GitHub Actions summary generator
+│   └── README.md
+│
+└── unit-testing/
+    └── fw-lab-examples/        # Firmware lab code & examples (Kyle Liang)
+        ├── components/can_driver/ # Shared TWAI/CAN bus driver
+        ├── brakelights/        # Brakelights ECU firmware & build files
+        └── pedals/             # Pedals ECU firmware & build files
 ```
 
 ---
