@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 CalSol Hardware Testbench: Subsystem Auto-Discovery & Change Resolver
-Detects all firmware subsystems in a repository, resolves their designated
-hardware testbench.json configurations, and filters by git changes.
+Detects all firmware subsystems in a repository that explicitly contain a
+testbench.json configuration, resolves their hardware settings, and filters
+by git changes. Subsystems without testbench.json are NOT scheduled for testing.
 """
 
 import os
@@ -49,69 +50,49 @@ def get_git_diff_files(repo_root):
 def find_all_subsystems(repo_root):
     """
     Scans the repository to locate all testable subsystems.
-    Identified by:
-      1. Presence of testbench.json
-      2. Presence of a test/CMakeLists.txt subdirectory
+    A subsystem is ONLY discovered if it explicitly contains a testbench.json file.
+    Folders without testbench.json (even if they contain CMakeLists.txt) are excluded.
     """
     subsystems = {}
 
-    # 1. Look for testbench.json
     for tb in glob.glob(os.path.join(repo_root, "**/testbench.json"), recursive=True):
         rel = os.path.relpath(tb, repo_root).replace("\\", "/")
-        # Ignore files inside hidden or build directories
-        if any(part.startswith(".") or part in ["build", "managed_components"] for part in rel.split("/")):
-            continue
-        folder = rel.split("/")[0]
-        subsystems[folder] = tb
-
-    # 2. Look for */test/CMakeLists.txt
-    for cm in glob.glob(os.path.join(repo_root, "**/test/CMakeLists.txt"), recursive=True):
-        rel = os.path.relpath(cm, repo_root).replace("\\", "/")
-        if any(part.startswith(".") or part in ["build", "managed_components"] for part in rel.split("/")):
-            continue
         parts = rel.split("/")
-        if len(parts) >= 3 and parts[-2] == "test":
+        # Ignore files inside hidden or build directories
+        if any(part.startswith(".") or part in ["build", "managed_components"] for part in parts):
+            continue
+        if len(parts) == 1:
+            # Root level testbench.json
+            subsystems["root"] = tb
+        else:
             folder = parts[0]
-            if folder not in subsystems:
-                subsystems[folder] = None
-
-    # 3. Look for single root project test/CMakeLists.txt
-    if os.path.isfile(os.path.join(repo_root, "test", "CMakeLists.txt")) and not subsystems:
-        subsystems["test"] = None
+            subsystems[folder] = tb
 
     return subsystems
 
 def load_subsystem_config(repo_root, folder, config_path, port_override=None):
     """
-    Loads testbench.json configuration or infers sensible defaults.
+    Loads testbench.json configuration for a subsystem.
     """
     cfg = {}
-    resolved_cfg_file = None
+    resolved_cfg_file = config_path
 
-    if config_path and os.path.isfile(config_path):
-        resolved_cfg_file = config_path
-    else:
-        candidates = [
-            os.path.join(repo_root, folder, "testbench.json"),
-            os.path.join(repo_root, folder, "test", "testbench.json"),
-            os.path.join(repo_root, "testbench.json")
-        ]
-        for c in candidates:
-            if os.path.isfile(c):
-                resolved_cfg_file = c
-                break
-
-    if resolved_cfg_file:
+    if resolved_cfg_file and os.path.isfile(resolved_cfg_file):
         try:
             with open(resolved_cfg_file, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
         except Exception as e:
             print(f"[-] Warning: Error parsing {resolved_cfg_file}: {e}")
 
-    # Resolve target directory
-    default_target = f"{folder}/test" if os.path.isdir(os.path.join(repo_root, folder, "test")) else folder
+    # Determine default target directory
+    if folder == "root":
+        default_target = "test" if os.path.isdir(os.path.join(repo_root, "test")) else "."
+        name = cfg.get("name", os.path.basename(repo_root))
+    else:
+        default_target = f"{folder}/test" if os.path.isdir(os.path.join(repo_root, folder, "test")) else folder
+        name = cfg.get("name", folder)
+
     target = cfg.get("target", default_target).replace("\\", "/")
-    name = cfg.get("name", folder)
     port = port_override if port_override else cfg.get("port", "")
     baud = cfg.get("baud", 921600)
     timeout = cfg.get("timeout", 12)
@@ -129,7 +110,7 @@ def load_subsystem_config(repo_root, folder, config_path, port_override=None):
     }
 
 def main():
-    parser = argparse.ArgumentParser(description="CalSol Subsystem Auto-Discovery & Change Resolver")
+    parser = argparse.ArgumentParser(description="CalSol Subsystem Auto-Discovery (Requires testbench.json)")
     parser.add_argument("--repo-root", default=".", help="Root of the repository to inspect")
     parser.add_argument("--target", default="auto", help="Target subsystem ('auto', 'all', or specific path)")
     parser.add_argument("--port", default="", help="Serial port override")
@@ -144,16 +125,17 @@ def main():
 
     print(f"[*] CalSol Auto-Discovery Engine running in: {repo_root}")
     print(f"[*] Target mode: {target_mode}")
+    print("[*] Filtering policy: Only subsystems with testbench.json are scheduled.")
 
-    # Discover all candidate subsystems in repo
+    # Discover all candidate subsystems with testbench.json in repo
     all_subsystems = find_all_subsystems(repo_root)
-    print(f"[*] Discovered {len(all_subsystems)} total subsystems: {list(all_subsystems.keys())}")
+    print(f"[*] Discovered {len(all_subsystems)} subsystems with testbench.json: {list(all_subsystems.keys())}")
 
     active_subsystems = []
     skipped_subsystems = []
 
     if target_mode in ["all", ""]:
-        # Run all discovered subsystems
+        # Run all discovered subsystems that contain testbench.json
         for folder, cfg_file in all_subsystems.items():
             cfg = load_subsystem_config(repo_root, folder, cfg_file, port_override)
             active_subsystems.append(cfg)
@@ -166,23 +148,21 @@ def main():
                 active_subsystems.append(cfg)
                 matched = True
         if not matched:
-            # Custom unlisted target path
-            active_subsystems.append({
-                "name": os.path.basename(target_mode.rstrip("/")),
-                "folder": target_mode.split("/")[0],
-                "target": target_mode,
-                "port": port_override,
-                "baud": 921600,
-                "timeout": 12,
-                "description": "Manual target",
-                "config_found": False
-            })
+            # Check if specified target explicitly contains a testbench.json
+            candidate_tb = os.path.join(repo_root, target_mode, "testbench.json")
+            if not os.path.isfile(candidate_tb):
+                candidate_tb = os.path.join(repo_root, os.path.dirname(target_mode), "testbench.json")
+            if os.path.isfile(candidate_tb):
+                cfg = load_subsystem_config(repo_root, target_mode.split("/")[0], candidate_tb, port_override)
+                active_subsystems.append(cfg)
+            else:
+                print(f"[-] Target '{target_mode}' was requested but lacks a testbench.json. Skipping.")
     else:
         # Automatic change detection
         changed_files = get_git_diff_files(repo_root)
         if changed_files is None:
-            # If diff could not be computed, run all
-            print("[*] Running all subsystems as git diff was inconclusive.")
+            # If diff could not be computed, run all subsystems that have testbench.json
+            print("[*] Running all configured subsystems as git diff was inconclusive.")
             for folder, cfg_file in all_subsystems.items():
                 active_subsystems.append(load_subsystem_config(repo_root, folder, cfg_file, port_override))
         else:
@@ -196,7 +176,7 @@ def main():
             if not code_changes and not has_shared_change:
                 print("[*] Only non-code/documentation changes detected. No hardware tests required.")
             elif has_shared_change:
-                print("[*] Changes detected in shared components or core workflows. Scheduling all subsystems.")
+                print("[*] Changes detected in shared components or core workflows. Scheduling all configured subsystems.")
                 for folder, cfg_file in all_subsystems.items():
                     active_subsystems.append(load_subsystem_config(repo_root, folder, cfg_file, port_override))
             else:
@@ -244,7 +224,7 @@ def main():
                     port_disp = f"`{s['port']}`" if s['port'] else "*auto-detect*"
                     f.write(f"| {s['name']} | `{s['target']}` | {port_disp} | {s['timeout']}s | ⏭️ *Skipped (Unchanged)* |\n")
             else:
-                f.write("ℹ️ *No modified firmware subsystems detected. Hardware tests skipped.*\n")
+                f.write("ℹ️ *No modified firmware subsystems with `testbench.json` detected. Hardware tests skipped.*\n")
             f.write("\n")
 
 if __name__ == "__main__":

@@ -267,7 +267,7 @@ jobs:
 ```
 
 #### What this single workflow does automatically:
-1. **Auto-Discovery:** Automatically scans your repository for any subsystem directories containing `testbench.json` or `*/test/CMakeLists.txt`.
+1. **Strict `testbench.json` Auto-Discovery:** Scans your repository exclusively for subsystem directories containing a `testbench.json` file. Folders containing only `CMakeLists.txt` (such as libraries, drivers, or shared components) are never scheduled as test targets.
 2. **Smart Change Detection:** On every push or Pull Request, it inspects `git diff` to determine which ECUs were modified. Only modified subsystems are compiled and flashed.
 3. **Hardware Port Routing:** Reads each subsystem's `testbench.json` to route firmware to its designated microcontroller on `stolerpi` (e.g. `/dev/esp32_johnathan` vs `/dev/esp32_ahmed`).
 4. **Collision Protection:** Enforces strict hardware mutexes so multiple boards or test suites never collide on the bench UART bus.
@@ -291,9 +291,9 @@ If your repository already has its own custom CI workflow and you simply want a 
 
 ---
 
-### Configuring Subsystems via `testbench.json` (Optional)
+### Defining Subsystems via `testbench.json` (Required for CI)
 
-By default, the runner automatically discovers projects in `*/test` and discovers available ESP32 serial ports. To bind a specific subsystem to a designated bench microcontroller, add a `testbench.json` file inside that subsystem folder:
+A firmware directory is **only scheduled for hardware testing if it explicitly contains a `testbench.json` file**. Folders containing only `CMakeLists.txt` are treated as normal source code and will never be scheduled as test targets. To enable hardware CI for an ECU, place `testbench.json` inside its folder:
 
 ```json
 {

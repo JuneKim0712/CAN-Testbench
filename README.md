@@ -88,7 +88,7 @@ jobs:
 ```
 
 ### What this does automatically:
-- 🔍 **Auto-Discovers Subsystems:** Scans your repo for any folders containing `testbench.json` or `*/test/CMakeLists.txt`.
+- 🔍 **Strict `testbench.json` Discovery:** Scans your repo exclusively for folders containing `testbench.json`. Subsystems without `testbench.json` (even if they have `CMakeLists.txt`) are excluded from hardware testing.
 - ⚡ **Smart Change-Detection:** Compiles and flashes **only the ECUs modified** in that push/PR.
 - 🎯 **Per-ECU Microcontroller Routing:** Reads each folder's `testbench.json` to flash the correct board on `stolerpi` (e.g. `/dev/esp32_johnathan` vs `/dev/esp32_ahmed`).
 - 📊 **Rich Step Summary:** Posts pass/fail tables with test assertions directly to GitHub.
