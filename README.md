@@ -1,19 +1,19 @@
-# CalSol CAN Testbench & CI Monorepo
+# CalSol Gen11 Hardware Testbench & CI Testing Ground
 
-Continuous integration, remote hardware testbench flashing, Slack bot management, and on-target Unity unit testing for the UC Berkeley Solar Vehicle Team (**CalSol**).
+Continuous hardware integration, automated on-target Unity unit testing, and GitHub Actions workflow testing ground for the UC Berkeley Solar Vehicle Team (**CalSol**).
 
-Designed as the testing ground and prototype for [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW).
+Designed exclusively to model and validate continuous integration workflows for [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW).
 
 ---
 
 ## 1. Repository Structure
 
 ```text
-CAN_TestBench/
-├── .github/workflows/          # Central GitHub Actions CI/CD workflows for Raspberry Pi
+CAN-Testbench/
+├── .github/workflows/          # GitHub Actions CI/CD workflows for Raspberry Pi
 │   └── unit-test.yml           # Multi-subsystem hardware test matrix & reusable workflow
 │
-├── components/                 # Shared vehicle components & libraries
+├── components/                 # Shared vehicle components & libraries (from Gen11-FW)
 │   └── can_driver/             # Universal CalSol CAN hardware driver (CAN.h, CAN_driver.c)
 │
 ├── lights_fw/                  # Subsystem 1: Brakelights & Hazards
@@ -38,17 +38,11 @@ CAN_TestBench/
 │           ├── CMakeLists.txt
 │           └── test_main.c     # Throttle deadzones, plausibility cutoff rules, and CAN
 │
-├── server/                     # Raspberry Pi & CI Hardware Testbench Runner
-│   ├── cal-test.sh             # Automated build, flash, and test orchestrator
-│   ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
-│   └── lib/
-│       └── unity_parser.py     # Serial monitor & GitHub Actions summary table generator
-│
-└── Slack_Bot/                  # Bench Pi Slack Bot Daemon (@bot commands)
-    ├── bot.py
-    ├── esp_fleet_bot.service
-    ├── requirements.txt
-    └── Readme.md
+└── server/                     # Raspberry Pi Testbench Engine
+    ├── cal-test.sh             # Automated build, flash, and test orchestrator
+    ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
+    └── lib/
+        └── unity_parser.py     # Serial monitor & GitHub Actions summary table generator
 ```
 
 ---
