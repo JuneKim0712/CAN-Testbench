@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# CalSol Testbench Server: On-Target Unity Unit Test Runner & Assertion Parser
+# CalSol Testbench Server: On-Target Unity Unit Test Runner (Concise Mode)
 # Usage: cal-test <board_name> <test_binary_path>
 # ==============================================================================
 
@@ -23,10 +23,7 @@ if [ -z "$FLASH_RUNNER" ] || [ ! -f "$FLASH_RUNNER" ]; then
     exit 1
 fi
 
-# 1. Flash the test binary to target board
-echo "=========================================================="
-echo " [HIL Test] Flashing Unity Binary to ${BOARD}"
-echo "=========================================================="
+# 1. Flash the test binary
 "$FLASH_RUNNER" "$BOARD" "$TEST_BIN"
 
 # Resolve device path
@@ -38,42 +35,48 @@ for dev_candidate in "/dev/${BOARD}" "/dev/esp32_${BOARD}" "/dev/calsol_${BOARD}
     fi
 done
 
-echo "[*] Monitoring ${DEVICE} for Unity test completion (15s timeout)..."
+echo "[*] Running Unity tests on ${BOARD}..."
 
 python3 - <<EOF
 import serial, sys, time
 
 device = "$DEVICE"
 try:
-    ser = serial.Serial(device, 115200, timeout=1)
+    ser = serial.Serial(device, 115200, timeout=0.5)
 except Exception as e:
     print(f"[-] Could not open serial port {device}: {e}")
     sys.exit(1)
 
 start_time = time.time()
 passed = False
-timed_out = True
+summary = ""
 
-while time.time() - start_time < 15:
+while time.time() - start_time < 12:
     line = ser.readline().decode('utf-8', errors='replace').strip()
-    if line:
-        print("  | " + line)
-    if "Tests 0 Failures 0 Ignored" in line:
-        passed = True
-        timed_out = False
-        break
-    if "Failures" in line and "0 Failures" not in line:
-        passed = False
-        timed_out = False
+    if not line:
+        continue
+    if ":PASS" in line:
+        parts = line.split(":")
+        name = parts[-2] if len(parts) >= 2 else line
+        print(f"    ✓ {name}")
+    elif ":FAIL" in line:
+        parts = line.split(":")
+        name = parts[-2] if len(parts) >= 2 else line
+        print(f"    ✗ {name} (FAILED)")
+        print(f"      {line}")
+    elif "Tests" in line and "Failures" in line:
+        summary = line
+        if "0 Failures" in line:
+            passed = True
         break
 
 if passed:
-    print("\n[+] SUCCESS: All Unity unit tests passed on physical hardware!")
+    print(f"\n[+] {summary} (ALL PASSED)")
     sys.exit(0)
-elif timed_out:
-    print("\n[-] TIMEOUT: Target did not complete tests within 15 seconds.")
+elif summary:
+    print(f"\n[-] {summary} (FAILED)")
     sys.exit(1)
 else:
-    print("\n[-] FAILURE: One or more unit tests failed.")
+    print("\n[-] Timed out waiting for test completion.")
     sys.exit(1)
 EOF

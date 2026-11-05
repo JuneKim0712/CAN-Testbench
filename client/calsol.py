@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CalSol CAN Testbench - Developer Client CLI
+CalSol CAN Testbench - Developer Client CLI (Concise Mode)
 Cross-platform tool (Windows / macOS / Linux) for remote flashing, monitoring, and testing.
 """
 
@@ -31,28 +31,37 @@ def load_config():
             pass
     return cfg
 
-def run_cmd(cmd, check=True):
-    print(f"[*] Running: {' '.join(cmd)}")
-    return subprocess.run(cmd, check=check)
+def run_cmd_quiet(cmd):
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if res.returncode != 0:
+        print(f"[-] Command failed: {' '.join(cmd)}")
+        if res.stdout:
+            print(res.stdout)
+        if res.stderr:
+            print(res.stderr)
+        sys.exit(res.returncode)
+    return res
 
 def cmd_flash(args, config):
     board = args.board or config.get("default_board", "steering")
     bin_path = Path(args.binary) if args.binary else Path(f"build/{board}.bin")
 
     if not bin_path.exists():
-        print(f"[-] Error: Binary not found at {bin_path}. Run your build step first!")
+        print(f"[-] Error: Binary not found at {bin_path}. Run build first!")
         sys.exit(1)
 
     host = config["host"]
     remote_staging = config["staging_dir"]
     remote_bin = f"{remote_staging}/{bin_path.name}"
 
-    print(f"[1/2] Transferring {bin_path} -> {host}:{remote_bin}...")
-    run_cmd(["ssh", host, f"mkdir -p {remote_staging}"])
-    run_cmd(["scp", str(bin_path), f"{host}:{remote_bin}"])
+    printf_end = ""
+    print(f"[*] Syncing {bin_path.name} to {host}... ", end="", flush=True)
+    run_cmd_quiet(["ssh", host, f"mkdir -p {remote_staging}"])
+    run_cmd_quiet(["scp", str(bin_path), f"{host}:{remote_bin}"])
+    print("OK")
 
-    print(f"[2/2] Triggering remote flash on {board}...")
-    run_cmd(["ssh", "-t", host, f"~/CAN_TestBench/server/cal-flash.sh {board} {remote_bin} || cal-flash {board} {remote_bin}"])
+    res = subprocess.run(["ssh", "-t", host, f"~/CAN_TestBench/server/cal-flash.sh {board} {remote_bin} || cal-flash {board} {remote_bin}"])
+    sys.exit(res.returncode)
 
 def cmd_test(args, config):
     board = args.board or config.get("default_board", "steering")
@@ -66,11 +75,11 @@ def cmd_test(args, config):
     remote_staging = config["staging_dir"]
     remote_bin = f"{remote_staging}/{bin_path.name}"
 
-    print(f"[1/2] Transferring test binary {bin_path} -> {host}...")
-    run_cmd(["ssh", host, f"mkdir -p {remote_staging}"])
-    run_cmd(["scp", str(bin_path), f"{host}:{remote_bin}"])
+    print(f"[*] Syncing {bin_path.name} to {host}... ", end="", flush=True)
+    run_cmd_quiet(["ssh", host, f"mkdir -p {remote_staging}"])
+    run_cmd_quiet(["scp", str(bin_path), f"{host}:{remote_bin}"])
+    print("OK")
 
-    print(f"[2/2] Running automated Unity tests on {board}...")
     res = subprocess.run(["ssh", host, f"~/CAN_TestBench/server/cal-test.sh {board} {remote_bin} || cal-test {board} {remote_bin}"])
     sys.exit(res.returncode)
 
@@ -79,22 +88,22 @@ def cmd_monitor(args, config):
     host = config["host"]
     device = f"/dev/{board}" if not board.startswith("/dev/") else board
 
-    print(f"[*] Connecting to serial monitor on {device} (Press Ctrl+] to exit)...")
-    run_cmd(["ssh", "-t", host, f"python3 -m serial.tools.miniterm {device} 115200 || tio {device} -b 115200"], check=False)
+    print(f"[*] Serial monitor on {device} (Ctrl+] to exit):")
+    subprocess.run(["ssh", "-t", host, f"tio {device} -b 115200 || python3 -m serial.tools.miniterm {device} 115200"])
 
 def cmd_status(args, config):
     host = config["host"]
-    print(f"[*] Querying testbench status on {host}...")
-    run_cmd(["ssh", host, "~/CAN_TestBench/server/cal-status.sh 2>/dev/null || cal-status 2>/dev/null || ls -la /dev/esp32* 2>/dev/null || true"])
+    subprocess.run(["ssh", host, "~/CAN_TestBench/server/cal-status.sh 2>/dev/null || cal-status 2>/dev/null || ls -la /dev/esp32* 2>/dev/null || true"])
 
 def cmd_powercycle(args, config):
     host = config["host"]
-    print(f"[*] Power-cycling USB testbench hubs on {host}...")
-    run_cmd(["ssh", host, "esp32-powercycle || cal-powercycle"])
+    print(f"[*] Power-cycling USB hubs on {host}... ", end="", flush=True)
+    res = run_cmd_quiet(["ssh", host, "~/CAN_TestBench/server/cal-powercycle.sh || cal-powercycle || esp32-powercycle"])
+    print("OK")
 
 def main():
     config = load_config()
-    parser = argparse.ArgumentParser(description="CalSol CAN Testbench Client CLI")
+    parser = argparse.ArgumentParser(description="CalSol CAN Testbench Client")
     subparsers = parser.add_subparsers(dest="action", required=True)
 
     # Flash
@@ -115,7 +124,7 @@ def main():
     subparsers.add_parser("status", help="Check hardware board availability and locks")
 
     # Powercycle
-    subparsers.add_parser("powercycle", help="Hard power-cycle hung USB devices on the Pi")
+    subparsers.add_parser("powercycle", help="Power-cycle USB hubs on testbench")
 
     args = parser.parse_args()
 
