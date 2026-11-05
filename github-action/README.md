@@ -14,7 +14,7 @@ Unlike traditional software CI pipelines that run inside abstract Docker contain
                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ GitHub Actions Cloud Orchestrator                           │
-│  - Job 1: detect-changes (Path filtering & matrix gen)      │
+│  - Job 1: detect-changes (Inspects testbench.json per folder)│
 │  - Job 2: testbench (Matrix execution per changed subsystem)│
 └──────────────────────────────┬──────────────────────────────┘
                                │ Dispatched via runner daemon
@@ -22,11 +22,10 @@ Unlike traditional software CI pipelines that run inside abstract Docker contain
 ┌─────────────────────────────────────────────────────────────┐
 │ Raspberry Pi 5 (`stolerpi` - ARM64 Linux)                   │
 │  - Service: `github-runner.service` (systemd --user)        │
-│  - Local checkout: `~/actions-runner/_work/...`              │
 │                                                             │
 │  1. `cal-test.sh`                                           │
-│     ├── Environment setup: Source ESP-IDF (/opt/esp-idf)    │
-│     ├── Port discovery: Auto-detect /dev/esp32_* /dev/ttyACM│
+│     ├── Per-Folder Config: Read `<subsystem>/testbench.json`│
+│     ├── Port mapping: /dev/esp32_johnathan vs /dev/esp32_ahmed
 │     ├── Hardware Mutex: Acquire flock (/tmp/calsol_locks/)  │
 │     ├── Build: `idf.py build` -> .logs/build.log            │
 │     ├── Flash: `idf.py flash` (921.6k baud) -> flash.log    │
@@ -38,14 +37,15 @@ Unlike traditional software CI pipelines that run inside abstract Docker contain
 │     ├── Post Markdown summary table to $GITHUB_STEP_SUMMARY │
 │     └── Exit with code 0 (Pass) or code 1 (Fail/Timeout)    │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ UART Flashing (921.6k baud)
-                               │ UART Serial Logging (115.2k baud)
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Target Silicon (ESP32-S3 Dual-Core Xtensa LX7)              │
-│  - Runs FreeRTOS & Unity Test Framework                     │
-│  - Executes subsystem logic, ADC math, and CAN frame checks │
-└─────────────────────────────────────────────────────────────┘
+                               │
+               ┌───────────────┴───────────────┐
+               │ UART (921.6k)                 │ UART (921.6k)
+               ▼                               ▼
+┌──────────────────────────────┐┌──────────────────────────────┐
+│ ESP32-S3 Board A             ││ ESP32-S3 Board B             │
+│ /dev/esp32_johnathan (ttyACM1)││ /dev/esp32_ahmed (ttyACM0)   │
+│ Lights & Hazards ECU         ││ Pedals & Throttle ECU        │
+└──────────────────────────────┘└──────────────────────────────┘
 ```
 
 ---
@@ -102,7 +102,53 @@ filters: |
 
 ---
 
-## 4. Detailed Script Breakdown
+## 4. Per-Subsystem Hardware Configuration (`testbench.json`)
+
+In a monorepo containing multiple vehicle subsystems, each subsystem can be mapped to its own designated microcontroller on the bench. Each subsystem directory can contain a `testbench.json` configuration file:
+
+### Example: `lights_fw/testbench.json`
+```json
+{
+  "name": "lights_fw",
+  "target": "lights_fw/test",
+  "port": "/dev/esp32_johnathan",
+  "baud": 921600,
+  "timeout": 12,
+  "description": "Brakelights & Hazards ECU testbench configuration"
+}
+```
+
+### Example: `pedals_fw/testbench.json`
+```json
+{
+  "name": "pedals_fw",
+  "target": "pedals_fw/test",
+  "port": "/dev/esp32_ahmed",
+  "baud": 921600,
+  "timeout": 12,
+  "description": "Accelerator & Brake Plausibility ECU testbench configuration"
+}
+```
+
+### Supported Configuration Fields
+
+| Field | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `name` | string | Subsystem folder name | Name displayed in GitHub Actions job title and reports |
+| `target` | string | `<folder>/test` | Relative path to the ESP-IDF test project directory |
+| `port` | string | `""` (auto-detect) | Udev device path on Raspberry Pi (e.g. `/dev/esp32_johnathan`) |
+| `baud` | integer | `921600` | Baud rate for flashing firmware onto silicon |
+| `timeout` | integer | `12` | Max seconds to monitor serial port for Unity results |
+| `description`| string | `""` | Human-readable documentation string |
+
+### Precedence Hierarchy
+1. **CLI Flag Override:** Passing a port directly (`cal-test.sh <target> [port] [timeout]`) overrides all files.
+2. **Folder `testbench.json`:** If no CLI argument is given, settings are loaded from `<folder>/testbench.json`.
+3. **Automatic Discovery Fallback:** If the configured port is disconnected or empty, the runner automatically scans active udev devices (`/dev/steering`, `/dev/esp32_*`, `/dev/ttyACM*`).
+
+---
+
+## 5. Detailed Script Breakdown
 
 ### A. `cal-test.sh` — Hardware Test Orchestrator
 
@@ -111,40 +157,39 @@ This script is the primary entrypoint called by both GitHub Actions and engineer
 #### Sequence of Operations:
 
 ```text
-cal-test.sh <target_directory_or_bin> [serial_port]
+cal-test.sh <target_directory_or_bin> [port] [timeout]
   │
   ├── 1. Resolve Target Path
   │      Checks if target is a relative directory, absolute path, or pre-built binary.
   │
-  ├── 2. Source ESP-IDF Environment
+  ├── 2. Load Folder `testbench.json`
+  │      Inspects $TARGET/testbench.json or $(dirname $TARGET)/testbench.json.
+  │      Extracts port, baud, timeout, and name.
+  │
+  ├── 3. Source ESP-IDF Environment
   │      Verifies if `idf.py` is in $PATH. If not, automatically locates and sources
   │      `/opt/esp-idf/export.sh` or `~/esp/esp-idf/export.sh`.
   │
-  ├── 3. Serial Port Auto-Discovery
-  │      If port is not supplied, scans known udev symlinks in order of priority:
-  │      - /dev/steering
-  │      - /dev/esp32_johnathan
-  │      - /dev/bms
-  │      - /dev/esp32_ahmed
-  │      - /dev/ttyACM0, /dev/ttyACM1
+  ├── 4. Port Validation & Auto-Discovery
+  │      Validates configured port. If not connected, scans known udev symlinks.
   │
-  ├── 4. Hardware Mutex Acquisition (`flock`)
+  ├── 5. Hardware Mutex Acquisition (`flock`)
   │      Opens file descriptor 200 on `/tmp/calsol_locks/<board>.lock`.
   │      Waits up to 15 seconds (`flock -w 15 200`).
   │      Prevents concurrent flashing by GitHub Actions, local terminals, or the Slack Bot!
   │
-  ├── 5. Build Firmware (`idf.py build`)
+  ├── 6. Build Firmware (`idf.py build`)
   │      Navigates to the test project directory.
   │      Configures ESP32-S3 target if no sdkconfig exists.
   │      Redirects all stdout/stderr to `.logs/build.log`.
   │      If compilation fails, prints the last 30 lines of error log and exits with code 1.
   │
-  ├── 6. Flash Silicon (`idf.py flash` / `esptool.py`)
-  │      Flashes firmware image at 921,600 baud.
+  ├── 7. Flash Silicon (`idf.py flash` / `esptool.py`)
+  │      Flashes firmware image at configured baud rate (default 921,600 baud).
   │      Redirects output to `.logs/flash.log`.
   │      If flashing fails, dumps error log and exits with code 1.
   │
-  └── 7. Launch Unity Parser (`unity_parser.py`)
+  └── 8. Launch Unity Parser (`unity_parser.py`)
          Executes serial monitor to parse test assertions and report results.
 ```
 
@@ -168,7 +213,7 @@ This Python utility is responsible for reading the microcontroller's UART output
 
 #### How It Works:
 1. **Serial Connection:** Opens the specified serial device (`--port`) at 115,200 baud with a 0.5-second read timeout.
-2. **Stream Analysis:** Continuously reads serial lines until `--timeout` (default 12s) expires or test completion is detected:
+2. **Stream Analysis:** Continuously reads serial lines until `--timeout` expires or test completion is detected:
    - Matches line containing `:PASS` -> Records passed assertion: `results.append(("PASS", test_name, line))`.
    - Matches line containing `:FAIL` -> Records failure: `results.append(("FAIL", test_name, line))`.
    - Matches Unity summary line containing `Tests` and `Failures`:
@@ -189,26 +234,6 @@ This Python utility is responsible for reading the microcontroller's UART output
 
 ---
 
-## 5. Workflow Step-by-Step Walkthrough
-
-Here is the exact progression of steps executed when a workflow run triggers:
-
-### Job 1: `detect-changes`
-1. **Checkout Repository:** Fetches the repository shallowly to inspect changed files.
-2. **Filter Changed Paths:** Executes `dorny/paths-filter@v3` against GitHub's Compare API to see which folders were touched.
-3. **Determine Target Matrix:** Converts matched folders into a JSON matrix array (`targets`) and outputs a boolean (`has_changes`).
-4. **Report Detection Summary:** Appends a quick Markdown notice to GitHub Actions summary stating which subsystems were scheduled.
-
-### Job 2: `testbench`
-1. **Conditional Check:** Evaluates `if: needs.detect-changes.outputs.has_changes == 'true'`. If false, the job is cleanly skipped.
-2. **Matrix Expansion:** GitHub Actions schedules a parallel/queued job for each target subsystem in `subsystem: ${{ fromJson(needs.detect-changes.outputs.targets) }}`.
-3. **Checkout Repository:** Checks out the code on the Raspberry Pi runner.
-4. **Make Scripts Executable:** Runs `chmod +x github-action/*.sh github-action/lib/*.py`.
-5. **Run Hardware Unit Tests:** Runs `./github-action/cal-test.sh "${{ matrix.subsystem }}"`.
-6. **Dump Failure Logs:** Runs only `if: failure()`. If build or flash failed, reads `.logs/build.log` and `.logs/flash.log` and outputs them inside collapsible `<details>` blocks on GitHub for instant debugging without needing SSH access.
-
----
-
 ## 6. How to Add a New Firmware Subsystem & Test
 
 To integrate a new vehicle subsystem (e.g., `steering_fw`):
@@ -217,6 +242,7 @@ To integrate a new vehicle subsystem (e.g., `steering_fw`):
 Structure the new folder alongside existing firmware:
 ```text
 steering_fw/
+├── testbench.json              # Custom ECU port and timeout settings
 ├── CMakeLists.txt
 ├── main/
 │   ├── CMakeLists.txt
@@ -228,7 +254,18 @@ steering_fw/
         └── test_main.c
 ```
 
-### 2. Update Path Filter in [`.github/workflows/unit-test.yml`](../.github/workflows/unit-test.yml)
+### 2. Configure `testbench.json`
+```json
+{
+  "name": "steering_fw",
+  "target": "steering_fw/test",
+  "port": "/dev/steering",
+  "baud": 921600,
+  "timeout": 15
+}
+```
+
+### 3. Update Path Filter in [`.github/workflows/unit-test.yml`](../.github/workflows/unit-test.yml)
 Add the subsystem under the `filters` block:
 ```yaml
 steering_fw/test:
@@ -238,10 +275,10 @@ steering_fw/test:
   - '.github/**'
 ```
 
-### 3. Add to Manual Trigger Options
+### 4. Add to Manual Trigger Options
 Add `'steering_fw/test'` to `workflow_dispatch.inputs.target.options`.
 
-Commit and push your changes. From that moment forward, any commit touching `steering_fw/` will automatically compile, flash, and test on target hardware!
+Commit and push your changes. From that moment forward, any commit touching `steering_fw/` will automatically compile, flash to its designated microcontroller, and test on target hardware!
 
 ---
 
@@ -251,9 +288,8 @@ Commit and push your changes. From that moment forward, any commit touching `ste
 - **Cause:** Another test job, terminal session, or Slack bot command was holding the hardware mutex lock.
 - **Resolution:** The runner automatically waits 15 seconds. If a stale lock remains, check running processes on the Pi (`ps aux | grep -E 'cal-test|idf.py'`) or remove the lock in `/tmp/calsol_locks/`.
 
-### Q: Why was the hardware test skipped after my commit?
-- **Cause:** The path filter determined that no firmware files were modified (e.g. only `README.md` or `.gitignore` changed).
-- **Resolution:** This is intentional behavior to save testbed runtime. To force a run without changing firmware, trigger via the **Actions** tab using `workflow_dispatch`.
+### Q: What if a configured port in `testbench.json` is unplugged?
+- **Behavior:** `cal-test.sh` prints a warning and automatically falls back to discovering available ESP32 serial devices in `/dev/`.
 
 ### Q: Where do I view test logs if a test fails?
 - **In GitHub UI:** Open the failed Actions run. The step summary directly contains the Unity test assertion table and collapsible build/flash logs.
