@@ -124,18 +124,6 @@ if [ -d "$TARGET" ]; then
         exit 1
     fi
 
-    # Feature E: Memory Bloat & Sizing Guard
-    printf "[*] Analyzing memory footprint... "
-    if idf.py size --format json2 --output-file "build/size_info.json" >/dev/null 2>&1; then
-        python3 "${SCRIPT_DIR}/lib/size_reporter.py" \
-            --size-file "build/size_info.json" \
-            --subsystem "${SUBSYSTEM_SLUG}" \
-            --output-json "${LOG_DIR}/${SUBSYSTEM_SLUG}_size_summary.json" >/dev/null 2>&1 || true
-        echo "OK"
-    else
-        echo "SKIPPED"
-    fi
-
     # Feature B: Stage trackside flashable binaries
     ARTIFACTS_DIR="${TARGET}/build/artifacts"
     mkdir -p "$ARTIFACTS_DIR"
@@ -144,8 +132,6 @@ if [ -d "$TARGET" ]; then
     cp -f build/bootloader/bootloader.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
     cp -f build/partition_table/partition-table.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
     cp -f build/flasher_args.json "$ARTIFACTS_DIR/" 2>/dev/null || true
-    [ -f "build/size_info.json" ] && cp -f "build/size_info.json" "$ARTIFACTS_DIR/" 2>/dev/null || true
-    [ -f "${LOG_DIR}/${SUBSYSTEM_SLUG}_size_summary.json" ] && cp -f "${LOG_DIR}/${SUBSYSTEM_SLUG}_size_summary.json" "$ARTIFACTS_DIR/" 2>/dev/null || true
 
     printf "[*] Flashing %s (%s baud, fast app-flash)... " "$BOARD_NAME" "$BAUD"
     # Try high-speed app partition flashing first; fallback to full flash if needed

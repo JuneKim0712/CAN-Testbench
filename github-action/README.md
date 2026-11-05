@@ -270,19 +270,7 @@ Located at [`github-action/lib/unity_parser.py`](file:///C:/JuneKim0712/CAN_Test
 
 ---
 
-### D. `lib/size_reporter.py` — Memory Bloat & Footprint Sizing Guard
-Located at [`github-action/lib/size_reporter.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/size_reporter.py).
-
-- Automatically executes after `idf.py build` via `idf.py size --format json2`.
-- Tracks:
-  - **DRAM (Data/BSS RAM):** Monitors available stack/heap SRAM. Warns if usage exceeds 75%, flags critical at 90%.
-  - **IRAM (Instruction RAM):** Monitors cached executable RAM.
-  - **Flash Footprint:** Evaluates total code and read-only data against partition boundaries.
-- Formats a GitHub Markdown summary table and exports structured JSON for PR aggregation.
-
----
-
-### E. `lib/crash_decoder.py` — Crash Post-Mortem & Stack Backtrace Decoder
+### D. `lib/crash_decoder.py` — Crash Post-Mortem & Stack Backtrace Decoder
 Located at [`github-action/lib/crash_decoder.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/crash_decoder.py).
 
 - Scans the UART stream for ESP32 panics (`Guru Meditation Error`, `LoadProhibited`, `abort()`, `assert failed`).
@@ -292,16 +280,16 @@ Located at [`github-action/lib/crash_decoder.py`](file:///C:/JuneKim0712/CAN_Tes
 
 ---
 
-### F. `lib/pr_reporter.py` — Sticky PR Status & Memory Dashboard Bot
+### E. `lib/pr_reporter.py` — Sticky PR Status Dashboard Bot
 Located at [`github-action/lib/pr_reporter.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/pr_reporter.py).
 
 - Automatically triggers at the end of Pull Request workflows.
-- Aggregates Cloud Static Analysis results, physical HIL test outcomes, memory footprint utilization, and crash backtraces.
+- Aggregates Cloud Static Analysis results, physical HIL test outcomes, and crash backtraces.
 - Maintains a single **sticky comment** on the PR (updating in-place via HTML marker `<!-- CALSOL_HIL_STATUS_COMMENT -->`) so developers never have to leave the PR page to verify hardware CI status.
 
 ---
 
-### G. Automated Trackside Firmware Artifacts
+### F. Automated Trackside Firmware Artifacts
 - All compiled binaries (`.bin`, `.elf`, `bootloader.bin`, `partition-table.bin`, `flasher_args.json`) are automatically packaged and uploaded via `actions/upload-artifact@v4`.
 - Trackside engineers and electrical team members can download ready-to-flash binaries directly from GitHub without installing the ESP-IDF toolchain locally.
 
