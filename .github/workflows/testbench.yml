@@ -1,0 +1,91 @@
+name: CalSol Hardware Testbench Engine
+
+# ==============================================================================
+# Centralized, Plug-and-Play Hardware-in-the-Loop CI Workflow for CalSol
+# Automatically discovers all testable subsystems, parses testbench.json
+# configurations, detects changed files, and dispatches on-target tests.
+# ==============================================================================
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: 'Target subsystem ("auto" for smart change-detection, "all", or path)'
+        required: false
+        type: string
+        default: 'auto'
+      port:
+        description: 'Serial port override on Raspberry Pi (optional)'
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target subsystem ("auto", "all", or path)'
+        required: false
+        type: string
+        default: 'all'
+      port:
+        description: 'Serial port override'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  discover:
+    name: Auto-Discover Subsystems & Settings
+    runs-on: [ self-hosted, linux, ARM64 ]
+    outputs:
+      matrix: ${{ steps.discovery.outputs.matrix }}
+      has_changes: ${{ steps.discovery.outputs.has_changes }}
+      count: ${{ steps.discovery.outputs.count }}
+    steps:
+      - name: Checkout Calling Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Testbench Runner Engine
+        uses: actions/checkout@v4
+        with:
+          repository: CalSol/CAN_TestBench
+          path: .calsol_testbench
+
+      - name: Auto-Discover & Resolve Subsystems
+        id: discovery
+        env:
+          INPUT_TARGET: ${{ inputs.target }}
+          PORT_OVERRIDE: ${{ inputs.port }}
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 .calsol_testbench/github-action/lib/auto_discover.py --repo-root .
+
+  testbench:
+    name: Test ${{ matrix.cfg.name }} (${{ matrix.cfg.port || 'auto' }})
+    needs: discover
+    if: needs.discover.outputs.has_changes == 'true'
+    runs-on: [ self-hosted, linux, ARM64 ]
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg: ${{ fromJson(needs.discover.outputs.matrix) }}
+
+    steps:
+      - name: Checkout Calling Repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Testbench Runner Engine
+        uses: actions/checkout@v4
+        with:
+          repository: CalSol/CAN_TestBench
+          path: .calsol_testbench
+
+      - name: Run Hardware Testbench Action
+        uses: ./.calsol_testbench/github-action
+        with:
+          target: ${{ matrix.cfg.target }}
+          port: ${{ matrix.cfg.port }}
+          timeout: ${{ matrix.cfg.timeout }}
