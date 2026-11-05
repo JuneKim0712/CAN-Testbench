@@ -47,7 +47,7 @@ def cmd_flash(args, config):
     run_cmd(["scp", str(bin_path), f"{host}:{remote_bin}"])
 
     print(f"[2/2] Triggering remote flash on {board}...")
-    run_cmd(["ssh", "-t", host, f"~/CAN-Testbench/server/cal-flash.sh {board} {remote_bin} || cal-flash {board} {remote_bin}"])
+    run_cmd(["ssh", "-t", host, f"~/CAN_TestBench/server/cal-flash.sh {board} {remote_bin} || cal-flash {board} {remote_bin}"])
 
 def cmd_test(args, config):
     board = args.board or config.get("default_board", "esp32_johnathan")
@@ -66,7 +66,7 @@ def cmd_test(args, config):
     run_cmd(["scp", str(bin_path), f"{host}:{remote_bin}"])
 
     print(f"[2/2] Running automated Unity tests on {board}...")
-    res = subprocess.run(["ssh", host, f"~/CAN-Testbench/server/cal-test.sh {board} {remote_bin} || cal-test {board} {remote_bin}"])
+    res = subprocess.run(["ssh", host, f"~/CAN_TestBench/server/cal-test.sh {board} {remote_bin} || cal-test {board} {remote_bin}"])
     sys.exit(res.returncode)
 
 def cmd_monitor(args, config):
@@ -80,7 +80,7 @@ def cmd_monitor(args, config):
 def cmd_status(args, config):
     host = config["host"]
     print(f"[*] Querying testbench status on {host}...")
-    run_cmd(["ssh", host, "~/CAN-Testbench/server/cal-status.sh 2>/dev/null || cal-status 2>/dev/null || ls -la /dev/esp32* 2>/dev/null || true"])
+    run_cmd(["ssh", host, "~/CAN_TestBench/server/cal-status.sh 2>/dev/null || cal-status 2>/dev/null || ls -la /dev/esp32* 2>/dev/null || true"])
 
 def cmd_powercycle(args, config):
     host = config["host"]

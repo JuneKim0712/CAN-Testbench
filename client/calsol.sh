@@ -33,7 +33,7 @@ case "$ACTION" in
         ssh "$PI_HOST" "mkdir -p ${STAGING_DIR}"
         scp "$BIN" "${PI_HOST}:${STAGING_DIR}/$(basename "$BIN")"
         echo "[2/2] Flashing ${BOARD} on remote testbench..."
-        ssh -t "$PI_HOST" "~/CAN-Testbench/server/cal-flash.sh ${BOARD} ${STAGING_DIR}/$(basename "$BIN") || cal-flash ${BOARD} ${STAGING_DIR}/$(basename "$BIN")"
+        ssh -t "$PI_HOST" "~/CAN_TestBench/server/cal-flash.sh ${BOARD} ${STAGING_DIR}/$(basename "$BIN") || cal-flash ${BOARD} ${STAGING_DIR}/$(basename "$BIN")"
         ;;
 
     test)
@@ -46,7 +46,7 @@ case "$ACTION" in
         ssh "$PI_HOST" "mkdir -p ${STAGING_DIR}"
         scp "$TEST_BIN" "${PI_HOST}:${STAGING_DIR}/$(basename "$TEST_BIN")"
         echo "[2/2] Running automated Unity tests on ${BOARD}..."
-        ssh "$PI_HOST" "~/CAN-Testbench/server/cal-test.sh ${BOARD} ${STAGING_DIR}/$(basename "$TEST_BIN") || cal-test ${BOARD} ${STAGING_DIR}/$(basename "$TEST_BIN")"
+        ssh "$PI_HOST" "~/CAN_TestBench/server/cal-test.sh ${BOARD} ${STAGING_DIR}/$(basename "$TEST_BIN") || cal-test ${BOARD} ${STAGING_DIR}/$(basename "$TEST_BIN")"
         ;;
 
     monitor)
@@ -55,7 +55,7 @@ case "$ACTION" in
         ;;
 
     status)
-        ssh "$PI_HOST" "~/CAN-Testbench/server/cal-status.sh 2>/dev/null || cal-status 2>/dev/null || ls -la /dev/esp32* 2>/dev/null || true"
+        ssh "$PI_HOST" "~/CAN_TestBench/server/cal-status.sh 2>/dev/null || cal-status 2>/dev/null || ls -la /dev/esp32* 2>/dev/null || true"
         ;;
 
     powercycle)

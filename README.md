@@ -56,8 +56,8 @@ See [Slack_Bot/Readme.md](Slack_Bot/Readme.md) for full configuration, Slack API
 
 1. **Clone this repository on your laptop:**
    ```bash
-   git clone https://github.com/JuneKim0712/CAN-Testbench.git
-   cd CAN-Testbench
+   git clone https://github.com/CalSol/CAN_TestBench.git
+   cd CAN_TestBench
    ```
 
 2. **Configure your connection in `client/config.json`:**
@@ -95,7 +95,7 @@ See [Slack_Bot/Readme.md](Slack_Bot/Readme.md) for full configuration, Slack API
 
 1. **Clone / Sync on the Raspberry Pi (`stolerpi`):**
    ```bash
-   git clone https://github.com/JuneKim0712/CAN-Testbench.git ~/CAN-Testbench
+   git clone https://github.com/CalSol/CAN_TestBench.git ~/CAN_TestBench
    ```
 
 2. **Make scripts executable and link them:**
