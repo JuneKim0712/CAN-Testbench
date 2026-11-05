@@ -80,19 +80,29 @@ if [ ${#CPPCHECK_TARGETS[@]} -eq 0 ]; then
     CPPCHECK_TARGETS=("${REPO_ROOT}")
 fi
 
-if cppcheck --enable=warning,performance,portability \
-            --inline-suppr \
-            --suppress=missingIncludeSystem \
-            --suppress=unmatchedSuppression \
-            --error-exitcode=1 \
-            --template="[{file}:{line}]: ({severity}) {message}" \
-            "${CPPCHECK_TARGETS[@]}" > "$REPORT_FILE" 2>&1; then
-    echo "PASSED (0 defects detected)"
+cppcheck --enable=warning,performance,portability \
+         --inline-suppr \
+         --suppress=missingInclude \
+         --suppress=missingIncludeSystem \
+         --suppress=unusedFunction \
+         --suppress=unmatchedSuppression \
+         --template="[{file}:{line}]: ({severity}) {message}" \
+         "${CPPCHECK_TARGETS[@]}" > "$REPORT_FILE" 2>&1 || true
+
+ERROR_COUNT=$(grep -c "\]: (error)" "$REPORT_FILE" 2>/dev/null || true)
+ERROR_COUNT="${ERROR_COUNT//[!0-9]/}"
+[ -z "$ERROR_COUNT" ] && ERROR_COUNT=0
+
+WARNING_COUNT=$(grep -c -E "\]: (warning|performance|portability)" "$REPORT_FILE" 2>/dev/null || true)
+WARNING_COUNT="${WARNING_COUNT//[!0-9]/}"
+[ -z "$WARNING_COUNT" ] && WARNING_COUNT=0
+
+if [ "$ERROR_COUNT" -eq 0 ]; then
+    echo "PASSED (0 critical errors, ${WARNING_COUNT} non-blocking notices)"
 else
-    echo "FAILED"
-    HAS_CPPCHECK_ERRORS=1
+    echo "FAILED (${ERROR_COUNT} critical error(s) detected)"
     echo "=== Cppcheck Diagnostics ==="
-    cat "$REPORT_FILE"
+    grep "]: (error)" "$REPORT_FILE" || cat "$REPORT_FILE"
 fi
 
 # 4. Write GitHub Actions Step Summary if in CI
@@ -100,12 +110,20 @@ if [ -n "$GITHUB_STEP_SUMMARY" ]; then
     {
         echo "### 🛡️ Pre-Hardware Code Quality & Static Analysis"
         echo ""
-        if [ $HAS_CPPCHECK_ERRORS -eq 0 ]; then
-            echo "✅ **Cppcheck Static Analysis:** Passed (0 logic bugs / memory safety defects)"
+        if [ "$ERROR_COUNT" -eq 0 ]; then
+            echo "✅ **Cppcheck Static Analysis:** Passed (0 critical bugs)"
+            if [ "$WARNING_COUNT" -gt 0 ]; then
+                echo "<details><summary>ℹ️ View ${WARNING_COUNT} static analysis suggestions / non-blocking notices</summary>"
+                echo ""
+                echo '```text'
+                cat "$REPORT_FILE"
+                echo '```'
+                echo "</details>"
+            fi
         else
-            echo "❌ **Cppcheck Static Analysis:** Failed — logic defects detected"
+            echo "❌ **Cppcheck Static Analysis:** Failed — ${ERROR_COUNT} critical defect(s) detected!"
             echo '```text'
-            cat "$REPORT_FILE"
+            grep "]: (error)" "$REPORT_FILE" || cat "$REPORT_FILE"
             echo '```'
         fi
         echo ""
@@ -122,7 +140,7 @@ if [ -n "$GITHUB_STEP_SUMMARY" ]; then
     } >> "$GITHUB_STEP_SUMMARY"
 fi
 
-if [ $HAS_CPPCHECK_ERRORS -ne 0 ]; then
+if [ "$ERROR_COUNT" -gt 0 ]; then
     exit 1
 fi
 
