@@ -1,16 +1,32 @@
+# Compiled binaries & build artifacts
+build/
+*.bin
+*.elf
+*.map
+*.hex
+sdkconfig
+sdkconfig.old
+workspace/
+
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 .venv/
 venv/
+*.egg-info/
 
 # Secrets — tokens live in /etc/esp-fleet-bot.env on the Pi, never in the repo
 .env
 *.env
 
-# ESP-IDF build output (should never be here anyway — FLEET_WORKSPACE points
-# outside the checkout — but belt and braces)
-workspace/
-build/
-sdkconfig
-sdkconfig.old
+# Editor & OS files
+.vscode/*
+!.vscode/tasks.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Locks & staging
+*.lock
+staging/

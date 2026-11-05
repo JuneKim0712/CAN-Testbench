@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CalSol: Remote Flash Active Board",
+      "type": "shell",
+      "command": "python client/calsol.py flash",
+      "windows": {
+        "command": "python client/calsol.py flash"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CalSol: Run Remote Unity Tests",
+      "type": "shell",
+      "command": "python client/calsol.py test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CalSol: Open Serial Monitor",
+      "type": "shell",
+      "command": "python client/calsol.py monitor",
+      "problemMatcher": []
+    },
+    {
+      "label": "CalSol: Testbench Status Check",
+      "type": "shell",
+      "command": "python client/calsol.py status",
+      "problemMatcher": []
+    }
+  ]
+}
