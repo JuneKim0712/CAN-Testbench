@@ -1,0 +1,27 @@
+# Compiled binaries & build artifacts
+build/
+*.bin
+*.elf
+*.map
+*.hex
+sdkconfig
+sdkconfig.old
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+
+# Editor & OS files
+.vscode/*
+!.vscode/tasks.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Locks & staging
+*.lock
+staging/
