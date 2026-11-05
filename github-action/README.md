@@ -1,275 +1,282 @@
-# CalSol Hardware Testbench & GitHub Actions CI Engine
+# CalSol Hardware Testbench & GitHub Actions CI Engine Documentation
 
-This directory contains the continuous integration (CI) hardware runner engine for the UC Berkeley Solar Vehicle Team (**CalSol**). It bridges cloud GitHub Actions workflows to physical ESP32-S3 microcontrollers on the bench Raspberry Pi (`stolerpi`).
-
----
-
-## 1. Executive Architecture Overview
-
-Unlike traditional software CI pipelines that run inside abstract Docker containers or emulators, the CalSol CAN Testbench runs **Hardware-in-the-Loop (HIL)** unit tests on real automotive silicon. Code is compiled against Espressif ESP-IDF, flashed over high-speed UART, and executed on physical microcontrollers connected to real hardware peripherals and CAN bus transceivers.
-
-```
- GitHub Event (push / PR / manual)
-               │
-               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ GitHub Actions Cloud Orchestrator                           │
-│  - Job 1: detect-changes (Inspects testbench.json per folder)│
-│  - Job 2: testbench (Matrix execution per changed subsystem)│
-└──────────────────────────────┬──────────────────────────────┘
-                               │ Dispatched via runner daemon
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Raspberry Pi 5 (`stolerpi` - ARM64 Linux)                   │
-│  - Service: `github-runner.service` (systemd --user)        │
-│                                                             │
-│  1. `cal-test.sh`                                           │
-│     ├── Per-Folder Config: Read `<subsystem>/testbench.json`│
-│     ├── Port mapping: /dev/esp32_johnathan vs /dev/esp32_ahmed
-│     ├── Hardware Mutex: Acquire flock (/tmp/calsol_locks/)  │
-│     ├── Build: `idf.py build` -> .logs/build.log            │
-│     ├── Flash: `idf.py flash` (921.6k baud) -> flash.log    │
-│     └── Monitor & Parse: Launch `unity_parser.py`           │
-│                                                             │
-│  2. `unity_parser.py`                                       │
-│     ├── Read serial output line-by-line (115,200 baud)      │
-│     ├── Extract Unity assertion tokens (:PASS / :FAIL)      │
-│     ├── Post Markdown summary table to $GITHUB_STEP_SUMMARY │
-│     └── Exit with code 0 (Pass) or code 1 (Fail/Timeout)    │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-               ┌───────────────┴───────────────┐
-               │ UART (921.6k)                 │ UART (921.6k)
-               ▼                               ▼
-┌──────────────────────────────┐┌──────────────────────────────┐
-│ ESP32-S3 Board A             ││ ESP32-S3 Board B             │
-│ /dev/esp32_johnathan (ttyACM1)││ /dev/esp32_ahmed (ttyACM0)   │
-│ Lights & Hazards ECU         ││ Pedals & Throttle ECU        │
-└──────────────────────────────┘└──────────────────────────────┘
-```
+This technical guide provides a complete, deep-dive walkthrough of the hardware-in-the-loop continuous integration (CI) architecture deployed in the `github-action/` directory of the CalSol CAN Testbench repository.
 
 ---
 
-## 2. Directory Structure
+## 1. Executive Summary & Design Philosophy
+
+Most software CI pipelines execute inside virtual machines or cloud containers (e.g., Ubuntu Docker images). While suitable for pure algorithmic code, **firmware for physical automotive vehicles (CalSol Gen11)** has critical hardware-dependent characteristics that simulations cannot replicate:
+- Real Xtensa Dual-Core LX7 silicon execution speeds and register behavior
+- FreeRTOS multitasking and hardware context switching
+- Physical UART peripheral timings and baud-rate synchronizations
+- Hardware interrupts and on-chip CAN/TWAI peripheral controllers
+
+The **CalSol CAN Testbench** is a true **Hardware-in-the-Loop (HIL)** automated test runner. Cloud GitHub Actions orchestrate the workflow, but actual compilation, flashing, execution, and verification run on physical microcontrollers connected to a bench **Raspberry Pi 5 (`stolerpi`)**.
+
+---
+
+## 2. System Architecture & End-to-End Workflow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Firmware Engineer
+    participant GH as GitHub Cloud (Actions Orchestrator)
+    participant Pi as Raspberry Pi Bench (`stolerpi`)
+    participant ESP_A as ESP32-S3 (Pedals: ahmed)
+    participant ESP_B as ESP32-S3 (Lights: johnathan)
+
+    Dev->>GH: git push origin main
+    GH->>GH: Evaluate Changed Paths & Read testbench.json
+    alt No Firmware Files Changed
+        GH-->>Dev: Skip Hardware Test (Clean Green Status)
+    else Subsystems Changed (e.g. pedals_fw & lights_fw)
+        GH->>GH: Build Dynamic Matrix with Port & Timeout Configs
+        par Job 1: Test pedals_fw
+            GH->>Pi: Dispatch pedals_fw to Runner
+            Pi->>Pi: Parse pedals_fw/testbench.json -> /dev/esp32_ahmed
+            Pi->>Pi: Acquire Mutex: /tmp/calsol_locks/esp32_ahmed.lock
+            Pi->>Pi: Compile: idf.py build
+            Pi->>ESP_A: Flash over UART (921,600 baud)
+            ESP_A->>Pi: Stream Unity Assertions (:PASS / :FAIL)
+            Pi->>Pi: unity_parser.py parses stream & writes Step Summary
+            Pi->>GH: Return Job Exit Code (0 = Pass)
+        and Job 2: Test lights_fw
+            GH->>Pi: Dispatch lights_fw to Runner
+            Pi->>Pi: Parse lights_fw/testbench.json -> /dev/esp32_johnathan
+            Pi->>Pi: Acquire Mutex: /tmp/calsol_locks/esp32_johnathan.lock
+            Pi->>Pi: Compile: idf.py build
+            Pi->>ESP_B: Flash over UART (921,600 baud)
+            ESP_B->>Pi: Stream Unity Assertions (:PASS / :FAIL)
+            Pi->>Pi: unity_parser.py parses stream & writes Step Summary
+            Pi->>GH: Return Job Exit Code (0 = Pass)
+        end
+        GH-->>Dev: Render Multi-Device Results Dashboard
+    end
+```
+
+---
+
+## 3. Directory Layout
+
+The repository structure isolates reusable runner scripts and per-subsystem configurations:
 
 ```text
-github-action/
-├── cal-test.sh         # Master test orchestrator (Build with ccache, Mutex, app-flash, Parse)
-├── cal-flash.sh        # Standalone mutex flashing utility for pre-built binaries
-├── static-check.sh     # Pre-hardware cloud static analysis & lint gate (cppcheck & clang-format)
-├── action.yml          # Standalone composite action definition
-├── README.md           # Comprehensive architecture and operation guide
-└── lib/
-    ├── __init__.py     # Python package marker
-    ├── auto_discover.py# Smart subsystem discovery & change resolver
-    └── unity_parser.py # UART serial stream parser & GitHub Step Summary generator
+CAN_TestBench/
+├── .github/workflows/
+│   └── unit-test.yml           # GitHub Actions workflow (dynamic matrix + JSON parsing)
+│
+├── github-action/              # Hardware CI Engine (formerly server/)
+│   ├── cal-test.sh             # Master build, mutex, flash, and test orchestrator
+│   ├── cal-flash.sh            # Standalone mutex flashing utility for pre-built binaries
+│   ├── README.md               # Repository documentation for the CI engine
+│   └── lib/
+│       ├── __init__.py         # Python package marker
+│       └── unity_parser.py     # Serial monitor & GitHub Actions Step Summary reporter
+│
+├── lights_fw/                  # Brakelights & Hazards Subsystem
+│   ├── testbench.json          # Subsystem hardware config (port, baud, timeout)
+│   ├── main/                   # Production firmware code
+│   └── test/                   # Unity on-target test suite
+│
+├── pedals_fw/                  # Accelerator & Brake Plausibility Subsystem
+│   ├── testbench.json          # Subsystem hardware config (port, baud, timeout)
+│   ├── main/                   # Production firmware code
+│   └── test/                   # Unity on-target test suite
+│
+├── Slack_Bot/                  # Bench Pi Slack Bot Daemon (Jonathan Ji)
+└── unit-testing/
+    └── fw-lab-examples/        # Firmware lab code & examples (Kyle Liang)
 ```
-
----
-
-## 3. GitHub Actions CI Triggers & Filtering
-
-The workflow file is located at [`.github/workflows/unit-test.yml`](../.github/workflows/unit-test.yml).
-
-### Supported Triggers
-
-| Trigger Event | Purpose | Behavior |
-| :--- | :--- | :--- |
-| `push: branches: [main]` | Continuous testing on merge | Runs path filtering across commits in push |
-| `pull_request: branches: [main]` | Pre-merge verification | Runs path filtering between PR branch and `main` |
-| `workflow_dispatch` | Manual on-demand testing | Interactive drop-down to select `all` or specific subsystem |
-| `workflow_call` | Reusable workflow execution | Allows caller repos (e.g. `CalSol/Gen11-FW`) to pass target paths |
-
-### Dynamic Path Filtering (`dorny/paths-filter@v3`)
-
-To prevent wearing out ESP32 flash memory and avoid wasting bench test time, the workflow uses an intelligent path detector:
-
-```yaml
-filters: |
-  lights_fw/test:
-    - 'lights_fw/**'
-    - 'components/**'
-    - 'github-action/**'
-    - '.github/**'
-  pedals_fw/test:
-    - 'pedals_fw/**'
-    - 'components/**'
-    - 'github-action/**'
-    - '.github/**'
-```
-
-#### Filtering Rules:
-1. **Isolated Subsystems:** Modifying only files inside `lights_fw/` triggers **only** `lights_fw/test`. The `pedals_fw/test` suite is completely omitted from the matrix.
-2. **Shared Dependencies:** Modifying shared drivers (`components/can_driver/**`), runner scripts (`github-action/**`), or the workflow itself (`.github/**`) causes **all** test suites to run, preventing cross-subsystem regressions.
-3. **Documentation & Unrelated Commits:** Modifying only documentation (e.g., `README.md`, `.gitignore`, `docs/`) evaluates to an empty change list (`targets: []`), setting `has_changes=false`. The entire hardware test job is safely skipped with a clean green checkmark.
 
 ---
 
 ## 4. Per-Subsystem Hardware Configuration (`testbench.json`)
 
-In a monorepo containing multiple vehicle subsystems, each subsystem can be mapped to its own designated microcontroller on the bench. Each subsystem directory can contain a `testbench.json` configuration file:
+In a monorepo containing multiple vehicle electronic control units (ECUs), each ECU may be wired to a dedicated ESP32 development board on the bench. To avoid hardcoding ports into CI workflows or shell scripts, each subsystem folder defines a `testbench.json` file.
 
-### Example: `lights_fw/testbench.json`
+### Schema: `testbench.json`
 ```json
 {
-  "name": "lights_fw",
-  "target": "lights_fw/test",
-  "port": "/dev/esp32_johnathan",
-  "baud": 921600,
-  "timeout": 12,
-  "description": "Brakelights & Hazards ECU testbench configuration"
+  "name": "<string>",           // Friendly display name in CI logs
+  "target": "<string>",         // Path to the test directory (e.g. "lights_fw/test")
+  "port": "<string>",           // Designated serial device on stolerpi (/dev/esp32_*)
+  "baud": <number>,             // Flashing baud rate (default: 921600)
+  "timeout": <number>,          // Maximum seconds to wait for Unity test completion
+  "description": "<string>"     // Human-readable description
 }
 ```
 
-### Example: `pedals_fw/testbench.json`
-```json
-{
-  "name": "pedals_fw",
-  "target": "pedals_fw/test",
-  "port": "/dev/esp32_ahmed",
-  "baud": 921600,
-  "timeout": 12,
-  "description": "Accelerator & Brake Plausibility ECU testbench configuration"
-}
+### Deployed Subsystem Configurations:
+
+1. **`lights_fw/testbench.json`**:
+   ```json
+   {
+     "name": "lights_fw",
+     "target": "lights_fw/test",
+     "port": "/dev/esp32_johnathan",
+     "baud": 921600,
+     "timeout": 12,
+     "description": "Brakelights & Hazards ECU testbench configuration"
+   }
+   ```
+
+2. **`pedals_fw/testbench.json`**:
+   ```json
+   {
+     "name": "pedals_fw",
+     "target": "pedals_fw/test",
+     "port": "/dev/esp32_ahmed",
+     "baud": 921600,
+     "timeout": 12,
+     "description": "Accelerator & Brake Plausibility ECU testbench configuration"
+   }
+   ```
+
+---
+
+## 5. Workflow Step Breakdown & Dynamic Matrix
+
+The GitHub Actions workflow at [`.github/workflows/unit-test.yml`](file:///C:/JuneKim0712/CAN_TestBench/.github/workflows/unit-test.yml) executes across two distinct stages:
+
+### Job 1: `detect-changes` (Orchestration & Config Resolution)
+1. **Path Filtering (`dorny/paths-filter@v3`):** Evaluates file changes against glob rules.
+2. **JSON Extraction:** A clean Python block inspects changed folders, parses each folder's `testbench.json`, and synthesizes a structured matrix payload:
+   ```json
+   [
+     {
+       "name": "pedals_fw",
+       "folder": "pedals_fw",
+       "target": "pedals_fw/test",
+       "port": "/dev/esp32_ahmed",
+       "timeout": 12
+     },
+     {
+       "name": "lights_fw",
+       "folder": "lights_fw",
+       "target": "lights_fw/test",
+       "port": "/dev/esp32_johnathan",
+       "timeout": 12
+     }
+   ]
+   ```
+3. **Step Summary:** Emits a formatted Markdown table to `$GITHUB_STEP_SUMMARY` detailing which subsystems will execute and which hardware ports they will target.
+
+### Job 2: `testbench` (Matrix Execution on `stolerpi`)
+- Uses `matrix: { cfg: ${{ fromJson(needs.detect-changes.outputs.matrix) }} }`.
+- Sets job title dynamically: `Test ${{ matrix.cfg.name }} (${{ matrix.cfg.port || 'auto' }})`.
+- Executes:
+  ```bash
+  ./github-action/cal-test.sh "${{ matrix.cfg.target }}" "${{ matrix.cfg.port }}" "${{ matrix.cfg.timeout }}"
+  ```
+- **Log Dumper:** If compilation, flashing, or assertions fail, the workflow automatically attaches the last 40 lines of `.logs/build.log` and `.logs/flash.log` in collapsible `<details>` blocks.
+
+---
+
+## 6. In-Depth Script Analysis
+
+### A. `cal-test.sh` — Master Test Orchestrator
+Located at [`github-action/cal-test.sh`](file:///C:/JuneKim0712/CAN_TestBench/github-action/cal-test.sh).
+
+```bash
+#!/usr/bin/env bash
+set -e
 ```
 
-### Supported Configuration Fields
+#### 1. Configuration Precedence
+The script respects a strict 3-tier hierarchy:
+$$\text{CLI Argument} \succ \text{Subsystem } testbench.json \succ \text{Automatic Device Discovery}$$
 
-| Field | Type | Default | Description |
-| :--- | :---: | :---: | :--- |
-| `name` | string | Subsystem folder name | Name displayed in GitHub Actions job title and reports |
-| `target` | string | `<folder>/test` | Relative path to the ESP-IDF test project directory |
-| `port` | string | `""` (auto-detect) | Udev device path on Raspberry Pi (e.g. `/dev/esp32_johnathan`) |
-| `baud` | integer | `921600` | Baud rate for flashing firmware onto silicon |
-| `timeout` | integer | `12` | Max seconds to monitor serial port for Unity results |
-| `description`| string | `""` | Human-readable documentation string |
+```bash
+CONFIG_FILE=""
+if [ -d "$TARGET" ] && [ -f "${TARGET}/testbench.json" ]; then
+    CONFIG_FILE="${TARGET}/testbench.json"
+elif [ -d "$TARGET" ] && [ -f "$(dirname "$TARGET")/testbench.json" ]; then
+    CONFIG_FILE="$(dirname "$TARGET")/testbench.json"
+fi
 
-### Precedence Hierarchy
-1. **CLI Flag Override:** Passing a port directly (`cal-test.sh <target> [port] [timeout]`) overrides all files.
-2. **Folder `testbench.json`:** If no CLI argument is given, settings are loaded from `<folder>/testbench.json`.
-3. **Automatic Discovery Fallback:** If the configured port is disconnected or empty, the runner automatically scans active udev devices (`/dev/steering`, `/dev/esp32_*`, `/dev/ttyACM*`).
+if [ -n "$CONFIG_FILE" ]; then
+    CONFIG_PORT=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('port',''))" 2>/dev/null || true)
+    CONFIG_TIMEOUT=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('timeout',''))" 2>/dev/null || true)
+    CONFIG_BAUD=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('baud',''))" 2>/dev/null || true)
+    CONFIG_NAME=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('name',''))" 2>/dev/null || true)
+fi
 
----
-
-## 5. Detailed Script Breakdown
-
-### A. `cal-test.sh` — Hardware Test Orchestrator
-
-This script is the primary entrypoint called by both GitHub Actions and engineers working locally on the Pi.
-
-#### Sequence of Operations:
-
-```text
-cal-test.sh <target_directory_or_bin> [port] [timeout]
-  │
-  ├── 1. Resolve Target Path
-  │      Checks if target is a relative directory, absolute path, or pre-built binary.
-  │
-  ├── 2. Load Folder `testbench.json`
-  │      Inspects $TARGET/testbench.json or $(dirname $TARGET)/testbench.json.
-  │      Extracts port, baud, timeout, and name.
-  │
-  ├── 3. Source ESP-IDF Environment
-  │      Verifies if `idf.py` is in $PATH. If not, automatically locates and sources
-  │      `/opt/esp-idf/export.sh` or `~/esp/esp-idf/export.sh`.
-  │
-  ├── 4. Port Validation & Auto-Discovery
-  │      Validates configured port. If not connected, scans known udev symlinks.
-  │
-  ├── 5. Hardware Mutex Acquisition (`flock`)
-  │      Opens file descriptor 200 on `/tmp/calsol_locks/<board>.lock`.
-  │      Waits up to 15 seconds (`flock -w 15 200`).
-  │      Prevents concurrent flashing by GitHub Actions, local terminals, or the Slack Bot!
-  │
-  ├── 6. Build Firmware (`idf.py build`)
-  │      Navigates to the test project directory.
-  │      Configures ESP32-S3 target if no sdkconfig exists.
-  │      Redirects all stdout/stderr to `.logs/build.log`.
-  │      If compilation fails, prints the last 30 lines of error log and exits with code 1.
-  │
-  ├── 7. Flash Silicon (`idf.py flash` / `esptool.py`)
-  │      Flashes firmware image at configured baud rate (default 921,600 baud).
-  │      Redirects output to `.logs/flash.log`.
-  │      If flashing fails, dumps error log and exits with code 1.
-  │
-  └── 8. Launch Unity Parser (`unity_parser.py`)
-         Executes serial monitor to parse test assertions and report results.
+PORT="${CLI_PORT:-$CONFIG_PORT}"
+TIMEOUT="${CLI_TIMEOUT:-${CONFIG_TIMEOUT:-12}}"
+BAUD="${CONFIG_BAUD:-921600}"
 ```
 
+#### 2. Automatic Fallback & Port Validation
+If a configured port is unplugged or missing, `cal-test.sh` prints a warning and falls back to scanning available `/dev/esp32_*` and `/dev/ttyACM*` links rather than crashing.
+
+#### 3. Granular Hardware Mutex Locking (`flock`)
+Instead of a single global lock that blocks the entire bench, locks are namespaced per serial device:
+```bash
+BOARD_NAME="$(basename "$PORT")"
+LOCK_DIR="/tmp/calsol_locks"
+mkdir -p "$LOCK_DIR"
+LOCK_FILE="${LOCK_DIR}/${BOARD_NAME}.lock"
+exec 200>"$LOCK_FILE"
+if ! flock -w 15 200; then
+    echo "[-] ERROR: Board '${BOARD_NAME}' is currently in use by another process!"
+    exit 1
+fi
+```
+This enables simultaneous flashing and testing if multiple runners or background tasks target different physical ESP32 boards!
+
+#### 4. Compiler Acceleration via `ccache` (54x Faster Builds)
+- Exports `IDF_CCACHE_ENABLE=1` and `CCACHE_DIR="${HOME}/.ccache"`.
+- Caches FreeRTOS and ESP-IDF precompiled object files on `stolerpi`.
+- Recompilation time drops from **~70 seconds down to 1.3 seconds**!
+
+#### 5. Differential Application Flashing (`app-flash`)
+- Attempts `idf.py app-flash` at 921,600 baud, flashing **only the app partition at 0x10000**.
+- Bypasses rewriting the bootloader and partition table, taking **only 2.3 seconds**.
+- Automatically falls back to full `flash` if the bootloader or partition structures require an update.
+- Extends SPI flash hardware lifespan by preventing unnecessary write cycles.
+
 ---
 
-### B. `cal-flash.sh` — Fast Hardware Mutex Flashing Runner
+### B. `static-check.sh` — Pre-Hardware Cloud Quality Gate
+Located at [`github-action/static-check.sh`](file:///C:/JuneKim0712/CAN_TestBench/github-action/static-check.sh).
 
-A lightweight flashing utility intended for pre-compiled binaries or quick manual updates without requiring a full CMake build tree.
-
-- **Usage:** `./github-action/cal-flash.sh <board_name> <binary_path> [offset]`
-- **Features:**
-  - Fast resolution of board udev devices (`/dev/<board>`, `/dev/esp32_<board>`).
-  - Strict 15-second mutex acquisition before touching serial hardware.
-  - Invokes `esptool.py` with `--before default_reset --after hard_reset write_flash 0x10000 <binary>`.
+Runs in GitHub Actions cloud on `ubuntu-latest` before physical hardware tests:
+1. **`clang-format` Linting:** Verifies code styling across all `.c` and `.h` files against `.clang-format`.
+2. **`cppcheck` Deep Static Analysis:** Checks for:
+   - Memory leaks and pointer arithmetic errors
+   - Out-of-bounds array access and buffer overflows
+   - Uninitialized variables
+   - Dead code and portability issues
+3. **Fast-Fail Gate:** If defects or syntax bugs are discovered, CI fails in **~10 seconds in the cloud**, blocking the hardware runner and preventing wasted bench time.
 
 ---
 
-### C. `lib/unity_parser.py` — Serial Monitor & GitHub Summary Generator
+### C. `lib/unity_parser.py` — UART Serial Parser & GitHub Reporter
+Located at [`github-action/lib/unity_parser.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/unity_parser.py).
 
-This Python utility is responsible for reading the microcontroller's UART output, detecting pass/fail assertions, and posting formatted status back to GitHub.
-
-#### How It Works:
-1. **Serial Connection:** Opens the specified serial device (`--port`) at 115,200 baud with a 0.5-second read timeout.
-2. **Stream Analysis:** Continuously reads serial lines until `--timeout` expires or test completion is detected:
-   - Matches line containing `:PASS` -> Records passed assertion: `results.append(("PASS", test_name, line))`.
-   - Matches line containing `:FAIL` -> Records failure: `results.append(("FAIL", test_name, line))`.
-   - Matches Unity summary line containing `Tests` and `Failures`:
-     - If `0 Failures` is present, marks run as `passed = True` and terminates loop immediately.
-3. **GitHub Step Summary Integration:**
-   - Detects the `$GITHUB_STEP_SUMMARY` environment variable provided by the GitHub Actions runner.
-   - Generates a Markdown table containing test status icons, function names, and raw line output:
+- Connects to the designated UART port at 115,200 baud.
+- Matches Unity tokens `:PASS` and `:FAIL`.
+- Writes an interactive Markdown summary table directly to `$GITHUB_STEP_SUMMARY`:
 
 | Status | Test Function | Details |
 | :---: | :--- | :--- |
-| ✅ | `test_voltage_conversion` | `../main/test_main.c:28:test_voltage_conversion:PASS` |
-| ✅ | `test_state_toggle` | `../main/test_main.c:37:test_state_toggle:PASS` |
-| ✅ | `test_can_message_format` | `../main/test_main.c:47:test_can_message_format:PASS` |
+| ✅ | `test_pedal_plausibility_both_zero` | `../main/test_main.c:38:test_pedal_plausibility_both_zero:PASS` |
+| ✅ | `test_pedal_plausibility_valid_accel` | `../main/test_main.c:48:test_pedal_plausibility_valid_accel:PASS` |
+| ✅ | `test_pedal_implausibility_brake_and_accel` | `../main/test_main.c:58:test_pedal_implausibility_brake_and_accel:PASS` |
 
-4. **Exit Codes:**
-   - Exits with **Code 0** if and only if all tests passed.
-   - Exits with **Code 1** if any test failed, or if no summary line was detected before timeout.
+- Enforces exit code `0` on 100% pass, or code `1` on failure or timeout.
 
 ---
 
----
+## 7. Plug-and-Play Integration in Any CalSol Repository
 
-## 5. Build Speed & Hardware Protection Optimizations
+With the introduction of the centralized **auto-discovery engine** (`auto_discover.py`), the **reusable workflow** (`testbench.yml`), and the **composite action** (`github-action/action.yml`), integrating automated Hardware-in-the-Loop (HIL) testing into any repository (e.g. `CalSol/Gen11-FW` or developer repos) requires only a single 13-line YAML file.
 
-### A. Compiler Acceleration via `ccache` (54x Faster Rebuilds)
-Compilation of FreeRTOS, ESP-IDF drivers, and component HALs typically takes 45–75 seconds on ARM64 Raspberry Pi hardware.
-- `cal-test.sh` automatically exports `IDF_CCACHE_ENABLE=1` and `CCACHE_DIR="${HOME}/.ccache"`.
-- Object files are cached locally on `stolerpi`.
-- **Result:** Rebuild times drop from **~70 seconds to 1.3 seconds** on unchanged components.
+### Option 1: The 13-Line Reusable Workflow (Recommended for All Repositories)
 
-### B. Differential App Flashing (`app-flash`)
-Instead of rewriting the bootloader, partition table, and NVS on every test run:
-- `cal-test.sh` attempts `idf.py app-flash` first, which flashes **only the application partition** at `0x10000`.
-- Automatically falls back to full `flash` if bootloader or partition structures require updating.
-- **Result:** Flashing takes **2.3 seconds** (vs ~15-20s for full flash) and preserves SPI flash memory lifespan.
-
-### C. Pre-Hardware Cloud Quality Gate (`static-check.sh`)
-Before waking up the physical bench runner on `stolerpi`, GitHub Actions runs an instant quality check on standard cloud runners (`ubuntu-latest`):
-- **`cppcheck` Static Analysis:** Scans for null pointer dereferences, array out-of-bounds, uninitialized variables, and memory leaks.
-- **`clang-format` Linting:** Verifies code styling against `.clang-format`.
-- **Fast Fail:** If bugs or formatting violations exist, the run fails immediately in **~10 seconds in the cloud** without tying up bench hardware.
-
----
-
-## 6. Plug-and-Play Integration Guide
-
-Implementing automated Hardware-in-the-Loop (HIL) testing in any CalSol firmware repository (such as [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW) or a personal ECU repo) requires **zero script maintenance and only a single 13-line YAML file**.
-
----
-
-### Option A: The 1-File Reusable Workflow (Recommended for All Repositories)
-
-Whether your repository contains a single ECU or a 10-subsystem monorepo, add `.github/workflows/testbench.yml` to your repository:
+Whether your repository contains a single test project or a 10-ECU monorepo, create `.github/workflows/testbench.yml` in your repository:
 
 ```yaml
 name: CalSol Hardware Testbench
@@ -293,19 +300,19 @@ jobs:
       target: ${{ inputs.target || 'auto' }}
 ```
 
-#### What this single workflow does automatically:
-1. **Strict `testbench.json` Auto-Discovery:** Scans your repository exclusively for subsystem directories containing a `testbench.json` file. Folders containing only `CMakeLists.txt` (such as libraries, drivers, or shared components) are never scheduled as test targets.
-2. **Smart Change Detection:** On every push or Pull Request, it inspects `git diff` to determine which ECUs were modified. Only modified subsystems are compiled and flashed.
-3. **Hardware Port Routing:** Reads each subsystem's `testbench.json` to route firmware to its designated microcontroller on `stolerpi` (e.g. `/dev/esp32_johnathan` vs `/dev/esp32_ahmed`).
-4. **Collision Protection:** Enforces strict hardware mutexes so multiple boards or test suites never collide on the bench UART bus.
-5. **Interactive Results:** Formats Unity assertion results (`:PASS` / `:FAIL`) into a GitHub Actions Step Summary table.
-6. **Zero Boilerplate:** When adding a new ECU to your monorepo, **you never need to edit the workflow file**. Just add your folder and push!
+#### What happens automatically:
+1. **Strict `testbench.json` Auto-Discovery:** Scans the caller repository exclusively for directories containing `testbench.json`. Folders with only `CMakeLists.txt` (such as libraries, drivers, or shared components) are never scheduled as test targets.
+2. **Smart Change Detection:** On every push or PR, inspects `git diff` against base branch. Compiles and flashes **only the ECUs that had modifications**.
+3. **Microcontroller Routing:** Parses each folder's `testbench.json` to route firmware to its designated board on `stolerpi` (e.g. `/dev/esp32_johnathan` vs `/dev/esp32_ahmed`).
+4. **Collision Protection:** Enforces serial device mutex locks (`/tmp/calsol_locks/<board>.lock`) so parallel jobs never collide.
+5. **Interactive Summary:** Renders discovery tables and Unity `:PASS`/`:FAIL` tables in the GitHub Actions Step Summary.
+6. **Zero Workflow Maintenance:** When engineers add a new ECU folder to the monorepo, **they only add `testbench.json` and never need to edit the workflow YAML**.
 
 ---
 
-### Option B: The Standalone Composite Action (For Custom Workflows)
+### Option 2: Standalone Composite Action (For Custom Workflows)
 
-If your repository already has its own custom CI workflow and you simply want a step that flashes and tests a specific project on bench silicon, use the composite action:
+If your repository already has its own custom CI workflow and you simply want a step that flashes and tests on bench hardware:
 
 ```yaml
 - name: Run On-Target ESP32 Test
@@ -318,9 +325,9 @@ If your repository already has its own custom CI workflow and you simply want a 
 
 ---
 
-### Defining Subsystems via `testbench.json` (Required for CI)
+### Subsystem Configuration: `testbench.json`
 
-A firmware directory is **only scheduled for hardware testing if it explicitly contains a `testbench.json` file**. Folders containing only `CMakeLists.txt` are treated as normal source code and will never be scheduled as test targets. To enable hardware CI for an ECU, place `testbench.json` inside its folder:
+To customize hardware settings for an ECU, place `testbench.json` in the subsystem folder:
 
 ```json
 {
@@ -333,33 +340,52 @@ A firmware directory is **only scheduled for hardware testing if it explicitly c
 }
 ```
 
-#### Supported Settings:
-- `name`: Human-readable name displayed in CI dashboard.
-- `target`: Path to the ESP-IDF test project (defaults to `<folder>/test`).
-- `port`: Symlink path on `stolerpi` (e.g. `/dev/esp32_johnathan`, `/dev/esp32_ahmed`). If omitted or empty, auto-detects connected ESP32.
-- `baud`: High-speed flashing baud rate (default: `921600`).
-- `timeout`: Maximum test duration in seconds (default: `12`).
+| Field | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `name` | `string` | Folder name | Display name in GitHub Actions status |
+| `target` | `string` | `<folder>/test` | Path to ESP-IDF CMake test application |
+| `port` | `string` | `""` (auto-detect) | Device symlink on `stolerpi` (e.g. `/dev/esp32_johnathan`) |
+| `baud` | `number` | `921600` | Flashing baud rate |
+| `timeout` | `number` | `12` | Max seconds to wait for Unity assertion results |
 
 ---
 
-### Prerequisites & Permissions
+## 8. Multi-Branch & Concurrency Architecture (Queues, Locks & Team Collaboration)
 
-1. **Self-Hosted Runner:** The repository must run under the `CalSol` GitHub organization where the `stolerpi` runner (`[ self-hosted, linux, ARM64 ]`) is registered.
-2. **Local Testing:** You can test any project on the Pi before pushing by SSHing into `stolerpi`:
-   ```bash
-   ./github-action/cal-test.sh <subsystem_path> [port] [timeout]
-   ```
----
+When multiple developers work across different feature branches in a monorepo simultaneously, the system operates across three protective layers:
 
-## 7. Troubleshooting & FAQs
+### Layer 1: Simultaneous Request Queueing (GitHub Actions Runner Daemon)
+- The self-hosted runner daemon on `stolerpi` runs a single active worker process (`actions-runner`).
+- If two workflow runs trigger at the exact same second (e.g. Developer Alice pushes to `pedals-v2` and Developer Bob pushes to `lights-v2`):
+  - **Job 1** is dispatched to `stolerpi` immediately.
+  - **Job 2** enters the GitHub Actions cloud queue with status `Queued`.
+  - As soon as Job 1 finishes, `stolerpi` picks up Job 2 automatically.
+  - **Zero data loss, no race conditions, and no dropped runs.**
 
-### Q: Why did the test fail with "Board is currently in use by another process"?
-- **Cause:** Another test job, terminal session, or Slack bot command was holding the hardware mutex lock.
-- **Resolution:** The runner automatically waits 15 seconds. If a stale lock remains, check running processes on the Pi (`ps aux | grep -E 'cal-test|idf.py'`) or remove the lock in `/tmp/calsol_locks/`.
+### Layer 2: Hardware-Level Mutex Protection (`flock`)
+- Even if a developer runs a manual flashing command in an SSH terminal while GitHub Actions is flashing, the UART transfer is protected by Linux advisory locks:
+  ```bash
+  LOCK_FILE="/tmp/calsol_locks/${BOARD_NAME}.lock"
+  flock -w 15 200
+  ```
+- Because locks are keyed per board (`esp32_johnathan.lock` vs `esp32_ahmed.lock`), tests on different microcontrollers can run without blocking each other.
 
-### Q: What if a configured port in `testbench.json` is unplugged?
-- **Behavior:** `cal-test.sh` prints a warning and automatically falls back to discovering available ESP32 serial devices in `/dev/`.
+### Layer 3: Multi-Branch Isolation & Stale Run Cancellation
+- **Path Isolation:** Changes on Alice's branch only trigger tests for the ECU folders modified in her commits. Bob's PR status is never affected by Alice's test run.
+- **Clean Git Checkouts:** `actions/checkout@v4` checks out the exact Git commit SHA of that specific branch into an isolated working tree.
+- **Automatic Stale Run Cancellation:** Workflows define branch-scoped concurrency groups:
+  ```yaml
+  concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+  ```
+  If an engineer pushes 3 rapid commits to their branch, GitHub Actions automatically cancels the obsolete prior test runs and immediately tests the latest commit. Different branches (`github.ref`) remain completely independent and are never cancelled by each other.
 
-### Q: Where do I view test logs if a test fails?
-- **In GitHub UI:** Open the failed Actions run. The step summary directly contains the Unity test assertion table and collapsible build/flash logs.
-- **On the Pi:** Inspect `~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/.logs/`.
+### Layer 4: Systemd Lingering Daemon Permanence (`loginctl enable-linger`)
+- On the Raspberry Pi host (`stolerpi`), user services run under `systemd --user`.
+- By default, Linux systemd terminates user processes when the last interactive SSH session closes.
+- Lingering is permanently enabled for user `jkim`:
+  ```bash
+  loginctl enable-linger jkim
+  ```
+- This guarantees that `github-runner.service` remains running 24/7 in the background without being interrupted or killed with exit code 143 when developers disconnect their SSH terminals.
