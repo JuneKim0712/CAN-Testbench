@@ -234,52 +234,248 @@ This Python utility is responsible for reading the microcontroller's UART output
 
 ---
 
-## 6. How to Add a New Firmware Subsystem & Test
+## 6. Guide: Implementing Hardware CI in Your Own Repository
 
-To integrate a new vehicle subsystem (e.g., `steering_fw`):
+Whether you are developing in [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW), a subsystem-specific repository, or your own testing fork, you can integrate this automated hardware testbench into your repo with minimal setup.
 
-### 1. Create Subsystem Directory & Test App
-Structure the new folder alongside existing firmware:
-```text
-steering_fw/
-├── testbench.json              # Custom ECU port and timeout settings
-├── CMakeLists.txt
-├── main/
-│   ├── CMakeLists.txt
-│   └── main.c
-└── test/
-    ├── CMakeLists.txt
-    └── main/
-        ├── CMakeLists.txt
-        └── test_main.c
-```
+There are two primary integration patterns depending on your repository structure:
+- **Pattern A (Reusable Workflow):** Best for single-ECU repositories or simple setups. Calls `CalSol/CAN_TestBench`'s centralized runner without needing to copy build scripts.
+- **Pattern B (Monorepo Dynamic Matrix):** Best for multi-ECU repositories (like `Gen11-FW`). Evaluates commit diffs, runs only changed folders, and maps each ECU to its designated ESP32 board.
 
-### 2. Configure `testbench.json`
+---
+
+### Pattern A: Reusable Workflow Integration (Recommended for Single Subsystems)
+
+If your repository focuses on one ECU or already has a unified test target, you can invoke CalSol's centralized testbench workflow directly via GitHub's `workflow_call`.
+
+#### Step 1: Add `testbench.json` to Your Test Project
+Place `testbench.json` inside your test directory (e.g. `test/testbench.json` or project root):
+
 ```json
 {
   "name": "steering_fw",
-  "target": "steering_fw/test",
-  "port": "/dev/steering",
+  "target": "test",
+  "port": "/dev/esp32_johnathan",
   "baud": 921600,
-  "timeout": 15
+  "timeout": 12,
+  "description": "Steering wheel ECU hardware test configuration"
 }
 ```
 
-### 3. Update Path Filter in [`.github/workflows/unit-test.yml`](../.github/workflows/unit-test.yml)
-Add the subsystem under the `filters` block:
+*Note: If `port` is omitted or left as `""`, the runner automatically detects any available ESP32 connected to the bench.*
+
+#### Step 2: Create the Workflow File in Your Repo
+Create `.github/workflows/hardware-test.yml` in your repository:
+
 ```yaml
-steering_fw/test:
-  - 'steering_fw/**'
-  - 'components/**'
-  - 'github-action/**'
-  - '.github/**'
+name: Hardware Testbench
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  run-hardware-tests:
+    name: Run On-Target ESP32 Test
+    uses: CalSol/CAN_TestBench/.github/workflows/unit-test.yml@main
+    with:
+      target: 'test'                    # Path to the ESP-IDF test project in your repo
+      # port: '/dev/esp32_johnathan'    # Optional override (defaults to testbench.json or auto)
 ```
 
-### 4. Add to Manual Trigger Options
-Add `'steering_fw/test'` to `workflow_dispatch.inputs.target.options`.
+That's it! When you push or open a PR, GitHub Actions automatically dispatches the job to `stolerpi`, checks out your code, pulls the testbench engine, compiles, flashes, and reports results.
 
-Commit and push your changes. From that moment forward, any commit touching `steering_fw/` will automatically compile, flash to its designated microcontroller, and test on target hardware!
+---
 
+### Pattern B: Monorepo Dynamic Matrix Integration (Recommended for Multi-ECU Repos)
+
+If your repository contains multiple vehicle subsystems (e.g. `lights_fw`, `pedals_fw`, `steering_fw`, `bms_fw`), you only want to compile and flash the ECUs that were modified in a commit.
+
+#### Step 1: Structure Subsystems & Configurations
+Give each subsystem its own folder with a `testbench.json` specifying its assigned ESP32 board on `stolerpi`:
+
+```text
+your-firmware-repo/
+├── lights_fw/
+│   ├── testbench.json          # "port": "/dev/esp32_johnathan"
+│   ├── main/
+│   └── test/
+│       └── main/test_main.c
+├── pedals_fw/
+│   ├── testbench.json          # "port": "/dev/esp32_ahmed"
+│   ├── main/
+│   └── test/
+│       └── main/test_main.c
+└── steering_fw/
+    ├── testbench.json          # "port": "/dev/steering"
+    ├── main/
+    └── test/
+        └── main/test_main.c
+```
+
+#### Step 2: Create the Dynamic Matrix Workflow
+Create `.github/workflows/hardware-ci.yml` in your repository:
+
+```yaml
+name: CalSol Hardware CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target subsystem to test'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'lights_fw/test'
+          - 'pedals_fw/test'
+          - 'steering_fw/test'
+
+jobs:
+  detect-changes:
+    name: Detect Changed Subsystems & Configs
+    runs-on: [ self-hosted, linux, ARM64 ]
+    outputs:
+      matrix: ${{ steps.set-targets.outputs.matrix }}
+      has_changes: ${{ steps.set-targets.outputs.has_changes }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Filter Changed Paths
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          token: ${{ github.token }}
+          filters: |
+            lights_fw/test:
+              - 'lights_fw/**'
+              - 'components/**'
+            pedals_fw/test:
+              - 'pedals_fw/**'
+              - 'components/**'
+            steering_fw/test:
+              - 'steering_fw/**'
+              - 'components/**'
+
+      - name: Determine Target Matrix & Settings
+        id: set-targets
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TARGET: ${{ inputs.target }}
+          FILTER_CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          python3 - << 'EOF'
+          import json, os, glob
+
+          event_name = os.environ.get("EVENT_NAME", "")
+          input_target = os.environ.get("INPUT_TARGET", "")
+          filter_changes_raw = os.environ.get("FILTER_CHANGES", "[]")
+
+          try:
+              changes = json.loads(filter_changes_raw)
+          except:
+              changes = []
+
+          if event_name == "workflow_dispatch" and input_target and input_target != "all":
+              subsystems = [input_target]
+          elif event_name == "workflow_dispatch" and (input_target == "all" or not input_target):
+              subsystems = sorted(glob.glob("*/test"))
+          else:
+              subsystems = changes
+
+          matrix_items = []
+          for sub in subsystems:
+              folder = sub.split("/")[0]
+              cfg_path = f"{folder}/testbench.json"
+              if not os.path.exists(cfg_path):
+                  cfg_path = f"{sub}/testbench.json"
+
+              cfg = {}
+              if os.path.exists(cfg_path):
+                  try:
+                      with open(cfg_path, "r", encoding="utf-8") as f:
+                          cfg = json.load(f)
+                  except Exception as e:
+                      print(f"Warning: Failed to parse {cfg_path}: {e}")
+
+              target = cfg.get("target", f"{folder}/test" if not sub.endswith("/test") else sub)
+              name = cfg.get("name", folder)
+              port = cfg.get("port", "")
+              timeout = cfg.get("timeout", 12)
+
+              matrix_items.append({
+                  "name": name,
+                  "folder": folder,
+                  "target": target,
+                  "port": port,
+                  "timeout": timeout
+              })
+
+          has_changes = "true" if len(matrix_items) > 0 else "false"
+          matrix_json = json.dumps(matrix_items)
+
+          gh_output = os.environ.get("GITHUB_OUTPUT")
+          if gh_output:
+              with open(gh_output, "a", encoding="utf-8") as f:
+                  f.write(f"matrix={matrix_json}
+")
+                  f.write(f"has_changes={has_changes}
+")
+          EOF
+
+  testbench:
+    name: Test ${{ matrix.cfg.name }} (${{ matrix.cfg.port || 'auto' }})
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: [ self-hosted, linux, ARM64 ]
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Checkout CalSol Testbench Engine
+        uses: actions/checkout@v4
+        with:
+          repository: CalSol/CAN_TestBench
+          path: .calsol_testbench
+
+      - name: Make Scripts Executable
+        run: chmod +x .calsol_testbench/github-action/*.sh .calsol_testbench/github-action/lib/*.py
+
+      - name: Execute On-Target Hardware Test
+        run: |
+          .calsol_testbench/github-action/cal-test.sh \
+            "${{ matrix.cfg.target }}" \
+            "${{ matrix.cfg.port }}" \
+            "${{ matrix.cfg.timeout }}"
+
+      - name: Dump Failure Logs
+        if: failure()
+        run: |
+          echo "### ⚠️ Build / Flash Debug Logs for ${{ matrix.cfg.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "<details><summary>Click to view failure logs</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          [ -f ".calsol_testbench/github-action/.logs/build.log" ] && tail -n 40 .calsol_testbench/github-action/.logs/build.log
+          [ -f ".calsol_testbench/github-action/.logs/flash.log" ] && tail -n 40 .calsol_testbench/github-action/.logs/flash.log
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
 ---
 
 ## 7. Troubleshooting & FAQs
