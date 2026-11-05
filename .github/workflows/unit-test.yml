@@ -29,15 +29,15 @@ concurrency:
 jobs:
   static-analysis:
     name: Cloud Lint & Static Analysis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Analysis Tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq cppcheck clang-format
+          sudo apt-get install -y -qq cppcheck
 
       - name: Run Quality Gate Checks
         run: |
@@ -52,7 +52,7 @@ jobs:
       has_changes: ${{ steps.discovery.outputs.has_changes }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -79,7 +79,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run Hardware Test Action
         uses: ./github-action
@@ -90,29 +90,29 @@ jobs:
 
       - name: Upload Trackside Firmware Binaries
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.cfg.name }}-firmware-binaries
           path: ${{ matrix.cfg.target }}/build/artifacts/
           retention-days: 14
           if-no-files-found: ignore
 
-  pr-report:
-    name: Sticky PR Test & Memory Dashboard
+  report:
+    name: CalSol Testbench Status Dashboard
     needs: [static-analysis, discover, testbench]
-    if: always() && github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    if: always()
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download Build & Test Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: pr_artifacts
         continue-on-error: true
 
-      - name: Generate & Update Sticky PR Comment
+      - name: Generate Dashboard & Status Report
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

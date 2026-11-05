@@ -12,6 +12,12 @@ import sys
 import time
 import json
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 try:
     import serial
 except ImportError:
@@ -19,7 +25,7 @@ except ImportError:
     sys.exit(1)
 
 
-def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, verbose: bool = False, log_file: str = None, output_json: str = None) -> int:
+def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, verbose: bool = False, log_file: str = None, output_json: str = None, subsystem: str = "") -> int:
     try:
         ser = serial.Serial(port, baud, timeout=0.5)
     except Exception as e:
@@ -46,12 +52,12 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
             parts = line.split(":")
             test_name = parts[-2] if len(parts) >= 2 else line
             results.append(("PASS", test_name, line))
-            print(f"    ✓ {test_name}")
+            print(f"    [PASS] {test_name}")
         elif ":FAIL" in line:
             parts = line.split(":")
             test_name = parts[-2] if len(parts) >= 2 else line
             results.append(("FAIL", test_name, line))
-            print(f"    ✗ {test_name} (FAILED)")
+            print(f"    [FAIL] {test_name}")
             print(f"      {line}")
         elif "Tests" in line and "Failures" in line:
             summary = line
@@ -81,14 +87,13 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
     if gh_summary_file:
         try:
             with open(gh_summary_file, "a", encoding="utf-8") as f:
-                header_icon = "✅" if passed else "❌"
                 status_title = "Passed" if passed else "Failed"
-                f.write(f"\n### {header_icon} CalSol Testbench Results ({status_title})\n\n")
+                sub_title = f": {subsystem}" if subsystem else ""
+                f.write(f"\n### CalSol Testbench Results ({status_title}){sub_title}\n\n")
                 f.write(f"| Status | Test Function | Details |\n")
                 f.write(f"| :---: | :--- | :--- |\n")
                 for status, test_name, raw in results:
-                    icon = "✅" if status == "PASS" else "❌"
-                    f.write(f"| {icon} | `{test_name}` | `{raw}` |\n")
+                    f.write(f"| {status} | `{test_name}` | `{raw}` |\n")
                 if summary:
                     f.write(f"\n**Summary:** {summary}\n")
                 else:
@@ -101,6 +106,7 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
         try:
             os.makedirs(os.path.dirname(os.path.abspath(output_json)), exist_ok=True)
             report_data = {
+                "subsystem": subsystem if subsystem else port,
                 "port": port,
                 "passed": passed,
                 "summary": summary if summary else f"Timed out ({timeout}s)",
@@ -120,6 +126,7 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
 def main():
     parser = argparse.ArgumentParser(description="Parse Unity unit test results over serial.")
     parser.add_argument("--port", "-p", required=True, help="Serial port device path (e.g. /dev/esp32_johnathan)")
+    parser.add_argument("--subsystem", "-s", default="", help="Subsystem name (e.g. pedals_fw)")
     parser.add_argument("--baud", "-b", type=int, default=115200, help="Baud rate (default: 115200)")
     parser.add_argument("--timeout", "-t", type=float, default=12.0, help="Timeout in seconds (default: 12.0)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Print raw serial stream lines")
@@ -127,7 +134,15 @@ def main():
     parser.add_argument("--output-json", help="Path to write structured JSON results")
 
     args = parser.parse_args()
-    exit_code = parse_unity_stream(args.port, args.baud, args.timeout, args.verbose, args.log_file, args.output_json)
+    exit_code = parse_unity_stream(
+        port=args.port,
+        baud=args.baud,
+        timeout=args.timeout,
+        verbose=args.verbose,
+        log_file=args.log_file,
+        output_json=args.output_json,
+        subsystem=args.subsystem
+    )
     sys.exit(exit_code)
 
 

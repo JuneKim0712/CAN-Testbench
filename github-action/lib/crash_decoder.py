@@ -81,8 +81,6 @@ def decode_backtrace(addr2line_bin, elf_file, addresses):
         
         frames = []
         for idx, line in enumerate(lines):
-            # Format typically: 0x42008124: calculate_throttle_percent at /path/to/main.c:42
-            # or: 0x42008124: ?? ??:0
             addr_match = re.match(r"(0x[0-9a-fA-F]+):\s*(.*?)\s+at\s+(.*)", line)
             if addr_match:
                 frames.append({
@@ -105,11 +103,11 @@ def decode_backtrace(addr2line_bin, elf_file, addresses):
 
 def format_crash_markdown(crash_reason, frames, elf_file):
     md = []
-    md.append("### 💥 Firmware Crash Post-Mortem & Decoded Stack Backtrace\n")
+    md.append("### Firmware Crash Post-Mortem & Decoded Stack Backtrace\n")
     if crash_reason:
-        md.append(f"> ⚠️ **Panic Reason:** `{crash_reason}`\n")
+        md.append(f"> **Panic Reason:** `{crash_reason}`\n")
     else:
-        md.append("> ⚠️ **Panic Detected:** An unhandled hardware fault or FreeRTOS abort occurred.\n")
+        md.append("> **Panic Detected:** An unhandled hardware fault or FreeRTOS abort occurred.\n")
 
     if frames:
         md.append("| Frame | Program Counter (PC) | Function Name | Source Location |")
@@ -139,7 +137,6 @@ def main():
     crash_reason, addresses = scan_log_for_crash(log_content)
 
     if not crash_reason and not addresses:
-        # No crash detected
         sys.exit(0)
 
     print(f"[!] Crash detected: {crash_reason or 'Backtrace found'}")

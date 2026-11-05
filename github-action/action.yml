@@ -31,11 +31,15 @@ runs:
       if: failure()
       shell: bash
       run: |
-        echo "### ⚠️ Build / Flash Failure Logs for ${{ inputs.target }}" >> $GITHUB_STEP_SUMMARY
+        echo "### Build / Flash Failure Logs for ${{ inputs.target }}" >> $GITHUB_STEP_SUMMARY
         echo "<details><summary>Click to view failure logs</summary>" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo '```text' >> $GITHUB_STEP_SUMMARY
-        [ -f "${{ github.action_path }}/.logs/build.log" ] && tail -n 40 ${{ github.action_path }}/.logs/build.log
-        [ -f "${{ github.action_path }}/.logs/flash.log" ] && tail -n 40 ${{ github.action_path }}/.logs/flash.log
+        if [ -f "${{ github.action_path }}/.logs/build.log" ]; then
+            tail -n 40 "${{ github.action_path }}/.logs/build.log" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ -f "${{ github.action_path }}/.logs/flash.log" ]; then
+            tail -n 40 "${{ github.action_path }}/.logs/flash.log" >> $GITHUB_STEP_SUMMARY
+        fi
         echo '```' >> $GITHUB_STEP_SUMMARY
         echo "</details>" >> $GITHUB_STEP_SUMMARY
