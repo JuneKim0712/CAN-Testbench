@@ -8,197 +8,57 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Target subsystem to test'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - 'all'
-          - 'lights_fw/test'
-          - 'pedals_fw/test'
-  workflow_call:
-    inputs:
-      target:
-        description: 'Target subsystem to test'
+        description: 'Target subsystem to test ("auto", "all", or specific path)'
         required: false
-        type: string
         default: 'all'
+        type: string
       port:
-        description: 'Target serial port override'
+        description: 'Serial port override (optional)'
         required: false
-        type: string
         default: ''
+        type: string
 
 jobs:
-  detect-changes:
-    name: Detect Changed Subsystems & Configs
+  discover:
+    name: Auto-Discover Subsystems & Settings
     runs-on: [ self-hosted, linux, ARM64 ]
     outputs:
-      matrix: ${{ steps.set-targets.outputs.matrix }}
-      has_changes: ${{ steps.set-targets.outputs.has_changes }}
+      matrix: ${{ steps.discovery.outputs.matrix }}
+      has_changes: ${{ steps.discovery.outputs.has_changes }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Filter Changed Paths
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v3
-        id: filter
         with:
-          token: ${{ github.token }}
-          filters: |
-            lights_fw/test:
-              - 'lights_fw/**'
-              - 'components/**'
-              - 'github-action/**'
-              - '.github/**'
-            pedals_fw/test:
-              - 'pedals_fw/**'
-              - 'components/**'
-              - 'github-action/**'
-              - '.github/**'
+          fetch-depth: 0
 
-      - name: Determine Target Matrix & Settings
-        id: set-targets
+      - name: Auto-Discover & Resolve Subsystems
+        id: discovery
         env:
-          EVENT_NAME: ${{ github.event_name }}
           INPUT_TARGET: ${{ inputs.target }}
           PORT_OVERRIDE: ${{ inputs.port }}
-          FILTER_CHANGES: ${{ steps.filter.outputs.changes }}
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
-          python3 - << 'EOF'
-          import json, os, glob
-
-          event_name = os.environ.get("EVENT_NAME", "")
-          input_target = os.environ.get("INPUT_TARGET", "")
-          port_override = os.environ.get("PORT_OVERRIDE", "").strip()
-          filter_changes_raw = os.environ.get("FILTER_CHANGES", "[]")
-
-          try:
-              changes = json.loads(filter_changes_raw)
-          except:
-              changes = []
-
-          if event_name in ["workflow_dispatch", "workflow_call"] and input_target and input_target != "all":
-              subsystems = [input_target]
-          elif event_name in ["workflow_dispatch", "workflow_call"] and (input_target == "all" or not input_target):
-              subsystems = []
-              for d in sorted(glob.glob("*/test")):
-                  subsystems.append(d)
-          else:
-              subsystems = changes
-
-          matrix_items = []
-          for sub in subsystems:
-              folder = sub.split("/")[0]
-              cfg_path = f"{folder}/testbench.json"
-              if not os.path.exists(cfg_path):
-                  cfg_path = f"{sub}/testbench.json"
-
-              cfg = {}
-              if os.path.exists(cfg_path):
-                  try:
-                      with open(cfg_path, "r", encoding="utf-8") as f:
-                          cfg = json.load(f)
-                  except Exception as e:
-                      print(f"[-] Warning: Failed to parse {cfg_path}: {e}")
-
-              target = cfg.get("target", f"{folder}/test" if not sub.endswith("/test") else sub)
-              name = cfg.get("name", folder)
-              port = port_override if port_override else cfg.get("port", "")
-              timeout = cfg.get("timeout", 12)
-
-              matrix_items.append({
-                  "name": name,
-                  "folder": folder,
-                  "target": target,
-                  "port": port,
-                  "timeout": timeout
-              })
-
-          has_changes = "true" if len(matrix_items) > 0 else "false"
-          matrix_json = json.dumps(matrix_items)
-
-          gh_output = os.environ.get("GITHUB_OUTPUT")
-          if gh_output:
-              with open(gh_output, "a", encoding="utf-8") as f:
-                  f.write(f"matrix={matrix_json}\n")
-                  f.write(f"has_changes={has_changes}\n")
-
-          print(f"Target Subsystems Matrix: {matrix_json}")
-          EOF
-
-      - name: Report Detection Summary
-        env:
-          MATRIX_DATA: ${{ steps.set-targets.outputs.matrix }}
-          HAS_CHANGES: ${{ steps.set-targets.outputs.has_changes }}
-        run: |
-          python3 - << 'EOF'
-          import json, os
-
-          matrix_raw = os.environ.get("MATRIX_DATA", "[]")
-          has_changes = os.environ.get("HAS_CHANGES", "false")
-          event_name = os.environ.get("GITHUB_EVENT_NAME", "")
-          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-
-          if summary_path:
-              with open(summary_path, "a", encoding="utf-8") as f:
-                  f.write("### 🎯 Subsystem Target Matrix & Hardware Assignments\n\n")
-                  f.write(f"- **Trigger Event**: `{event_name}`\n\n")
-                  if has_changes == "true":
-                      f.write("| Subsystem | Test Target | Designated Port / Board | Timeout |\n")
-                      f.write("| :--- | :--- | :--- | :---: |\n")
-                      try:
-                          items = json.loads(matrix_raw)
-                          for item in items:
-                              name = item.get("name", "")
-                              target = item.get("target", "")
-                              port = item.get("port") or "auto"
-                              timeout = item.get("timeout", 12)
-                              f.write(f"| **{name}** | `{target}` | `{port}` | {timeout}s |\n")
-                      except Exception as e:
-                          f.write(f"Error parsing matrix: {e}\n")
-                  else:
-                      f.write("- **Target Subsystems**: None\n")
-                      f.write("- **Decision**: No firmware files were changed. Skipping hardware testbench.\n")
-          EOF
+          python3 github-action/lib/auto_discover.py --repo-root .
 
   testbench:
     name: Test ${{ matrix.cfg.name }} (${{ matrix.cfg.port || 'auto' }})
-    needs: detect-changes
-    if: needs.detect-changes.outputs.has_changes == 'true'
+    needs: discover
+    if: needs.discover.outputs.has_changes == 'true'
     runs-on: [ self-hosted, linux, ARM64 ]
     timeout-minutes: 8
     strategy:
       fail-fast: false
       matrix:
-        cfg: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+        cfg: ${{ fromJson(needs.discover.outputs.matrix) }}
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Make Scripts Executable
-        run: chmod +x github-action/*.sh github-action/lib/*.py
-
-      - name: Run Hardware Unit Tests
-        run: |
-          ./github-action/cal-test.sh "${{ matrix.cfg.target }}" "${{ matrix.cfg.port }}" "${{ matrix.cfg.timeout }}"
-
-      - name: Dump Failure Logs
-        if: failure()
-        run: |
-          echo "### ⚠️ Build / Flash Debug Logs for ${{ matrix.cfg.name }}" >> $GITHUB_STEP_SUMMARY
-          echo "<details><summary>Click to view failure log output</summary>" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```text' >> $GITHUB_STEP_SUMMARY
-          if [ -f "github-action/.logs/build.log" ]; then
-            echo "=== BUILD LOG ==="
-            tail -n 40 github-action/.logs/build.log
-          fi
-          if [ -f "github-action/.logs/flash.log" ]; then
-            echo "=== FLASH LOG ==="
-            tail -n 40 github-action/.logs/flash.log
-          fi
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "</details>" >> $GITHUB_STEP_SUMMARY
+      - name: Run Hardware Test Action
+        uses: ./github-action
+        with:
+          target: ${{ matrix.cfg.target }}
+          port: ${{ matrix.cfg.port }}
+          timeout: ${{ matrix.cfg.timeout }}

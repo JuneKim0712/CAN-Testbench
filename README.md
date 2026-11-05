@@ -68,16 +68,12 @@ Every push or Pull Request automatically runs the test matrix across all registe
 
 ---
 
-## 4. How to Implement this Hardware Action in Your Own Repository
+## 4. Plug-and-Play Integration in Your Own Repository
 
-To integrate automated Hardware-in-the-Loop (HIL) testing on physical ESP32-S3 silicon into your own firmware repository (such as [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW) or a personal subsystem repo):
-
-### Option 1: Reusable Workflow (Quickest Setup)
-
-Add `.github/workflows/hardware-test.yml` to your repository:
+To integrate automated on-target ESP32-S3 hardware testing into your repository (e.g. [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW) or a personal ECU repo), simply add `.github/workflows/testbench.yml`:
 
 ```yaml
-name: Hardware Testbench
+name: CalSol Hardware Testbench
 
 on:
   push:
@@ -87,25 +83,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-testbench:
-    name: Run On-Target ESP32 Test
-    uses: CalSol/CAN_TestBench/.github/workflows/unit-test.yml@main
-    with:
-      target: 'path/to/your/test_project'  # Directory containing CMakeLists.txt and test_main.c
-      # port: '/dev/esp32_johnathan'       # Optional override; defaults to testbench.json or auto-discovery
+  hardware-ci:
+    uses: CalSol/CAN_TestBench/.github/workflows/testbench.yml@main
 ```
 
-### Option 2: Monorepo Dynamic Matrix (Path-Filtered)
+### What this does automatically:
+- 🔍 **Auto-Discovers Subsystems:** Scans your repo for any folders containing `testbench.json` or `*/test/CMakeLists.txt`.
+- ⚡ **Smart Change-Detection:** Compiles and flashes **only the ECUs modified** in that push/PR.
+- 🎯 **Per-ECU Microcontroller Routing:** Reads each folder's `testbench.json` to flash the correct board on `stolerpi` (e.g. `/dev/esp32_johnathan` vs `/dev/esp32_ahmed`).
+- 📊 **Rich Step Summary:** Posts pass/fail tables with test assertions directly to GitHub.
+- 🧩 **Zero-Maintenance Monorepo:** Adding a new ECU folder requires **no workflow edits**!
 
-For repositories containing multiple vehicle ECUs (like `Gen11-FW`), use path filtering so that only modified subsystems are compiled and tested on their designated microcontrollers:
-
-1. **Add `testbench.json` to each subsystem folder:**
-   ```json
-   {
-     "name": "steering_fw",
-     "target": "steering_fw/test",
-     "port": "/dev/steering",
-     "timeout": 12
-   }
-   ```
-2. **Configure dynamic matrix dispatch:** Refer to the comprehensive [Step-by-Step Integration Guide](github-action/README.md#6-guide-implementing-hardware-ci-in-your-own-repository) for the full workflow template, configuration schema, runner setup, and local Pi debugging instructions.
+For standalone composite action usage and configuration details, see the [Full Documentation](github-action/README.md#6-plug-and-play-integration-guide).
