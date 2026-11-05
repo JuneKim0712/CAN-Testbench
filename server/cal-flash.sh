@@ -12,7 +12,7 @@ OFFSET="${3:-0x10000}"
 
 if [ -z "$BOARD" ] || [ -z "$BIN_FILE" ]; then
     echo "Usage: $0 <board_name> <binary_path> [offset]"
-    echo "Example: $0 esp32_johnathan build/app.bin"
+    echo "Example: $0 steering build/app.bin"
     exit 1
 fi
 

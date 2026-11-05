@@ -11,7 +11,7 @@ The `client/` folder contains tools for developers working from their personal l
    ```text
    Host stolerpi
        HostName stolerpi
-       User jkim
+       User <your_username>
        IdentityFile ~/.ssh/id_ed25519
    ```
 2. **Python 3:**
@@ -21,13 +21,13 @@ The `client/` folder contains tools for developers working from their personal l
 
 ## 2. Configuration (`client/config.json`)
 
-Edit `client/config.json` to customize target settings:
+Edit `client/config.json` to customize your workstation settings:
 ```json
 {
   "host": "stolerpi",
-  "remote_user": "jkim",
+  "remote_user": "<your_username>",
   "staging_dir": "~/calsol/staging",
-  "default_board": "esp32_johnathan",
+  "default_board": "steering",
   "baud_rate": 921600
 }
 ```
@@ -41,14 +41,14 @@ Edit `client/config.json` to customize target settings:
 # Check testbench board availability and active locks
 python client/calsol.py status
 
-# Flash firmware binary
-python client/calsol.py flash esp32_johnathan --binary build/steering.bin
+# Flash firmware binary to target board (e.g. steering, bms, dev1)
+python client/calsol.py flash steering --binary build/steering.bin
 
 # Run automated Unity unit tests on physical hardware
-python client/calsol.py test esp32_johnathan --binary build/unit_tests.bin
+python client/calsol.py test steering --binary build/unit_tests.bin
 
 # Open interactive serial console
-python client/calsol.py monitor esp32_johnathan
+python client/calsol.py monitor steering
 
 # Powercycle hung USB hubs if a board stops responding
 python client/calsol.py powercycle
@@ -57,9 +57,9 @@ python client/calsol.py powercycle
 ### Using Bash CLI (macOS / Linux / WSL)
 ```bash
 chmod +x client/calsol.sh
-./client/calsol.sh flash esp32_johnathan build/steering.bin
-./client/calsol.sh test esp32_johnathan build/unit_tests.bin
-./client/calsol.sh monitor esp32_johnathan
+./client/calsol.sh flash steering build/steering.bin
+./client/calsol.sh test steering build/unit_tests.bin
+./client/calsol.sh monitor steering
 ```
 
 ---

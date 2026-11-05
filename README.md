@@ -64,8 +64,8 @@ See [Slack_Bot/Readme.md](Slack_Bot/Readme.md) for full configuration, Slack API
    ```json
    {
      "host": "stolerpi",
-     "remote_user": "jkim",
-     "default_board": "esp32_johnathan"
+     "remote_user": "<your_pi_username>",
+     "default_board": "steering"
    }
    ```
 
@@ -76,17 +76,17 @@ See [Slack_Bot/Readme.md](Slack_Bot/Readme.md) for full configuration, Slack API
 
 4. **Flash firmware remotely from your workstation:**
    ```bash
-   python client/calsol.py flash esp32_johnathan --binary path/to/firmware.bin
+   python client/calsol.py flash <board_name> --binary path/to/firmware.bin
    ```
 
 5. **Run automated on-target Unity unit tests:**
    ```bash
-   python client/calsol.py test esp32_johnathan --binary path/to/unit_tests.bin
+   python client/calsol.py test <board_name> --binary path/to/unit_tests.bin
    ```
 
 6. **Monitor live serial console output:**
    ```bash
-   python client/calsol.py monitor esp32_johnathan
+   python client/calsol.py monitor <board_name>
    ```
 
 ---

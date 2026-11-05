@@ -1,8 +1,7 @@
 {
   "host": "stolerpi",
-  "remote_user": "jkim",
+  "remote_user": "<your_username>",
   "staging_dir": "~/calsol/staging",
-  "server_bin_dir": "~/calsol/server",
-  "default_board": "esp32_johnathan",
+  "default_board": "steering",
   "baud_rate": 921600
 }

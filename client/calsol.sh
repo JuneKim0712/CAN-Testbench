@@ -9,13 +9,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/config.json"
 
 PI_HOST="stolerpi"
-DEFAULT_BOARD="esp32_johnathan"
+DEFAULT_BOARD="steering"
 STAGING_DIR="~/calsol/staging"
 
 # Parse config.json if jq is available
 if command -v jq >/dev/null 2>&1 && [ -f "$CONFIG_FILE" ]; then
     PI_HOST="$(jq -r '.host // "stolerpi"' "$CONFIG_FILE")"
-    DEFAULT_BOARD="$(jq -r '.default_board // "esp32_johnathan"' "$CONFIG_FILE")"
+    DEFAULT_BOARD="$(jq -r '.default_board // "steering"' "$CONFIG_FILE")"
     STAGING_DIR="$(jq -r '.staging_dir // "~/calsol/staging"' "$CONFIG_FILE")"
 fi
 

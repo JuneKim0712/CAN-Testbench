@@ -14,24 +14,29 @@ from pathlib import Path
 CONFIG_PATH = Path(__file__).parent / "config.json"
 
 def load_config():
-    if CONFIG_PATH.exists():
-        with open(CONFIG_PATH, "r") as f:
-            return json.load(f)
-    return {
+    cfg = {
         "host": "stolerpi",
-        "remote_user": "jkim",
+        "remote_user": os.getenv("USER", os.getenv("USERNAME", "developer")),
         "staging_dir": "~/calsol/staging",
         "server_bin_dir": "~/calsol/server",
-        "default_board": "esp32_johnathan",
+        "default_board": "steering",
         "baud_rate": 921600
     }
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r") as f:
+                user_cfg = json.load(f)
+                cfg.update({k: v for k, v in user_cfg.items() if not str(v).startswith("<")})
+        except Exception:
+            pass
+    return cfg
 
 def run_cmd(cmd, check=True):
     print(f"[*] Running: {' '.join(cmd)}")
     return subprocess.run(cmd, check=check)
 
 def cmd_flash(args, config):
-    board = args.board or config.get("default_board", "esp32_johnathan")
+    board = args.board or config.get("default_board", "steering")
     bin_path = Path(args.binary) if args.binary else Path(f"build/{board}.bin")
 
     if not bin_path.exists():
@@ -50,7 +55,7 @@ def cmd_flash(args, config):
     run_cmd(["ssh", "-t", host, f"~/CAN_TestBench/server/cal-flash.sh {board} {remote_bin} || cal-flash {board} {remote_bin}"])
 
 def cmd_test(args, config):
-    board = args.board or config.get("default_board", "esp32_johnathan")
+    board = args.board or config.get("default_board", "steering")
     bin_path = Path(args.binary) if args.binary else Path(f"build/unit_tests.bin")
 
     if not bin_path.exists():
@@ -70,7 +75,7 @@ def cmd_test(args, config):
     sys.exit(res.returncode)
 
 def cmd_monitor(args, config):
-    board = args.board or config.get("default_board", "esp32_johnathan")
+    board = args.board or config.get("default_board", "steering")
     host = config["host"]
     device = f"/dev/{board}" if not board.startswith("/dev/") else board
 
