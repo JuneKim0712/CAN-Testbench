@@ -11,7 +11,7 @@ Designed exclusively to model and validate continuous integration workflows for 
 ```text
 CAN-Testbench/
 ├── .github/workflows/          # GitHub Actions CI/CD workflows for Raspberry Pi
-│   └── unit-test.yml           # Multi-subsystem hardware test matrix & reusable workflow
+│   └── unit-test.yml           # Dynamic change-detection hardware test matrix
 │
 ├── components/                 # Shared vehicle components & libraries (from Gen11-FW)
 │   └── can_driver/             # Universal CalSol CAN hardware driver (CAN.h, CAN_driver.c)
@@ -38,9 +38,10 @@ CAN-Testbench/
 │           ├── CMakeLists.txt
 │           └── test_main.c     # Throttle deadzones, plausibility cutoff rules, and CAN
 │
-└── server/                     # Raspberry Pi Testbench Engine
+└── github-action/              # Hardware Testbench & GitHub Actions CI Engine
     ├── cal-test.sh             # Automated build, flash, and test orchestrator
     ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
+    ├── README.md               # Comprehensive architecture, trigger, and step documentation
     └── lib/
         └── unity_parser.py     # Serial monitor & GitHub Actions summary table generator
 ```
@@ -53,10 +54,10 @@ On the Raspberry Pi testbed (`stolerpi`):
 
 ```bash
 # Test the lights subsystem
-./server/cal-test.sh lights_fw/test
+./github-action/cal-test.sh lights_fw/test
 
 # Test the pedals subsystem
-./server/cal-test.sh pedals_fw/test
+./github-action/cal-test.sh pedals_fw/test
 ```
 
 ---

@@ -50,12 +50,12 @@ jobs:
             lights_fw/test:
               - 'lights_fw/**'
               - 'components/**'
-              - 'server/**'
+              - 'github-action/**'
               - '.github/**'
             pedals_fw/test:
               - 'pedals_fw/**'
               - 'components/**'
-              - 'server/**'
+              - 'github-action/**'
               - '.github/**'
 
       - name: Determine Target Matrix
@@ -109,13 +109,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Make Scripts Executable
-        run: chmod +x server/*.sh server/lib/*.py
+        run: chmod +x github-action/*.sh github-action/lib/*.py
 
       - name: Run Hardware Unit Tests
         run: |
           TARGET="${{ matrix.subsystem }}"
           PORT="${{ inputs.port || '' }}"
-          ./server/cal-test.sh "$TARGET" "$PORT"
+          ./github-action/cal-test.sh "$TARGET" "$PORT"
 
       - name: Dump Failure Logs
         if: failure()
@@ -124,13 +124,13 @@ jobs:
           echo "<details><summary>Click to view failure log output</summary>" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
-          if [ -f "server/.logs/build.log" ]; then
+          if [ -f "github-action/.logs/build.log" ]; then
             echo "=== BUILD LOG ==="
-            tail -n 40 server/.logs/build.log
+            tail -n 40 github-action/.logs/build.log
           fi
-          if [ -f "server/.logs/flash.log" ]; then
+          if [ -f "github-action/.logs/flash.log" ]; then
             echo "=== FLASH LOG ==="
-            tail -n 40 server/.logs/flash.log
+            tail -n 40 github-action/.logs/flash.log
           fi
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "</details>" >> $GITHUB_STEP_SUMMARY
