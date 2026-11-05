@@ -38,11 +38,15 @@ CAN-Testbench/
 │           ├── CMakeLists.txt
 │           └── test_main.c     # Throttle deadzones, plausibility cutoff rules, and CAN
 │
+├── .clang-format               # Universal CalSol C/C++ code styling rules
 └── github-action/              # Hardware Testbench & GitHub Actions CI Engine
-    ├── cal-test.sh             # Automated build, flash, and test orchestrator
+    ├── cal-test.sh             # Fast build (ccache), mutex locking, app-flash, & test runner
     ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
+    ├── static-check.sh         # Pre-hardware cloud static analysis & lint quality gate
+    ├── action.yml              # Standalone composite action for custom workflows
     ├── README.md               # Comprehensive architecture, trigger, and step documentation
     └── lib/
+        ├── auto_discover.py    # Subsystem discovery & git change resolver
         └── unity_parser.py     # Serial monitor & GitHub Actions summary table generator
 ```
 

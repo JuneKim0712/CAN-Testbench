@@ -3,7 +3,8 @@ name: CalSol Hardware Testbench Engine
 # ==============================================================================
 # Centralized, Plug-and-Play Hardware-in-the-Loop CI Workflow for CalSol
 # Automatically discovers all testable subsystems, parses testbench.json
-# configurations, detects changed files, and dispatches on-target tests.
+# configurations, detects changed files, runs cloud static analysis quality
+# gates, and dispatches on-target tests with ccache and app-flash.
 # ==============================================================================
 
 on:
@@ -37,6 +38,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  static-analysis:
+    name: Cloud Lint & Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Calling Repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Testbench Runner Engine
+        uses: actions/checkout@v4
+        with:
+          repository: CalSol/CAN_TestBench
+          path: .calsol_testbench
+
+      - name: Install Analysis Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cppcheck clang-format
+
+      - name: Run Quality Gate Checks
+        run: |
+          chmod +x .calsol_testbench/github-action/static-check.sh
+          .calsol_testbench/github-action/static-check.sh
+
   discover:
     name: Auto-Discover Subsystems & Settings
     runs-on: [ self-hosted, linux, ARM64 ]
@@ -68,7 +92,7 @@ jobs:
 
   testbench:
     name: Test ${{ matrix.cfg.name }} (${{ matrix.cfg.port || 'auto' }})
-    needs: discover
+    needs: [discover, static-analysis]
     if: needs.discover.outputs.has_changes == 'true'
     runs-on: [ self-hosted, linux, ARM64 ]
     timeout-minutes: 10
