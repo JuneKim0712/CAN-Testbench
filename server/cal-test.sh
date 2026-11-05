@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # 1. Resolve target directory or binary
-INPUT_TARGET="${1:-lights_fw/test}"
+INPUT_TARGET="${1:-unit-testing/fw-lab-examples/brakelights/test}"
 PORT="${2}"
 
 if [ -d "${REPO_ROOT}/${INPUT_TARGET}" ]; then

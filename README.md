@@ -1,48 +1,37 @@
-# CalSol Gen11 Hardware Testbench & CI Testing Ground
+# CalSol CAN Testbench
 
-Continuous hardware integration, automated on-target Unity unit testing, and GitHub Actions workflow testing ground for the UC Berkeley Solar Vehicle Team (**CalSol**).
-
-Designed exclusively to model and validate continuous integration workflows for [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW).
+Testing infrastructure, Slack bot automation, continuous integration, and automated on-target Unity unit testing for the UC Berkeley Solar Vehicle Team (**CalSol**).
 
 ---
 
 ## 1. Repository Structure
 
 ```text
-CAN-Testbench/
+CAN_TestBench/
 ├── .github/workflows/          # GitHub Actions CI/CD workflows for Raspberry Pi
-│   └── unit-test.yml           # Multi-subsystem hardware test matrix & reusable workflow
+│   └── unit-test.yml           # Automated hardware testbench workflow
 │
-├── components/                 # Shared vehicle components & libraries (from Gen11-FW)
-│   └── can_driver/             # Universal CalSol CAN hardware driver (CAN.h, CAN_driver.c)
+├── Slack_Bot/                  # Bench Pi Slack Bot Daemon (@bot commands)
+│   ├── bot.py                  # Slack Socket Mode bot (scan, flash, verify, who)
+│   ├── esp_fleet_bot.service   # Systemd service unit template
+│   ├── requirements.txt        # Python dependencies (slack-bolt, pyserial)
+│   └── Readme.md               # Slack bot documentation and token setup
 │
-├── lights_fw/                  # Subsystem 1: Brakelights & Hazards
-│   ├── CMakeLists.txt          # Production ESP-IDF CMake
-│   ├── main/                   # Production firmware (I2C power, hazards, CAN loop)
-│   │   ├── CMakeLists.txt
-│   │   └── main.c
-│   └── test/                   # On-Target Unity unit tests
-│       ├── CMakeLists.txt
-│       └── main/
-│           ├── CMakeLists.txt
-│           └── test_main.c     # Voltage conversion, state machine, and CAN assertions
+├── server/                     # Raspberry Pi & CI Hardware Testbench Engine
+│   ├── cal-test.sh             # Automated build, flash, and test orchestrator
+│   ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
+│   └── lib/
+│       └── unity_parser.py     # Serial monitor & GitHub Actions summary generator
 │
-├── pedals_fw/                  # Subsystem 2: Accelerator & Brake Plausibility
-│   ├── CMakeLists.txt          # Production ESP-IDF CMake
-│   ├── main/                   # Production firmware (Dual ADC pedals, CAN throttle)
-│   │   ├── CMakeLists.txt
-│   │   └── main.c
-│   └── test/                   # On-Target Unity unit tests
-│       ├── CMakeLists.txt
-│       └── main/
-│           ├── CMakeLists.txt
-│           └── test_main.c     # Throttle deadzones, plausibility cutoff rules, and CAN
-│
-└── server/                     # Raspberry Pi Testbench Engine
-    ├── cal-test.sh             # Automated build, flash, and test orchestrator
-    ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
-    └── lib/
-        └── unity_parser.py     # Serial monitor & GitHub Actions summary table generator
+└── unit-testing/
+    └── fw-lab-examples/        # Firmware lab code & test suites
+        ├── components/can_driver/ # Shared TWAI/CAN bus driver
+        ├── brakelights/        # Brakelights ECU firmware & test suite
+        │   ├── main/main.c     # Production brakelights firmware
+        │   └── test/           # Hardware unit test suite
+        └── pedals/             # Pedals ECU firmware & test suite
+            ├── main/main.c     # Production throttle firmware
+            └── test/           # Hardware unit test suite
 ```
 
 ---
@@ -52,11 +41,11 @@ CAN-Testbench/
 On the Raspberry Pi testbed (`stolerpi`):
 
 ```bash
-# Test the lights subsystem
-./server/cal-test.sh lights_fw/test
+# Test the brakelights subsystem
+./server/cal-test.sh unit-testing/fw-lab-examples/brakelights/test
 
 # Test the pedals subsystem
-./server/cal-test.sh pedals_fw/test
+./server/cal-test.sh unit-testing/fw-lab-examples/pedals/test
 ```
 
 ---

@@ -10,18 +10,18 @@ on:
       target:
         description: 'Target subsystem test directory'
         required: true
-        default: 'lights_fw/test'
+        default: 'unit-testing/fw-lab-examples/brakelights/test'
         type: choice
         options:
-          - 'lights_fw/test'
-          - 'pedals_fw/test'
+          - 'unit-testing/fw-lab-examples/brakelights/test'
+          - 'unit-testing/fw-lab-examples/pedals/test'
   workflow_call:
     inputs:
       target:
         description: 'Target subsystem test directory'
         required: true
         type: string
-        default: 'lights_fw/test'
+        default: 'unit-testing/fw-lab-examples/brakelights/test'
       port:
         description: 'Target serial port'
         required: false
@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        subsystem: [ 'lights_fw/test', 'pedals_fw/test' ]
+        subsystem: [ 'unit-testing/fw-lab-examples/brakelights/test', 'unit-testing/fw-lab-examples/pedals/test' ]
 
     steps:
       - name: Checkout Repository
