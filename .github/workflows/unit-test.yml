@@ -8,20 +8,21 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Target subsystem test directory'
+        description: 'Target subsystem to test'
         required: true
-        default: 'lights_fw/test'
+        default: 'all'
         type: choice
         options:
+          - 'all'
           - 'lights_fw/test'
           - 'pedals_fw/test'
   workflow_call:
     inputs:
       target:
-        description: 'Target subsystem test directory'
-        required: true
+        description: 'Target subsystem to test'
+        required: false
         type: string
-        default: 'lights_fw/test'
+        default: 'all'
       port:
         description: 'Target serial port'
         required: false
@@ -29,14 +30,79 @@ on:
         default: ''
 
 jobs:
+  detect-changes:
+    name: Detect Changed Subsystems
+    runs-on: [ self-hosted, linux, ARM64 ]
+    outputs:
+      targets: ${{ steps.set-targets.outputs.targets }}
+      has_changes: ${{ steps.set-targets.outputs.has_changes }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Filter Changed Paths
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          token: ${{ github.token }}
+          filters: |
+            lights_fw/test:
+              - 'lights_fw/**'
+              - 'components/**'
+              - 'server/**'
+              - '.github/**'
+            pedals_fw/test:
+              - 'pedals_fw/**'
+              - 'components/**'
+              - 'server/**'
+              - '.github/**'
+
+      - name: Determine Target Matrix
+        id: set-targets
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "workflow_call" ]; then
+            TARGET="${{ inputs.target }}"
+            if [ "$TARGET" = "all" ] || [ -z "$TARGET" ]; then
+              MATRIX='["lights_fw/test", "pedals_fw/test"]'
+            else
+              MATRIX="[\"$TARGET\"]"
+            fi
+            echo "targets=$MATRIX" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            CHANGES='${{ steps.filter.outputs.changes }}'
+            if [ -z "$CHANGES" ] || [ "$CHANGES" = "[]" ]; then
+              echo "targets=[]" >> $GITHUB_OUTPUT
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+            else
+              echo "targets=$CHANGES" >> $GITHUB_OUTPUT
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Report Detection Summary
+        run: |
+          echo "### 🎯 Subsystem Change Detection" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger Event**: \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.set-targets.outputs.has_changes }}" = "true" ]; then
+            echo "- **Target Subsystem(s)**: \`${{ steps.set-targets.outputs.targets }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Decision**: Running tests only for changed folders." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Target Subsystem(s)**: None" >> $GITHUB_STEP_SUMMARY
+            echo "- **Decision**: No firmware files were changed. Skipping hardware testbench." >> $GITHUB_STEP_SUMMARY
+          fi
+
   testbench:
-    name: Test ${{ matrix.subsystem || inputs.target || 'Subsystem' }}
+    name: Test ${{ matrix.subsystem }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
     runs-on: [ self-hosted, linux, ARM64 ]
     timeout-minutes: 8
     strategy:
       fail-fast: false
       matrix:
-        subsystem: [ 'lights_fw/test', 'pedals_fw/test' ]
+        subsystem: ${{ fromJson(needs.detect-changes.outputs.targets) }}
 
     steps:
       - name: Checkout Repository
@@ -47,14 +113,14 @@ jobs:
 
       - name: Run Hardware Unit Tests
         run: |
-          TARGET="${{ inputs.target || matrix.subsystem }}"
+          TARGET="${{ matrix.subsystem }}"
           PORT="${{ inputs.port || '' }}"
           ./server/cal-test.sh "$TARGET" "$PORT"
 
       - name: Dump Failure Logs
         if: failure()
         run: |
-          echo "### ⚠️ Build / Flash Debug Logs for ${{ matrix.subsystem || inputs.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Build / Flash Debug Logs for ${{ matrix.subsystem }}" >> $GITHUB_STEP_SUMMARY
           echo "<details><summary>Click to view failure log output</summary>" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
