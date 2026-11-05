@@ -14,7 +14,7 @@ static bool IRAM_ATTR CAN_rx_cb(twai_node_handle_t handle,
 
     if (s_rx_queue == NULL) return false;
 
-    uint8_t recv_buff[8];
+    uint8_t recv_buff[8] = {0};
 
     twai_frame_t rx_frame = {
         .buffer     = recv_buff,
