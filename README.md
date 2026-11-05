@@ -1,15 +1,21 @@
 # CalSol CAN Testbench
 
-Unified hardware-in-the-loop (HIL) testing, remote flashing, and continuous validation infrastructure for the UC Berkeley Solar Vehicle Team (**CalSol**).
+Testing infrastructure, remote flashing, Slack bot automation, and continuous validation for the UC Berkeley Solar Vehicle Team (**CalSol**).
 
 ---
 
-## 1. Architecture Overview
+## 1. Repository Architecture
 
-The repository is structured into two main components:
+The repository contains three primary components:
 
-```
+```text
 CAN-Testbench/
+├── Slack_Bot/                  # Bench Pi Slack Bot Daemon (@bot commands)
+│   ├── bot.py                  # Slack Socket Mode bot (scan, flash, verify, who)
+│   ├── esp_fleet_bot.service   # Systemd service unit template
+│   ├── requirements.txt        # Python dependencies (slack-bolt, pyserial)
+│   └── Readme.md               # Slack bot documentation and token setup
+│
 ├── client/                     # Developer Workstation Side (Laptop / PC)
 │   ├── calsol.py               # Cross-platform CLI (Windows, macOS, Linux)
 │   ├── calsol.sh               # Bash wrapper for UNIX environments
@@ -29,15 +35,32 @@ CAN-Testbench/
 
 ---
 
-## 2. Quickstart: Developer (Client Side)
+## 2. Slack Bot Overview (`Slack_Bot/`)
 
-1. Clone this repository to your laptop:
+A Slack-driven ESP board discovery and verification daemon that runs continuously on the bench Raspberry Pi:
+
+| Slack Command | Action |
+|---|---|
+| `@bot boards` | List every ESP board plugged into the Pi (chip + MAC + port) |
+| `@bot flash <port>` | Build + flash + verify firmware on target port |
+| `@bot flash all` | Flash and verify on every connected board |
+| `@bot confirm <code>` | Approve a gated flash if another member is SSH'd into the Pi |
+| `@bot who` | Shows who is currently logged into the Pi |
+| `@bot status` | IDF version, git commit SHA, uptime, cached builds |
+
+See [Slack_Bot/Readme.md](Slack_Bot/Readme.md) for full configuration, Slack API scopes, and systemd service setup.
+
+---
+
+## 3. Quickstart: Developer (Client Side)
+
+1. **Clone this repository on your laptop:**
    ```bash
    git clone https://github.com/JuneKim0712/CAN-Testbench.git
    cd CAN-Testbench
    ```
 
-2. Configure your SSH target in `client/config.json`:
+2. **Configure your connection in `client/config.json`:**
    ```json
    {
      "host": "stolerpi",
@@ -46,47 +69,52 @@ CAN-Testbench/
    }
    ```
 
-3. Flash a firmware binary from your laptop to the remote testbench:
+3. **Check testbench status:**
+   ```bash
+   python client/calsol.py status
+   ```
+
+4. **Flash firmware remotely from your workstation:**
    ```bash
    python client/calsol.py flash esp32_johnathan --binary path/to/firmware.bin
    ```
 
-4. Run automated on-target Unity unit tests:
+5. **Run automated on-target Unity unit tests:**
    ```bash
    python client/calsol.py test esp32_johnathan --binary path/to/unit_tests.bin
    ```
 
-5. Monitor serial output live:
+6. **Monitor live serial console output:**
    ```bash
    python client/calsol.py monitor esp32_johnathan
    ```
 
 ---
 
-## 3. Quickstart: Raspberry Pi Host (Server Side)
+## 4. Quickstart: Raspberry Pi Host (Server Side)
 
-1. Clone or sync this repository onto the Raspberry Pi (`stolerpi`):
+1. **Clone / Sync on the Raspberry Pi (`stolerpi`):**
    ```bash
-   git clone https://github.com/JuneKim0712/CAN-Testbench.git ~/calsol/server
+   git clone https://github.com/JuneKim0712/CAN-Testbench.git ~/CAN-Testbench
    ```
 
-2. Make scripts executable and link them to `/usr/local/bin` (or user `~/bin`):
+2. **Make scripts executable and link them:**
    ```bash
-   chmod +x ~/calsol/server/*.sh
-   sudo ln -sf ~/calsol/server/cal-flash.sh /usr/local/bin/cal-flash
-   sudo ln -sf ~/calsol/server/cal-test.sh /usr/local/bin/cal-test
-   sudo ln -sf ~/calsol/server/cal-status.sh /usr/local/bin/cal-status
-   sudo ln -sf ~/calsol/server/cal-powercycle.sh /usr/local/bin/cal-powercycle
+   chmod +x ~/CAN-Testbench/server/*.sh
+   sudo ln -sf ~/CAN-Testbench/server/cal-flash.sh /usr/local/bin/cal-flash
+   sudo ln -sf ~/CAN-Testbench/server/cal-test.sh /usr/local/bin/cal-test
+   sudo ln -sf ~/CAN-Testbench/server/cal-status.sh /usr/local/bin/cal-status
+   sudo ln -sf ~/CAN-Testbench/server/cal-powercycle.sh /usr/local/bin/cal-powercycle
    ```
 
-3. Install persistent `udev` device mappings:
+3. **Install persistent `udev` device mappings:**
    ```bash
-   sudo ~/calsol/server/udev/setup-udev.sh
+   sudo ~/CAN-Testbench/server/udev/setup-udev.sh
    ```
 
 ---
 
-## 4. Hardware Safety & Multi-User Arbitration
+## 5. Hardware Safety & Multi-User Arbitration
 
 * **Hardware Mutex (`flock`):** The server-side flashing engine locks each target board's serial port with `flock`. If another developer is currently testing or flashing a board, concurrent attempts are held safely in a queue or cleanly rejected rather than corrupting flash memory.
-* **USB Power-Cycling:** Hung or frozen boards can be hard-reset without physical access using `calsol.py powercycle`.
+* **USB Power-Cycling:** Hung or frozen boards can be hard-reset without physical access using `python client/calsol.py powercycle`.

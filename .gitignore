@@ -6,6 +6,7 @@ build/
 *.hex
 sdkconfig
 sdkconfig.old
+workspace/
 
 # Python
 __pycache__/
@@ -14,6 +15,10 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+
+# Secrets — tokens live in /etc/esp-fleet-bot.env on the Pi, never in the repo
+.env
+*.env
 
 # Editor & OS files
 .vscode/*
