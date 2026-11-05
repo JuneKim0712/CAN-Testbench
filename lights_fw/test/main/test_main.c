@@ -38,7 +38,8 @@ static void test_state_toggle(void)
 {
     system_state_t state = STATE_IDLE;
     state = transition_state(state);
-    TEST_ASSERT_EQUAL_INT(STATE_ACTIVE, state);
+    // INTENTIONAL FAILURE FOR CI DEMO: Expecting 999 instead of 1 (STATE_ACTIVE)
+    TEST_ASSERT_EQUAL_INT(999, state);
 
     state = transition_state(state);
     TEST_ASSERT_EQUAL_INT(STATE_IDLE, state);
