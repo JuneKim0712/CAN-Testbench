@@ -117,3 +117,12 @@ jobs:
           target: ${{ matrix.cfg.target }}
           port: ${{ matrix.cfg.port }}
           timeout: ${{ matrix.cfg.timeout }}
+
+      - name: Upload Trackside Firmware Binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.cfg.name }}-firmware-binaries
+          path: ${{ matrix.cfg.target }}/build/artifacts/
+          retention-days: 14
+          if-no-files-found: ignore

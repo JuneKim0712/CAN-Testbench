@@ -52,6 +52,7 @@ fi
 PORT="${CLI_PORT:-$CONFIG_PORT}"
 TIMEOUT="${CLI_TIMEOUT:-${CONFIG_TIMEOUT:-12}}"
 BAUD="${CONFIG_BAUD:-921600}"
+SUBSYSTEM_SLUG="${CONFIG_NAME:-$(basename "$TARGET")}"
 
 # 3. Source ESP-IDF if idf.py is not in PATH
 if ! command -v idf.py >/dev/null 2>&1; then
@@ -100,7 +101,7 @@ if ! flock -w 15 200; then
 fi
 
 echo "=================================================="
-echo " CalSol Hardware Testbench: ${CONFIG_NAME:-$BOARD_NAME}"
+echo " CalSol Hardware Testbench: ${SUBSYSTEM_SLUG}"
 echo " Port:    ${PORT} (${BOARD_NAME})"
 echo " Target:  ${TARGET}"
 echo " Baud:    ${BAUD}"
@@ -122,6 +123,29 @@ if [ -d "$TARGET" ]; then
         tail -n 30 "$LOG_DIR/build.log"
         exit 1
     fi
+
+    # Feature E: Memory Bloat & Sizing Guard
+    printf "[*] Analyzing memory footprint... "
+    if idf.py size --format json2 --output-file "build/size_info.json" >/dev/null 2>&1; then
+        python3 "${SCRIPT_DIR}/lib/size_reporter.py" \
+            --size-file "build/size_info.json" \
+            --subsystem "${SUBSYSTEM_SLUG}" \
+            --output-json "${LOG_DIR}/${SUBSYSTEM_SLUG}_size_summary.json" >/dev/null 2>&1 || true
+        echo "OK"
+    else
+        echo "SKIPPED"
+    fi
+
+    # Feature B: Stage trackside flashable binaries
+    ARTIFACTS_DIR="${TARGET}/build/artifacts"
+    mkdir -p "$ARTIFACTS_DIR"
+    cp -f build/*.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
+    cp -f build/*.elf "$ARTIFACTS_DIR/" 2>/dev/null || true
+    cp -f build/bootloader/bootloader.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
+    cp -f build/partition_table/partition-table.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
+    cp -f build/flasher_args.json "$ARTIFACTS_DIR/" 2>/dev/null || true
+    [ -f "build/size_info.json" ] && cp -f "build/size_info.json" "$ARTIFACTS_DIR/" 2>/dev/null || true
+    [ -f "${LOG_DIR}/${SUBSYSTEM_SLUG}_size_summary.json" ] && cp -f "${LOG_DIR}/${SUBSYSTEM_SLUG}_size_summary.json" "$ARTIFACTS_DIR/" 2>/dev/null || true
 
     printf "[*] Flashing %s (%s baud, fast app-flash)... " "$BOARD_NAME" "$BAUD"
     # Try high-speed app partition flashing first; fallback to full flash if needed
@@ -147,7 +171,38 @@ elif [ -f "$TARGET" ]; then
     fi
 fi
 
-# 7. Parse Unity test results over serial
+# 7. Parse Unity test results over serial & Feature C Crash Decoding
 PARSER="${SCRIPT_DIR}/lib/unity_parser.py"
+SERIAL_LOG="${LOG_DIR}/${SUBSYSTEM_SLUG}_serial.log"
+RESULTS_JSON="${LOG_DIR}/${SUBSYSTEM_SLUG}_test_results.json"
+
 echo "[*] Monitoring Unity test output (${TIMEOUT}s timeout)..."
-python3 "$PARSER" --port "$PORT" --timeout "$TIMEOUT"
+set +e
+python3 "$PARSER" --port "$PORT" --timeout "$TIMEOUT" --log-file "$SERIAL_LOG" --output-json "$RESULTS_JSON"
+TEST_EXIT_CODE=$?
+set -e
+
+# Feature C: If test failed or aborted, run crash decoder to extract backtrace
+ELF_FILE=""
+if [ -d "$TARGET" ]; then
+    ELF_FILE=$(ls "${TARGET}/build"/*.elf 2>/dev/null | head -n 1 || true)
+fi
+
+if [ -n "$ELF_FILE" ] && [ -f "$SERIAL_LOG" ]; then
+    CRASH_JSON="${LOG_DIR}/${SUBSYSTEM_SLUG}_crash_report.json"
+    python3 "${SCRIPT_DIR}/lib/crash_decoder.py" \
+        --log-file "$SERIAL_LOG" \
+        --elf-file "$ELF_FILE" \
+        --output-json "$CRASH_JSON" >/dev/null 2>&1 || true
+
+    if [ -f "$CRASH_JSON" ] && [ -d "${TARGET}/build/artifacts" ]; then
+        cp -f "$CRASH_JSON" "${TARGET}/build/artifacts/" 2>/dev/null || true
+    fi
+fi
+
+# Copy test result JSON into artifacts if directory exists
+if [ -f "$RESULTS_JSON" ] && [ -d "${TARGET}/build/artifacts" ]; then
+    cp -f "$RESULTS_JSON" "${TARGET}/build/artifacts/" 2>/dev/null || true
+fi
+
+exit $TEST_EXIT_CODE

@@ -3,13 +3,14 @@
 CalSol CAN Testbench - Unity Serial Stream Parser
 Monitors an active UART serial port, extracts Unity test assertions,
 formats output for both terminal and GitHub Actions ($GITHUB_STEP_SUMMARY),
-and exits with code 0 (all pass) or code 1 (failure / timeout).
+records raw serial logs for crash post-mortem analysis, and outputs structured JSON.
 """
 
 import argparse
 import os
 import sys
 import time
+import json
 
 try:
     import serial
@@ -18,7 +19,7 @@ except ImportError:
     sys.exit(1)
 
 
-def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, verbose: bool = False) -> int:
+def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, verbose: bool = False, log_file: str = None, output_json: str = None) -> int:
     try:
         ser = serial.Serial(port, baud, timeout=0.5)
     except Exception as e:
@@ -29,11 +30,14 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
     passed = False
     summary = ""
     results = []  # List of tuples: (status, test_name, raw_line)
+    all_raw_lines = []
 
     while time.time() - start_time < timeout:
         line = ser.readline().decode("utf-8", errors="replace").strip()
         if not line:
             continue
+
+        all_raw_lines.append(line)
 
         if verbose:
             print(f"  [RAW] {line}")
@@ -54,6 +58,15 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
             if "0 Failures" in line:
                 passed = True
             break
+
+    # Save raw log file for crash decoder
+    if log_file:
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
+            with open(log_file, "w", encoding="utf-8", errors="replace") as f:
+                f.write("\n".join(all_raw_lines) + "\n")
+        except Exception as e:
+            print(f"[-] Note: Failed to save test log file: {e}", file=sys.stderr)
 
     # Terminal output
     if passed:
@@ -83,6 +96,24 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
         except Exception as e:
             print(f"[-] Note: Could not write to GITHUB_STEP_SUMMARY: {e}", file=sys.stderr)
 
+    # Save structured JSON
+    if output_json:
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(output_json)), exist_ok=True)
+            report_data = {
+                "port": port,
+                "passed": passed,
+                "summary": summary if summary else f"Timed out ({timeout}s)",
+                "total_assertions": len(results),
+                "passed_count": sum(1 for s, _, _ in results if s == "PASS"),
+                "failed_count": sum(1 for s, _, _ in results if s == "FAIL"),
+                "tests": [{"status": s, "name": n, "details": d} for s, n, d in results]
+            }
+            with open(output_json, "w", encoding="utf-8") as f:
+                json.dump(report_data, f, indent=2)
+        except Exception as e:
+            print(f"[-] Note: Could not save output JSON: {e}", file=sys.stderr)
+
     return 0 if passed else 1
 
 
@@ -92,9 +123,11 @@ def main():
     parser.add_argument("--baud", "-b", type=int, default=115200, help="Baud rate (default: 115200)")
     parser.add_argument("--timeout", "-t", type=float, default=12.0, help="Timeout in seconds (default: 12.0)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Print raw serial stream lines")
+    parser.add_argument("--log-file", help="Path to write complete raw serial logs")
+    parser.add_argument("--output-json", help="Path to write structured JSON results")
 
     args = parser.parse_args()
-    exit_code = parse_unity_stream(args.port, args.baud, args.timeout, args.verbose)
+    exit_code = parse_unity_stream(args.port, args.baud, args.timeout, args.verbose, args.log_file, args.output_json)
     sys.exit(exit_code)
 
 
