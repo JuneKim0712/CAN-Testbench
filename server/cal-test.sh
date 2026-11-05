@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # CalSol Testbench Server: On-Target Unity Unit Test Runner (Concise Mode)
-# Usage: cal-test <board_name> <test_binary_path>
+# Pure Bash orchestrator that delegates serial parsing to lib/unity_parser.py
 # ==============================================================================
 
 set -e
@@ -23,10 +23,10 @@ if [ -z "$FLASH_RUNNER" ] || [ ! -f "$FLASH_RUNNER" ]; then
     exit 1
 fi
 
-# 1. Flash the test binary
+# 1. Flash the test binary via cal-flash
 "$FLASH_RUNNER" "$BOARD" "$TEST_BIN"
 
-# Resolve device path
+# 2. Resolve device path
 DEVICE=""
 for dev_candidate in "/dev/${BOARD}" "/dev/esp32_${BOARD}" "/dev/calsol_${BOARD}"; do
     if [ -e "$dev_candidate" ]; then
@@ -35,48 +35,17 @@ for dev_candidate in "/dev/${BOARD}" "/dev/esp32_${BOARD}" "/dev/calsol_${BOARD}
     fi
 done
 
+if [ -z "$DEVICE" ]; then
+    echo "[-] Error: Device for '$BOARD' not found in /dev"
+    exit 1
+fi
+
+# 3. Call modular Python Unity parser
+PARSER_BIN="${SCRIPT_DIR}/lib/unity_parser.py"
+if [ ! -f "$PARSER_BIN" ]; then
+    echo "[-] Error: unity_parser.py not found at $PARSER_BIN"
+    exit 1
+fi
+
 echo "[*] Running Unity tests on ${BOARD}..."
-
-python3 - <<EOF
-import serial, sys, time
-
-device = "$DEVICE"
-try:
-    ser = serial.Serial(device, 115200, timeout=0.5)
-except Exception as e:
-    print(f"[-] Could not open serial port {device}: {e}")
-    sys.exit(1)
-
-start_time = time.time()
-passed = False
-summary = ""
-
-while time.time() - start_time < 12:
-    line = ser.readline().decode('utf-8', errors='replace').strip()
-    if not line:
-        continue
-    if ":PASS" in line:
-        parts = line.split(":")
-        name = parts[-2] if len(parts) >= 2 else line
-        print(f"    ✓ {name}")
-    elif ":FAIL" in line:
-        parts = line.split(":")
-        name = parts[-2] if len(parts) >= 2 else line
-        print(f"    ✗ {name} (FAILED)")
-        print(f"      {line}")
-    elif "Tests" in line and "Failures" in line:
-        summary = line
-        if "0 Failures" in line:
-            passed = True
-        break
-
-if passed:
-    print(f"\n[+] {summary} (ALL PASSED)")
-    sys.exit(0)
-elif summary:
-    print(f"\n[-] {summary} (FAILED)")
-    sys.exit(1)
-else:
-    print("\n[-] Timed out waiting for test completion.")
-    sys.exit(1)
-EOF
+python3 "$PARSER_BIN" --port "$DEVICE" --timeout 12
