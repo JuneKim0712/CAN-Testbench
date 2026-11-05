@@ -1,15 +1,14 @@
-# CalSol Hardware Testbench & GitHub Actions CI Engine: Comprehensive Architecture & Setup Manual
+# CalSol Hardware Testbench & GitHub Actions CI Engine: Architecture & GitHub Setup Manual
 
-This document is the authoritative technical specification and operational manual for the **CalSol Hardware-in-the-Loop (HIL) Continuous Integration (CI) Engine** deployed in the `github-action/` directory of the CalSol CAN Testbench repository.
+This document is the authoritative technical specification and GitHub integration manual for the **CalSol Hardware-in-the-Loop (HIL) Continuous Integration (CI) Engine** deployed in the `github-action/` directory of the CalSol CAN Testbench repository.
 
 ---
 
 ## Table of Contents
-1. [Executive Summary & Design Philosophy](#1-executive-summary--design-philosophy)
-2. [End-to-End System Architecture](#2-end-to-end-system-architecture)
-3. [Repository & Directory Architecture](#3-repository--directory-architecture)
-4. [Monorepo Hardware Configuration: `testbench.json`](#4-monorepo-hardware-configuration-testbenchjson)
-5. [Code-Level Walkthrough: What Every File Does](#5-code-level-walkthrough-what-every-file-does)
+1. [End-to-End System Architecture](#1-end-to-end-system-architecture)
+2. [Repository & Directory Architecture](#2-repository--directory-architecture)
+3. [Monorepo Hardware Configuration: `testbench.json`](#3-monorepo-hardware-configuration-testbenchjson)
+4. [Code-Level Walkthrough: What Every File Does](#4-code-level-walkthrough-what-every-file-does)
    - [A. Master Test Runner: `github-action/cal-test.sh`](#a-master-test-runner-github-actioncal-testsh)
    - [B. Standalone Flasher: `github-action/cal-flash.sh`](#b-standalone-flasher-github-actioncal-flashsh)
    - [C. Pre-Hardware Cloud Quality Gate: `static-check.sh` & `lib/static_check.py`](#c-pre-hardware-cloud-quality-gate-static-checksh--libstatic_checkpy)
@@ -19,41 +18,20 @@ This document is the authoritative technical specification and operational manua
    - [G. Sticky PR Dashboard Bot: `lib/pr_reporter.py`](#g-sticky-pr-dashboard-bot-libpr_reporterpy)
    - [H. Code Style Standard: `.clang-format`](#h-code-style-standard-clang-format)
    - [I. Workflow Definitions: `unit-test.yml` & `testbench.yml`](#i-workflow-definitions-unit-testyml--testbenchyml)
-6. [Step-by-Step Setup Guide: Making the CI Work from Scratch](#6-step-by-step-setup-guide-making-the-ci-work-from-scratch)
-   - [Phase 1: Raspberry Pi Hardware Bench Setup (`stolerpi`)](#phase-1-raspberry-pi-hardware-bench-setup-stolerpi)
-   - [Phase 2: ESP-IDF Toolchain & Build Acceleration Setup](#phase-2-esp-idf-toolchain--build-acceleration-setup)
-   - [Phase 3: Persistent USB Device Symlinks (`udev`)](#phase-3-persistent-usb-device-symlinks-udev)
-   - [Phase 4: GitHub Actions Runner Daemon & Systemd Linger](#phase-4-github-actions-runner-daemon--systemd-linger)
-   - [Phase 5: Subsystem `testbench.json` Configuration](#phase-5-subsystem-testbenchjson-configuration)
-   - [Phase 6: Repository Integration (The 13-Line Workflow)](#phase-6-repository-integration-the-13-line-workflow)
-7. [Day-to-Day Operations & Developer Workflows](#7-day-to-day-operations--developer-workflows)
-8. [Comprehensive Troubleshooting & Diagnostics Manual](#8-comprehensive-troubleshooting--diagnostics-manual)
+5. [GitHub Setup & Repository Integration Guide](#5-github-setup--repository-integration-guide)
+   - [Step 1: Create `testbench.json` in Subsystem Directories](#step-1-create-testbenchjson-in-subsystem-directories)
+   - [Step 2: Add the 13-Line Reusable Workflow (`.github/workflows/testbench.yml`)](#step-2-add-the-13-line-reusable-workflow-githubworkflowstestbenchyml)
+   - [Step 3: Configure GitHub Repository Permissions](#step-3-configure-github-repository-permissions)
+6. [Day-to-Day Operations & Developer Workflows](#6-day-to-day-operations--developer-workflows)
+   - [Manual Workflow Dispatch](#manual-workflow-dispatch)
+   - [Downloading Trackside Binaries](#downloading-trackside-binaries)
+7. [Comprehensive Troubleshooting & Diagnostics Manual](#7-comprehensive-troubleshooting--diagnostics-manual)
 
 ---
 
-## 1. Executive Summary & Design Philosophy
+## 1. End-to-End System Architecture
 
-Traditional software CI pipelines execute inside virtual machines or cloud containers (e.g. `ubuntu-latest`). While suitable for purely mathematical algorithms, **embedded firmware for physical solar electric vehicles (CalSol Gen11)** has physical hardware constraints that software emulation cannot duplicate:
-- **Silicon Execution Dynamics:** Dual-core Xtensa LX7 register behavior, instruction pipeline caching, and hardware interrupts.
-- **Real-Time Operating System (FreeRTOS):** Hardware timer interrupts, context switching, task priority preemption, and queue-based inter-task synchronization.
-- **Physical Electrical Peripherals:** Dedicated hardware TWAI (Two-Wire Automotive Interface / CAN 2.0B) controllers, physical transceivers, bus termination resistances, and high-speed UART bridges.
-
-The **CalSol CAN Testbench Engine** is a true **Hardware-in-the-Loop (HIL)** automated test pipeline. Cloud GitHub Actions orchestrate fast static analysis and dependency resolution, while physical compilation, flashing, execution, and verification run on physical microcontrollers connected to a bench **Raspberry Pi 5 (`stolerpi`)**.
-
-### Core Engineering Requirements Met:
-1. **Zero Hardware Wear on Doc Changes:** Changes to markdown files, python scripts, or documentation bypass hardware testing entirely.
-2. **Selective Monorepo Matrix:** Modifying one subsystem (e.g. `pedals_fw`) only flashes and tests that subsystem's dedicated microcontroller, leaving other boards idle.
-3. **54x Build Acceleration:** ESP-IDF builds utilize `ccache` to cache precompiled FreeRTOS and toolchain objects, slashing rebuild times from ~75s down to 1.3s.
-4. **8x Flash Acceleration & Flash Longevity:** Flashing uses differential `app-flash` at 921,600 baud, writing only the modified application partition (`0x10000`) and preserving SPI flash endurance.
-5. **Hardware Concurrency Protection:** Linux advisory file locking (`flock`) prevents simultaneous access or race conditions over physical UART ports.
-6. **Pre-Hardware Fast-Fail Quality Gate:** Cloud containers execute `cppcheck` and `clang-format` in ~13 seconds, blocking hardware dispatch if memory leaks or critical bugs exist.
-7. **Crash Backtrace Auto-Decoding:** Unhandled panics or FreeRTOS aborts have their raw hex addresses decoded to exact source files and line numbers via `addr2line`.
-8. **Automated Trackside Binary Packaging:** Every successful build archives flashable binaries (`.bin`, `.elf`, `bootloader.bin`, `flasher_args.json`) for trackside pit-crew deployment.
-9. **Sticky PR Status Dashboard:** Automatically posts and updates an in-place status comment on GitHub Pull Requests.
-
----
-
-## 2. End-to-End System Architecture
+The **CalSol CAN Testbench Engine** is an automated Hardware-in-the-Loop (HIL) testing pipeline. Cloud GitHub Actions orchestrate fast static analysis and dependency resolution, while physical compilation, flashing, execution, and verification run on physical microcontrollers connected to a bench **Raspberry Pi 5 (`stolerpi`)**.
 
 ```mermaid
 sequenceDiagram
@@ -108,7 +86,7 @@ sequenceDiagram
 
 ---
 
-## 3. Repository & Directory Architecture
+## 2. Repository & Directory Architecture
 
 ```text
 CAN_TestBench/
@@ -159,7 +137,7 @@ CAN_TestBench/
 
 ---
 
-## 4. Monorepo Hardware Configuration: `testbench.json`
+## 3. Monorepo Hardware Configuration: `testbench.json`
 
 Every subsystem in the monorepo has its own `testbench.json` placed directly inside its root directory. This provides complete decoupling: changing an ECU's target board, flashing baud rate, or timeout requires **zero changes to CI workflows or bash scripts**.
 
@@ -227,7 +205,7 @@ Every subsystem in the monorepo has its own `testbench.json` placed directly ins
 
 ---
 
-## 5. Code-Level Walkthrough: What Every File Does
+## 4. Code-Level Walkthrough: What Every File Does
 
 ### A. Master Test Runner: `github-action/cal-test.sh`
 Located at [`github-action/cal-test.sh`](file:///C:/JuneKim0712/CAN_TestBench/github-action/cal-test.sh).
@@ -424,118 +402,15 @@ Standardizes formatting across all CalSol C/C++ firmware:
 
 ---
 
-## 6. Step-by-Step Setup Guide: Making the CI Work from Scratch
+## 5. GitHub Setup & Repository Integration Guide
 
-Follow these instructions to configure a Raspberry Pi 5 bench runner and integrate repositories from zero.
+This guide covers everything required inside GitHub to connect a repository to the CalSol Hardware Testbench.
 
-### Phase 1: Raspberry Pi Hardware Bench Setup (`stolerpi`)
+### Step 1: Create `testbench.json` in Subsystem Directories
 
-1. **Operating System:** Install 64-bit Raspberry Pi OS or Ubuntu Server 24.04 ARM64.
-2. **Install Core System Packages:**
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y git curl wget build-essential cmake ninja-build ccache python3-pip python3-venv libusb-1.0-0 libglib2.0-0
-   ```
-3. **Grant Serial Port Permissions:**
-   Ensure the runner user (`jkim`) has permissions to access UART devices without sudo:
-   ```bash
-   sudo usermod -aG dialout,plugdev jkim
-   ```
+In your firmware repository, place a `testbench.json` in the root folder of each ECU or subsystem you want to test.
 
----
-
-### Phase 2: ESP-IDF Toolchain & Build Acceleration Setup
-
-1. **Install ESP-IDF v6.1+:**
-   ```bash
-   sudo mkdir -p /opt/esp-idf
-   sudo chown -R jkim:jkim /opt/esp-idf
-   git clone -b v6.1-beta1 --recursive https://github.com/espressif/esp-idf.git /opt/esp-idf
-   cd /opt/esp-idf
-   ./install.sh esp32s3
-   ```
-2. **Install Python Serial Dependency:**
-   ```bash
-   /opt/esp-idf/install.sh
-   . /opt/esp-idf/export.sh
-   pip install pyserial
-   ```
-3. **Configure Compiler Cache (`ccache`):**
-   ```bash
-   mkdir -p ~/.ccache
-   echo 'max_size = 5.0G' > ~/.ccache/ccache.conf
-   ```
-
----
-
-### Phase 3: Persistent USB Device Symlinks (`udev`)
-
-When multiple ESP32 boards are plugged into the Raspberry Pi via USB, default names like `/dev/ttyACM0` and `/dev/ttyACM1` can swap across reboots. To create persistent, human-readable symlinks:
-
-1. **Identify USB Vendor & Product IDs / Serial Numbers:**
-   ```bash
-   udevadm info --name=/dev/ttyACM0 --attribute-walk | grep -E "idVendor|idProduct|serial"
-   ```
-2. **Create Udev Rules File (`/etc/udev/rules.d/99-calsol-esp32.rules`):**
-   ```bash
-   sudo nano /etc/udev/rules.d/99-calsol-esp32.rules
-   ```
-   Add entries matching your hardware serials:
-   ```udev
-   # Ahmed ESP32-S3 (Pedals ECU)
-   SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", ATTRS{serial}=="12345678", SYMLINK+="esp32_ahmed", MODE="0666"
-
-   # Johnathan ESP32-S3 (Lights ECU)
-   SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", ATTRS{serial}=="87654321", SYMLINK+="esp32_johnathan", MODE="0666"
-   ```
-3. **Reload Rules:**
-   ```bash
-   sudo udevadm control --reload-rules && sudo udevadm trigger
-   ```
-4. **Verify Symlinks:**
-   ```bash
-   ls -l /dev/esp32_*
-   # Should display:
-   # /dev/esp32_ahmed -> ttyACM0
-   # /dev/esp32_johnathan -> ttyACM1
-   ```
-
----
-
-### Phase 4: GitHub Actions Runner Daemon & Systemd Linger
-
-1. **Download & Configure Runner:**
-   Navigate to your GitHub Organization or Repo $\rightarrow$ Settings $\rightarrow$ Actions $\rightarrow$ Runners $\rightarrow$ New runner:
-   ```bash
-   mkdir ~/actions-runner && cd ~/actions-runner
-   curl -o actions-runner-linux-arm64.tar.gz -L https://github.com/actions/runner/releases/download/v2.322.0/actions-runner-linux-arm64-2.322.0.tar.gz
-   tar xzf actions-runner-linux-arm64.tar.gz
-   ./config.sh --url https://github.com/CalSol/CAN_TestBench --token <REGISTRATION_TOKEN> --labels linux,ARM64,self-hosted
-   ```
-2. **Enable Systemd Lingering (CRITICAL):**
-   > [!IMPORTANT]
-   > Linux systemd shuts down user session services when the last SSH session disconnects, killing running tests with exit code 143 (`SIGTERM`). You **must** enable lingering:
-   ```bash
-   loginctl enable-linger jkim
-   ```
-   Verify lingering status:
-   ```bash
-   loginctl show-user jkim | grep Linger
-   # Must output: Linger=yes
-   ```
-3. **Install & Start Systemd Service:**
-   ```bash
-   sudo ./svc.sh install jkim
-   sudo ./svc.sh start
-   sudo ./svc.sh status
-   ```
-
----
-
-### Phase 5: Subsystem `testbench.json` Configuration
-
-In each firmware folder in your repository, create a `testbench.json` file:
-
+**Example: `bms_fw/testbench.json`**
 ```json
 {
   "name": "bms_fw",
@@ -547,59 +422,91 @@ In each firmware folder in your repository, create a `testbench.json` file:
 }
 ```
 
+#### Field Explanations:
+- `name`: Display name shown in GitHub Actions jobs and reports.
+- `target`: Path to the ESP-IDF test project containing `CMakeLists.txt` and `main/`.
+- `port`: The designated symlink of the microcontroller on the bench (e.g. `/dev/esp32_ahmed` or `/dev/esp32_johnathan`). Omit or leave empty `""` to auto-detect any connected ESP32.
+- `baud`: Flashing baud rate (`921600` recommended).
+- `timeout`: Maximum test duration in seconds (default: `12`).
+
 ---
 
-### Phase 6: Repository Integration (The 13-Line Workflow)
+### Step 2: Add the 13-Line Reusable Workflow (`.github/workflows/testbench.yml`)
 
-To enable automated testing in any CalSol repository (e.g. `CalSol/Gen11-FW`), create `.github/workflows/testbench.yml`:
+In your repository, create the file `.github/workflows/testbench.yml`:
 
 ```yaml
-name: Hardware CI
+name: CalSol Hardware CI
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  test:
+  hardware-ci:
     name: Run CalSol Hardware Testbench
     uses: CalSol/CAN_TestBench/.github/workflows/testbench.yml@main
     with:
       target: 'auto'
 ```
 
-That is all! The centralized engine automatically handles:
-- Cloud linting & static analysis
-- Changed file auto-discovery
-- Matrix job generation
-- Differential `app-flash` & `ccache` build execution
-- Trackside binary artifact uploads
+#### What this workflow automatically does:
+1. **Pre-Hardware Cloud Quality Gate:** Runs `cppcheck` and `clang-format` in cloud containers before dispatching to hardware.
+2. **Auto-Discovery:** Automatically scans your repo for `testbench.json` files and inspects Git diffs to test only modified ECUs.
+3. **Hardware Execution:** Dispatches tests to the bench runner with `ccache` acceleration and differential `app-flash`.
+4. **Artifact Uploads:** Archives flashable `.bin` and `.elf` files with a 14-day retention period.
 
 ---
 
-## 7. Day-to-Day Operations & Developer Workflows
+### Step 3: Configure GitHub Repository Permissions
 
-### Manual Dispatch (Testing a Specific ECU on a Specific Port)
-1. Navigate to **Actions** $\rightarrow$ **CalSol Hardware Unit Tests**.
+For the automated test runner and sticky PR comment bot to work properly, verify the following repository settings:
+
+1. **Enable Workflow Pull Request Write Permissions:**
+   - Go to your repository on GitHub.
+   - Click **Settings** $\rightarrow$ **Actions** $\rightarrow$ **General**.
+   - Scroll down to **Workflow permissions**.
+   - Select **Read and write permissions**.
+   - Check the box: **Allow GitHub Actions to create and approve pull requests**.
+   - Click **Save**.
+   *(This allows the `pr-report` job to post and update sticky status comments on Pull Requests).*
+
+2. **Allow Access to Reusable Workflows (Organization Repositories):**
+   - In `CalSol/CAN_TestBench` $\rightarrow$ **Settings** $\rightarrow$ **Actions** $\rightarrow$ **General**.
+   - Scroll down to **Access**.
+   - Ensure **Accessible from repositories in the 'CalSol' organization** is selected.
+
+---
+
+## 6. Day-to-Day Operations & Developer Workflows
+
+### Manual Workflow Dispatch
+You can trigger hardware tests on demand without making a commit:
+1. Navigate to **Actions** $\rightarrow$ **CalSol Hardware CI**.
 2. Click **Run workflow**.
-3. Under **Target subsystem**, enter: `pedals_fw` (or `"all"`).
-4. Under **Serial port override**, enter: `/dev/esp32_ahmed` (or leave blank for default).
+3. Under **Target subsystem**, enter:
+   - `"auto"`: Tests only modified subsystems.
+   - `"all"`: Forces tests across every subsystem in the repository.
+   - Specific path (e.g. `pedals_fw`): Tests only that ECU.
+4. Under **Serial port override**, enter an optional port (e.g. `/dev/esp32_ahmed`), or leave blank to use `testbench.json`.
 5. Click **Run workflow**.
 
-### Trackside Binary Downloads for Pit-Crew Flashing
-1. Open the green GitHub Actions run.
-2. Scroll to the bottom **Artifacts** section.
+### Downloading Trackside Binaries
+Trackside engineers can download pre-compiled, tested binaries to flash at the car:
+1. Open the successful GitHub Actions run.
+2. Scroll to the **Artifacts** section at the bottom.
 3. Download `<subsystem>-firmware-binaries.zip`.
-4. Flash the car at trackside with a laptop and USB cable:
+4. Extract and flash with a single command:
    ```bash
    esptool.py --port /dev/ttyACM0 --baud 921600 write_flash 0x10000 pedals_fw_test.bin
    ```
 
 ---
 
-## 8. Comprehensive Troubleshooting & Diagnostics Manual
+## 7. Comprehensive Troubleshooting & Diagnostics Manual
 
 ### Issue 1: "Board is currently in use by another process"
 - **Cause:** Another CI job, interactive SSH terminal, or background script is holding the `/tmp/calsol_locks/<board>.lock` advisory lock.
@@ -608,13 +515,13 @@ That is all! The centralized engine automatically handles:
   ssh jkim@stolerpi "lsof /tmp/calsol_locks/*.lock"
   ssh jkim@stolerpi "ps aux | grep -E 'cal-test|idf.py|python3'"
   ```
-- **Resolution:** If a process is orphaned, kill it:
+- **Resolution:** If an orphaned process remains, kill it:
   ```bash
   ssh jkim@stolerpi "kill -9 <PID>"
   ```
 
 ### Issue 2: "Process completed with exit code 143 (Runner Shutdown)"
-- **Cause:** Systemd lingering is disabled, and logging out of SSH terminated the user slice.
+- **Cause:** Systemd user lingering is disabled on the host, causing SSH disconnects to terminate running tests.
 - **Resolution:**
   ```bash
   ssh jkim@stolerpi "loginctl enable-linger jkim"
@@ -633,5 +540,5 @@ That is all! The centralized engine automatically handles:
 
 ### Issue 4: "Timed out (12s) waiting for Unity test output"
 - **Cause:** Firmware crashed before UART initialized, microcontroller is in an infinite loop, or wrong baud rate was specified.
-- **Diagnostic:** Inspect `github-action/.logs/<subsystem>_serial.log` on the Pi or read the decoded backtrace in the GitHub summary.
+- **Diagnostic:** Inspect `github-action/.logs/<subsystem>_serial.log` or read the decoded backtrace in the GitHub summary.
 - **Resolution:** If the test legitimately requires more time (e.g. multi-second CAN timers), increase `"timeout": 20` in `testbench.json`.
