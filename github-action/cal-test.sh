@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # 1. Resolve target directory or binary
-INPUT_TARGET="${1:-unit-testing/fw-lab-examples/brakelights/test}"
+INPUT_TARGET="${1:-lights_fw/test}"
 CLI_PORT="${2}"
 CLI_TIMEOUT="${3}"
 
@@ -110,7 +110,9 @@ echo "=================================================="
 # 6. Build & Flash
 if [ -d "$TARGET" ]; then
     cd "$TARGET"
-    printf "[*] Building firmware... "
+    printf "[*] Building firmware (ccache enabled)... "
+    export IDF_CCACHE_ENABLE=1
+    export CCACHE_DIR="${HOME}/.ccache"
     [ ! -f "sdkconfig" ] && idf.py set-target esp32s3 > "$LOG_DIR/build.log" 2>&1
     if idf.py build > "$LOG_DIR/build.log" 2>&1; then
         echo "OK"
@@ -121,9 +123,12 @@ if [ -d "$TARGET" ]; then
         exit 1
     fi
 
-    printf "[*] Flashing %s (%s baud)... " "$BOARD_NAME" "$BAUD"
-    if idf.py -p "$PORT" -b "$BAUD" flash > "$LOG_DIR/flash.log" 2>&1; then
+    printf "[*] Flashing %s (%s baud, fast app-flash)... " "$BOARD_NAME" "$BAUD"
+    # Try high-speed app partition flashing first; fallback to full flash if needed
+    if idf.py -p "$PORT" -b "$BAUD" app-flash > "$LOG_DIR/flash.log" 2>&1; then
         echo "OK"
+    elif idf.py -p "$PORT" -b "$BAUD" flash > "$LOG_DIR/flash.log" 2>&1; then
+        echo "OK (full flash fallback)"
     else
         echo "FAILED"
         echo "=== Flash Error Log ==="
