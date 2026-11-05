@@ -164,7 +164,7 @@ RESULTS_JSON="${LOG_DIR}/${SUBSYSTEM_SLUG}_test_results.json"
 
 echo "[*] Monitoring Unity test output (${TIMEOUT}s timeout)..."
 set +e
-python3 "$PARSER" --port "$PORT" --timeout "$TIMEOUT" --log-file "$SERIAL_LOG" --output-json "$RESULTS_JSON"
+python3 "$PARSER" --port "$PORT" --subsystem "$SUBSYSTEM_SLUG" --timeout "$TIMEOUT" --log-file "$SERIAL_LOG" --output-json "$RESULTS_JSON"
 TEST_EXIT_CODE=$?
 set -e
 
