@@ -24,17 +24,17 @@ on:
         type: string
         default: 'all'
       port:
-        description: 'Target serial port'
+        description: 'Target serial port override'
         required: false
         type: string
         default: ''
 
 jobs:
   detect-changes:
-    name: Detect Changed Subsystems
+    name: Detect Changed Subsystems & Configs
     runs-on: [ self-hosted, linux, ARM64 ]
     outputs:
-      targets: ${{ steps.set-targets.outputs.targets }}
+      matrix: ${{ steps.set-targets.outputs.matrix }}
       has_changes: ${{ steps.set-targets.outputs.has_changes }}
     steps:
       - name: Checkout Repository
@@ -58,43 +58,91 @@ jobs:
               - 'github-action/**'
               - '.github/**'
 
-      - name: Determine Target Matrix
+      - name: Determine Target Matrix & Settings
         id: set-targets
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TARGET: ${{ inputs.target }}
+          PORT_OVERRIDE: ${{ inputs.port }}
+          FILTER_CHANGES: ${{ steps.filter.outputs.changes }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "workflow_call" ]; then
-            TARGET="${{ inputs.target }}"
-            if [ "$TARGET" = "all" ] || [ -z "$TARGET" ]; then
-              MATRIX='["lights_fw/test", "pedals_fw/test"]'
-            else
-              MATRIX="[\"$TARGET\"]"
-            fi
-            echo "targets=$MATRIX" >> $GITHUB_OUTPUT
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          else
-            CHANGES='${{ steps.filter.outputs.changes }}'
-            if [ -z "$CHANGES" ] || [ "$CHANGES" = "[]" ]; then
-              echo "targets=[]" >> $GITHUB_OUTPUT
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-            else
-              echo "targets=$CHANGES" >> $GITHUB_OUTPUT
-              echo "has_changes=true" >> $GITHUB_OUTPUT
-            fi
-          fi
+          python3 - << 'EOF'
+          import json, os, glob
+
+          event_name = os.environ.get("EVENT_NAME", "")
+          input_target = os.environ.get("INPUT_TARGET", "")
+          port_override = os.environ.get("PORT_OVERRIDE", "").strip()
+          filter_changes_raw = os.environ.get("FILTER_CHANGES", "[]")
+
+          try:
+              changes = json.loads(filter_changes_raw)
+          except:
+              changes = []
+
+          if event_name in ["workflow_dispatch", "workflow_call"] and input_target and input_target != "all":
+              subsystems = [input_target]
+          elif event_name in ["workflow_dispatch", "workflow_call"] and (input_target == "all" or not input_target):
+              subsystems = []
+              for d in sorted(glob.glob("*/test")):
+                  subsystems.append(d)
+          else:
+              subsystems = changes
+
+          matrix_items = []
+          for sub in subsystems:
+              folder = sub.split("/")[0]
+              cfg_path = f"{folder}/testbench.json"
+              if not os.path.exists(cfg_path):
+                  cfg_path = f"{sub}/testbench.json"
+
+              cfg = {}
+              if os.path.exists(cfg_path):
+                  try:
+                      with open(cfg_path, "r", encoding="utf-8") as f:
+                          cfg = json.load(f)
+                  except Exception as e:
+                      print(f"[-] Warning: Failed to parse {cfg_path}: {e}")
+
+              target = cfg.get("target", f"{folder}/test" if not sub.endswith("/test") else sub)
+              name = cfg.get("name", folder)
+              port = port_override if port_override else cfg.get("port", "")
+              timeout = cfg.get("timeout", 12)
+
+              matrix_items.append({
+                  "name": name,
+                  "folder": folder,
+                  "target": target,
+                  "port": port,
+                  "timeout": timeout
+              })
+
+          has_changes = "true" if len(matrix_items) > 0 else "false"
+          matrix_json = json.dumps(matrix_items)
+
+          gh_output = os.environ.get("GITHUB_OUTPUT")
+          if gh_output:
+              with open(gh_output, "a", encoding="utf-8") as f:
+                  f.write(f"matrix={matrix_json}\n")
+                  f.write(f"has_changes={has_changes}\n")
+
+          print(f"Target Subsystems Matrix: {matrix_json}")
+          EOF
 
       - name: Report Detection Summary
         run: |
-          echo "### 🎯 Subsystem Change Detection" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Subsystem Target Matrix & Hardware Assignments" >> $GITHUB_STEP_SUMMARY
           echo "- **Trigger Event**: \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.set-targets.outputs.has_changes }}" = "true" ]; then
-            echo "- **Target Subsystem(s)**: \`${{ steps.set-targets.outputs.targets }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Decision**: Running tests only for changed folders." >> $GITHUB_STEP_SUMMARY
+            echo "| Subsystem | Test Target | Designated Port / Board | Timeout |" >> $GITHUB_STEP_SUMMARY
+            echo "| :--- | :--- | :--- | :---: |" >> $GITHUB_STEP_SUMMARY
+            python3 -c "import json, os; m=json.loads('${{ steps.set-targets.outputs.matrix }}'); [print(f\"| **{x['name']}** | `{x['target']}` | `{x['port'] or 'auto'}` | {x['timeout']}s |\") for x in m]" >> $GITHUB_STEP_SUMMARY
           else
-            echo "- **Target Subsystem(s)**: None" >> $GITHUB_STEP_SUMMARY
+            echo "- **Target Subsystems**: None" >> $GITHUB_STEP_SUMMARY
             echo "- **Decision**: No firmware files were changed. Skipping hardware testbench." >> $GITHUB_STEP_SUMMARY
           fi
 
   testbench:
-    name: Test ${{ matrix.subsystem }}
+    name: Test ${{ matrix.cfg.name }} (${{ matrix.cfg.port || 'auto' }})
     needs: detect-changes
     if: needs.detect-changes.outputs.has_changes == 'true'
     runs-on: [ self-hosted, linux, ARM64 ]
@@ -102,7 +150,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        subsystem: ${{ fromJson(needs.detect-changes.outputs.targets) }}
+        cfg: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
 
     steps:
       - name: Checkout Repository
@@ -113,14 +161,12 @@ jobs:
 
       - name: Run Hardware Unit Tests
         run: |
-          TARGET="${{ matrix.subsystem }}"
-          PORT="${{ inputs.port || '' }}"
-          ./github-action/cal-test.sh "$TARGET" "$PORT"
+          ./github-action/cal-test.sh "${{ matrix.cfg.target }}" "${{ matrix.cfg.port }}" "${{ matrix.cfg.timeout }}"
 
       - name: Dump Failure Logs
         if: failure()
         run: |
-          echo "### ⚠️ Build / Flash Debug Logs for ${{ matrix.subsystem }}" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Build / Flash Debug Logs for ${{ matrix.cfg.name }}" >> $GITHUB_STEP_SUMMARY
           echo "<details><summary>Click to view failure log output</summary>" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY

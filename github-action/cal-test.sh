@@ -2,6 +2,7 @@
 # ==============================================================================
 # CalSol Testbench: Automated On-Target Unit Test Runner
 # Designed for both GitHub Actions (CI) and local terminal execution.
+# Supports per-folder testbench.json configurations.
 # ==============================================================================
 
 set -e
@@ -11,7 +12,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # 1. Resolve target directory or binary
 INPUT_TARGET="${1:-lights_fw/test}"
-PORT="${2}"
+CLI_PORT="${2}"
+CLI_TIMEOUT="${3}"
 
 if [ -d "${REPO_ROOT}/${INPUT_TARGET}" ]; then
     TARGET="${REPO_ROOT}/${INPUT_TARGET}"
@@ -26,7 +28,32 @@ else
     exit 1
 fi
 
-# 2. Source ESP-IDF if idf.py is not in PATH
+# 2. Check for folder-specific testbench.json configuration
+CONFIG_FILE=""
+if [ -d "$TARGET" ] && [ -f "${TARGET}/testbench.json" ]; then
+    CONFIG_FILE="${TARGET}/testbench.json"
+elif [ -d "$TARGET" ] && [ -f "$(dirname "$TARGET")/testbench.json" ]; then
+    CONFIG_FILE="$(dirname "$TARGET")/testbench.json"
+fi
+
+CONFIG_PORT=""
+CONFIG_TIMEOUT=""
+CONFIG_BAUD=""
+CONFIG_NAME=""
+
+if [ -n "$CONFIG_FILE" ]; then
+    echo "[*] Found subsystem testbench configuration: ${CONFIG_FILE}"
+    CONFIG_PORT=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('port',''))" 2>/dev/null || true)
+    CONFIG_TIMEOUT=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('timeout',''))" 2>/dev/null || true)
+    CONFIG_BAUD=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('baud',''))" 2>/dev/null || true)
+    CONFIG_NAME=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('name',''))" 2>/dev/null || true)
+fi
+
+PORT="${CLI_PORT:-$CONFIG_PORT}"
+TIMEOUT="${CLI_TIMEOUT:-${CONFIG_TIMEOUT:-12}}"
+BAUD="${CONFIG_BAUD:-921600}"
+
+# 3. Source ESP-IDF if idf.py is not in PATH
 if ! command -v idf.py >/dev/null 2>&1; then
     if [ -f "/opt/esp-idf/export.sh" ]; then
         source /opt/esp-idf/export.sh >/dev/null 2>&1
@@ -38,7 +65,12 @@ if ! command -v idf.py >/dev/null 2>&1; then
     fi
 fi
 
-# 3. Auto-detect serial port if not provided
+# 4. Validate or auto-detect serial port
+if [ -n "$PORT" ] && [ ! -e "$PORT" ]; then
+    echo "[-] Warning: Configured port '${PORT}' not currently connected. Falling back to auto-detection..."
+    PORT=""
+fi
+
 if [ -z "$PORT" ]; then
     for candidate in "/dev/steering" "/dev/esp32_johnathan" "/dev/bms" "/dev/esp32_ahmed" "/dev/ttyACM0" "/dev/ttyACM1"; do
         if [ -e "$candidate" ]; then
@@ -57,7 +89,7 @@ BOARD_NAME="$(basename "$PORT")"
 LOG_DIR="${SCRIPT_DIR}/.logs"
 mkdir -p "$LOG_DIR"
 
-# 4. Mutex lock on the hardware device to prevent concurrent flashing
+# 5. Mutex lock on the hardware device to prevent concurrent flashing
 LOCK_DIR="/tmp/calsol_locks"
 mkdir -p "$LOCK_DIR"
 LOCK_FILE="${LOCK_DIR}/${BOARD_NAME}.lock"
@@ -68,11 +100,14 @@ if ! flock -w 15 200; then
 fi
 
 echo "=================================================="
-echo " CalSol Hardware Testbench: ${BOARD_NAME}"
-echo " Target: ${TARGET}"
+echo " CalSol Hardware Testbench: ${CONFIG_NAME:-$BOARD_NAME}"
+echo " Port:    ${PORT} (${BOARD_NAME})"
+echo " Target:  ${TARGET}"
+echo " Baud:    ${BAUD}"
+echo " Timeout: ${TIMEOUT}s"
 echo "=================================================="
 
-# 5. Build & Flash
+# 6. Build & Flash
 if [ -d "$TARGET" ]; then
     cd "$TARGET"
     printf "[*] Building firmware... "
@@ -86,8 +121,8 @@ if [ -d "$TARGET" ]; then
         exit 1
     fi
 
-    printf "[*] Flashing %s (921600 baud)... " "$BOARD_NAME"
-    if idf.py -p "$PORT" -b 921600 flash > "$LOG_DIR/flash.log" 2>&1; then
+    printf "[*] Flashing %s (%s baud)... " "$BOARD_NAME" "$BAUD"
+    if idf.py -p "$PORT" -b "$BAUD" flash > "$LOG_DIR/flash.log" 2>&1; then
         echo "OK"
     else
         echo "FAILED"
@@ -97,7 +132,7 @@ if [ -d "$TARGET" ]; then
     fi
 elif [ -f "$TARGET" ]; then
     printf "[*] Flashing pre-built binary %s... " "$BOARD_NAME"
-    if esptool.py --port "$PORT" --baud 921600 write_flash 0x10000 "$TARGET" > "$LOG_DIR/flash.log" 2>&1; then
+    if esptool.py --port "$PORT" --baud "$BAUD" write_flash 0x10000 "$TARGET" > "$LOG_DIR/flash.log" 2>&1; then
         echo "OK"
     else
         echo "FAILED"
@@ -107,7 +142,7 @@ elif [ -f "$TARGET" ]; then
     fi
 fi
 
-# 6. Parse Unity test results over serial
+# 7. Parse Unity test results over serial
 PARSER="${SCRIPT_DIR}/lib/unity_parser.py"
-echo "[*] Monitoring Unity test output..."
-python3 "$PARSER" --port "$PORT" --timeout 12
+echo "[*] Monitoring Unity test output (${TIMEOUT}s timeout)..."
+python3 "$PARSER" --port "$PORT" --timeout "$TIMEOUT"

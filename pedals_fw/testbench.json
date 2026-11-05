@@ -1,0 +1,8 @@
+{
+  "name": "pedals_fw",
+  "target": "pedals_fw/test",
+  "port": "/dev/esp32_ahmed",
+  "baud": 921600,
+  "timeout": 12,
+  "description": "Accelerator & Brake Plausibility ECU testbench configuration"
+}
