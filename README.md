@@ -19,12 +19,12 @@ CAN_TestBench/
 │   ├── requirements.txt        # Python dependencies (slack-bolt, pyserial)
 │   └── Readme.md               # Slack bot documentation and token setup
 │
-├── server/                     # Raspberry Pi Testbench Engine
+├── github-action/              # Hardware Testbench & GitHub Actions CI Engine
 │   ├── cal-test.sh             # Automated build, flash, and test orchestrator
 │   ├── cal-flash.sh            # Hardware mutex flashing runner (flock)
 │   ├── lib/
 │   │   └── unity_parser.py     # Serial monitor & GitHub Actions summary generator
-│   └── README.md
+│   └── README.md               # Comprehensive GitHub Action & runner documentation
 │
 └── unit-testing/
     └── fw-lab-examples/        # Firmware lab code & examples (Kyle Liang)
@@ -65,5 +65,5 @@ On `stolerpi`:
 
 ```bash
 # Build, flash, and run Unity tests on target
-./server/cal-test.sh path/to/project_dir [port]
+./github-action/cal-test.sh path/to/project_dir [port]
 ```

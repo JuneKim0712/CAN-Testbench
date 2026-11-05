@@ -46,11 +46,11 @@ jobs:
           path: .calsol_testbench
 
       - name: Make Scripts Executable
-        run: chmod +x .calsol_testbench/server/*.sh .calsol_testbench/server/lib/*.py
+        run: chmod +x .calsol_testbench/github-action/*.sh .calsol_testbench/github-action/lib/*.py
 
       - name: Execute On-Target Hardware Test
         run: |
-          .calsol_testbench/server/cal-test.sh "${{ inputs.target }}" "${{ inputs.port }}"
+          .calsol_testbench/github-action/cal-test.sh "${{ inputs.target }}" "${{ inputs.port }}"
 
       - name: Dump Failure Logs
         if: failure()
@@ -59,13 +59,13 @@ jobs:
           echo "<details><summary>Click to view failure log output</summary>" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
-          if [ -f ".calsol_testbench/server/.logs/build.log" ]; then
+          if [ -f ".calsol_testbench/github-action/.logs/build.log" ]; then
             echo "=== BUILD LOG ==="
-            tail -n 40 .calsol_testbench/server/.logs/build.log
+            tail -n 40 .calsol_testbench/github-action/.logs/build.log
           fi
-          if [ -f ".calsol_testbench/server/.logs/flash.log" ]; then
+          if [ -f ".calsol_testbench/github-action/.logs/flash.log" ]; then
             echo "=== FLASH LOG ==="
-            tail -n 40 .calsol_testbench/server/.logs/flash.log
+            tail -n 40 .calsol_testbench/github-action/.logs/flash.log
           fi
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "</details>" >> $GITHUB_STEP_SUMMARY
