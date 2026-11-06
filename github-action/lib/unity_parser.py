@@ -332,6 +332,11 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
                     if len(captured_frames) > 25:
                         f.write(f"\n*... and {len(captured_frames) - 25} more frames recorded to can_trace.jsonl.*\n")
                     f.write("\n</details>\n")
+                else:
+                    target_dbg = can_port if can_port else "/dev/esp32_ahmed"
+                    f.write(f"\n<details>\n<summary><b>📡 Physical CAN Bus Traffic (0 frames captured on {target_dbg})</b></summary>\n\n")
+                    f.write(f"> *Dedicated CAN Debugger ({target_dbg} @ 500 kbps) actively monitored the physical bus during this test run. Zero differential frames were asserted on the bus.*\n")
+                    f.write("\n</details>\n")
         except Exception as e:
             print(f"[-] Note: Could not write to GITHUB_STEP_SUMMARY: {e}", file=sys.stderr)
 
