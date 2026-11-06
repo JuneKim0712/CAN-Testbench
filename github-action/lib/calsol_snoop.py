@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
-CalSol CAN Testbench: Remote CAN Snooper CLI
-============================================
-Connects to the CAN Bridge Daemon via Unix socket or TCP,
-streaming live CAN bus traffic with microsecond timestamps.
+CalSol Remote CAN Snooper CLI
+Streams live CAN traffic from the CAN Bridge Daemon.
 """
 
 import sys
@@ -12,71 +10,67 @@ import socket
 import argparse
 from datetime import datetime
 
+
+def connect(sock_path: str, tcp: str | None = None) -> socket.socket:
+    if tcp:
+        host, port = tcp.split(":")
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((host, int(port)))
+        return s
+    if hasattr(socket, "AF_UNIX"):
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect(sock_path)
+        return s
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(("127.0.0.1", 5555))
+    return s
+
+
 def parse_id(val: str) -> int:
     return int(val, 16 if val.lower().startswith("0x") else 10)
 
+
 def main():
     parser = argparse.ArgumentParser(description="CalSol Remote CAN Snooper")
-    parser.add_argument("--socket", default="/tmp/calsol_can.sock", help="Unix domain socket path")
-    parser.add_argument("--tcp", help="Connect via TCP (host:port, e.g. 100.120.92.102:5555)")
-    parser.add_argument("--id", type=parse_id, help="Filter for a specific CAN ID")
-    parser.add_argument("--count", type=int, default=0, help="Exit after receiving N frames (0 = continuous)")
+    parser.add_argument("--socket", default="/tmp/calsol_can.sock", help="Unix socket path")
+    parser.add_argument("--tcp", help="TCP address (host:port)")
+    parser.add_argument("--id", type=parse_id, help="Filter for specific CAN ID")
+    parser.add_argument("--count", type=int, default=0, help="Exit after N frames (0 = continuous)")
     parser.add_argument("--json", action="store_true", help="Output raw JSON events")
-
     args = parser.parse_args()
 
-    sock = None
-    if args.tcp:
-        host, port = args.tcp.split(":")
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((host, int(port)))
-        print(f"[*] Connected to CAN bridge via TCP at {args.tcp}")
-    else:
-        if not hasattr(socket, "AF_UNIX"):
-            print("[-] Unix sockets not supported on this platform. Use --tcp host:port.")
-            sys.exit(1)
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(args.socket)
-        print(f"[*] Connected to CAN bridge via Unix socket: {args.socket}")
-
-    print("----------------------------------------------------------------------")
-    print(" Timestamp      Dir  CAN ID  DLC  Payload Data")
-    print("----------------------------------------------------------------------")
+    s = connect(args.socket, args.tcp)
+    print("Timestamp      Dir  CAN ID  DLC  Payload Data")
+    print("-" * 55)
 
     received = 0
     buf = ""
     try:
         while True:
-            data = sock.recv(2048)
+            data = s.recv(2048)
             if not data:
                 break
             buf += data.decode("utf-8", errors="replace")
             while "\n" in buf:
                 line, buf = buf.split("\n", 1)
-                line = line.strip()
-                if not line:
+                if not line.strip():
                     continue
                 try:
-                    event = json.loads(line)
-                    if event.get("event") != "frame":
+                    ev = json.loads(line)
+                    if ev.get("event") != "frame":
                         continue
-
-                    can_id = event.get("id")
-                    if args.id is not None and can_id != args.id:
+                    cid = ev.get("id")
+                    if args.id is not None and cid != args.id:
                         continue
-
                     received += 1
                     if args.json:
                         print(line)
                     else:
-                        ts = datetime.fromtimestamp(event.get("timestamp", 0)).strftime("%H:%M:%S.%f")[:-3]
-                        direction = event.get("direction", "rx").upper()
-                        id_hex = event.get("id_hex", f"0x{can_id:03X}")
-                        dlc = event.get("dlc", 0)
-                        raw_data = event.get("data", "")
-                        # Space-separate hex bytes
-                        spaced_data = " ".join(raw_data[i:i+2] for i in range(0, len(raw_data), 2)).upper()
-                        print(f"[{ts}]  {direction:2}   {id_hex:>6}   {dlc}    {spaced_data}")
+                        ts = datetime.fromtimestamp(ev.get("timestamp", 0)).strftime("%H:%M:%S.%f")[:-3]
+                        d = ev.get("direction", "rx").upper()
+                        raw = ev.get("data", "")
+                        spaced = " ".join(raw[i:i+2] for i in range(0, len(raw), 2)).upper()
+                        print(f"[{ts}]  {d:2}   0x{cid:03X}    {ev.get('dlc', 0)}    {spaced}")
 
                     if args.count > 0 and received >= args.count:
                         return
@@ -85,8 +79,9 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        sock.close()
-        print(f"\n[*] Stopped snooper. Total frames captured: {received}")
+        s.close()
+        print(f"\n[*] Stopped. Total frames captured: {received}")
+
 
 if __name__ == "__main__":
     main()
