@@ -1,10 +1,22 @@
 name: CalSol Hardware Unit Tests
 
+# Reusable workflow logic for CalSol hardware CI
+# NOTE: Automatic triggers (push / pull_request) are disabled on CalSol/CAN_TestBench
+# to prevent workflow execution here. Testing ground for workflows is JuneKim0712/CAN-Testbench.
+
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_call:
+    inputs:
+      target:
+        description: 'Target subsystem to test ("auto", "all", or specific path)'
+        required: false
+        default: 'all'
+        type: string
+      port:
+        description: 'Serial port override (optional)'
+        required: false
+        default: ''
+        type: string
   workflow_dispatch:
     inputs:
       target:
@@ -29,6 +41,7 @@ concurrency:
 jobs:
   static-analysis:
     name: Cloud Lint & Static Analysis
+    if: github.repository != 'CalSol/CAN_TestBench'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout Repository
@@ -46,6 +59,7 @@ jobs:
 
   discover:
     name: Auto-Discover Subsystems & Settings
+    if: github.repository != 'CalSol/CAN_TestBench'
     runs-on: [ self-hosted, linux, ARM64 ]
     outputs:
       matrix: ${{ steps.discovery.outputs.matrix }}
@@ -69,7 +83,7 @@ jobs:
   testbench:
     name: Test ${{ matrix.cfg.name }} (${{ matrix.cfg.port || 'auto' }})
     needs: [discover, static-analysis]
-    if: needs.discover.outputs.has_changes == 'true'
+    if: github.repository != 'CalSol/CAN_TestBench' && needs.discover.outputs.has_changes == 'true'
     runs-on: [ self-hosted, linux, ARM64 ]
     timeout-minutes: 8
     strategy:
@@ -100,7 +114,7 @@ jobs:
   report:
     name: CalSol Testbench Status Dashboard
     needs: [static-analysis, discover, testbench]
-    if: always()
+    if: github.repository != 'CalSol/CAN_TestBench' && always()
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout Repository
