@@ -171,7 +171,7 @@ def main():
             has_shared_change = any(any(f.startswith(trig) or f == trig for trig in shared_triggers) for f in changed_files)
             
             # Exclude purely documentation changes (.md files) from triggering all
-            code_changes = [f for f in changed_files if not f.endswith(".md") and not f.startswith(".")]
+            code_changes = [f for f in changed_files if not f.endswith(".md") and not f.startswith(".") and not f.startswith("web/") and not f.startswith("docs/")]
 
             if not code_changes and not has_shared_change:
                 print("[*] Only non-code/documentation changes detected. No hardware tests required.")

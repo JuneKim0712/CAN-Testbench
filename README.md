@@ -87,6 +87,11 @@ CAN_TestBench/
 │   ├── CODE_DOCUMENTATION.md       # Complete code & architectural reference manual
 │   └── CAN_TESTBENCH_STAGE_GUIDE.md # Stage-by-stage operational & engineering manual
 │
+├── web/                            # Interactive Telemetry & Testbench Web Portal (GitHub Pages)
+│   ├── index.html                  # Minimalist, right-angled telemetry dashboard
+│   └── data/
+│       └── history.json            # Cumulative testbench run records & bus traces
+│
 └── github-action/                  # Testbench runner scripts & ingestion libraries
     ├── action.yml                  # Standalone GitHub Composite Action definition
     ├── cal-test.sh                 # Master test execution runner (build, flash, parse, report)
@@ -188,6 +193,7 @@ Captured CAN frames are surfaced in four accessible locations during CI runs:
 2. **Job Step Summary:** Expandable within the specific test job summary under `<details>` **"CAN Bus Telemetry"**.
 3. **Live Job Logs:** Real-time stream inside step **"On-Target Silicon Execution & Live CAN Stream"** (e.g. `[CAN LIVE] 0x011 (THROTTLE_COMMAND)...`).
 4. **Run Artifacts:** Complete raw traces are downloadable as `can_trace.jsonl` under the run's **Artifacts** section for offline analysis.
+5. **Interactive Web Portal (GitHub Pages):** Deployed to `https://<org>.github.io/<repo>/`, displaying historical testbench runs, real-time CAN bus oscilloscope waveforms, filterable packet streams, and Unity assertion breakdowns.
 
 ---
 
