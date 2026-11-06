@@ -100,7 +100,7 @@ sequenceDiagram
     participant Lock as Lockfile (/tmp/calsol_locks/)
     participant ESP as ESP32-S3 Hardware Silicon
 
-    Dev->>Host: ssh stolerpi-jkim "bash github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan 12"
+    Dev->>Host: ssh <user>@stolerpi "bash github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan 12"
     Host->>Lock: flock -w 15 /tmp/calsol_locks/esp32_johnathan.lock
     Note over Lock: Prevents simultaneous writes by other devs/CI
     Host->>ESP: idf.py build && esptool flash (921,600 baud)
@@ -120,17 +120,17 @@ To prevent two engineers or a GitHub Actions runner from flashing the same micro
 From your workstation terminal:
 ```bash
 # 1. Connect and run automated Unity unit tests on Node 2 (DUT)
-ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan 15"
+ssh <user>@stolerpi "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan 15"
 
 # 2. Flash standalone firmware binary without running Unity tests
-ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-flash.sh pedals_fw/test /dev/esp32_johnathan"
+ssh <user>@stolerpi "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-flash.sh pedals_fw/test /dev/esp32_johnathan"
 ```
 
 ---
 
 ## Stage 3: Remote CAN Packet Snooping & Injection
 
-The bench operates a high-speed software bridge daemon ([`can_bridge_daemon.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/can_bridge_daemon.py)) that interfaces with the dedicated CAN Debugger on Node 2.
+The bench operates a high-speed software bridge daemon ([`can_bridge_daemon.py`](../github-action/lib/can_bridge_daemon.py)) that interfaces with the dedicated CAN Debugger on Node 2.
 
 ```mermaid
 flowchart LR
@@ -170,7 +170,7 @@ Because CAN frames can contain arbitrary binary zeros (`0x00`), standard null-te
 - Computes an 8-bit checksum: `sum(frame) % 256 == 0` for integrity.
 
 ### How to Snoop (Listen to) Live Bus Traffic
-Run [`calsol_snoop.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/calsol_snoop.py) to watch the live bus in real-time:
+Run [`calsol_snoop.py`](../github-action/lib/calsol_snoop.py) to watch the live bus in real-time:
 ```bash
 # Snoop on the Raspberry Pi
 python3 github-action/lib/calsol_snoop.py
@@ -191,7 +191,7 @@ Timestamp      Dir  CAN ID  DLC  Payload Data
 ```
 
 ### How to Inject (Transmit) Packets Remotely
-Run [`calsol_inject.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/calsol_inject.py) to transmit custom CAN frames:
+Run [`calsol_inject.py`](../github-action/lib/calsol_inject.py) to transmit custom CAN frames:
 ```bash
 # One-shot injection of Drive Command 0x501
 python3 github-action/lib/calsol_inject.py --id 0x501 --data 000000003F000000
@@ -204,18 +204,18 @@ python3 github-action/lib/calsol_inject.py --id 0x11 --data 80 --rate 20
 
 ## Stage 4: Software Board Emulation (Virtual ECUs)
 
-When developing a single subsystem (like the pedals board), the other physical car ECUs (BMS, Motor Controller, Steering) are usually missing. The testbench provides lightweight, deterministic software-defined mock ECUs in [`sim/virtual_ecus/`](file:///C:/JuneKim0712/CAN_TestBench/sim/virtual_ecus/).
+When developing a single subsystem (like the pedals board), the other physical car ECUs (BMS, Motor Controller, Steering) are usually missing. The testbench provides lightweight, deterministic software-defined mock ECUs in [`sim/virtual_ecus/`](../sim/virtual_ecus/).
 
 ### The Emulated Models
-1. **Virtual BMS ([`virtual_bms.py`](file:///C:/JuneKim0712/CAN_TestBench/sim/virtual_ecus/virtual_bms.py)):**
+1. **Virtual BMS ([`virtual_bms.py`](../sim/virtual_ecus/virtual_bms.py)):**
    - Simulates a 96-cell series lithium-ion pack (nominal 379.2V, 28.5°C, 88% SoC).
    - Broadcasts Heartbeat `0x301` @ 10 Hz, Cell Voltages `0x302` @ 2 Hz, Temperatures `0x303` @ 1 Hz.
    - Responds to fault conditions by tripping contactors from `CLOSED` to `OPEN`.
-2. **Virtual Motor Controller ([`virtual_motor.py`](file:///C:/JuneKim0712/CAN_TestBench/sim/virtual_ecus/virtual_motor.py)):**
+2. **Virtual Motor Controller ([`virtual_motor.py`](../sim/virtual_ecus/virtual_motor.py)):**
    - Simulates a Tritium WaveSculptor 22 motor controller and Gen11 vehicle physics ($320\text{ kg}$, $C_d A = 0.12$, $C_{rr} = 0.0028$, $80\text{ Nm}$ peak torque).
    - Listens for Drive Command `0x501` or Pedal Position `0x11`.
    - Broadcasts Motor Status `0x502` @ 20 Hz (RPM, velocity, phase current) and Bus Measurements `0x503` @ 10 Hz.
-3. **Virtual Steering ([`virtual_steering.py`](file:///C:/JuneKim0712/CAN_TestBench/sim/virtual_ecus/virtual_steering.py)):**
+3. **Virtual Steering ([`virtual_steering.py`](../sim/virtual_ecus/virtual_steering.py)):**
    - Simulates driver mode switch (`NEUTRAL`, `DRIVE`, `REVERSE`), cruise control, and hazard lights.
    - Broadcasts Controls `0x200` @ 10 Hz.
 
@@ -233,7 +233,7 @@ python3 sim/virtual_ecus/car_runner.py --duration 30
 
 ## Stage 5: GitHub Actions CI Pipeline & PR Status Dashboard
 
-On every Pull Request or push to `main`, GitHub Actions automatically orchestrates the entire verification process via [`.github/workflows/unit-test.yml`](file:///C:/JuneKim0712/CAN_TestBench/.github/workflows/unit-test.yml).
+On every Pull Request or push to `main`, GitHub Actions automatically orchestrates the entire verification process via [`.github/workflows/unit-test.yml`](../.github/workflows/unit-test.yml).
 
 ```mermaid
 flowchart TD
@@ -264,9 +264,9 @@ flowchart TD
 | **Inject Single Packet** | `python3 github-action/lib/calsol_inject.py --id 0x501 --data DEADBEEF` |
 | **Inject Periodic Packet (20 Hz)** | `python3 github-action/lib/calsol_inject.py --id 0x11 --data 80 --rate 20` |
 | **Start Virtual Vehicle** | `python3 sim/virtual_ecus/car_runner.py` |
-| **Run Unit Tests on DUT** | `ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan 15"` |
-| **Flash DUT Standalone** | `ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-flash.sh pedals_fw/test /dev/esp32_johnathan"` |
-| **Restore Debugger to Node 1** | `ssh stolerpi-jkim "python3 -m esptool --chip esp32s3 -p /dev/esp32_ahmed -b 921600 write-flash 0x0 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/bootloader/bootloader.bin 0x8000 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/partition_table/partition-table.bin 0x10000 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/CAN_driver_API.bin"` |
+| **Run Unit Tests on DUT** | `ssh <user>@stolerpi "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan 15"` |
+| **Flash DUT Standalone** | `ssh <user>@stolerpi "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-flash.sh pedals_fw/test /dev/esp32_johnathan"` |
+| **Restore Debugger to Node 1** | `ssh <user>@stolerpi "python3 -m esptool --chip esp32s3 -p /dev/esp32_ahmed -b 921600 write-flash 0x0 /opt/calsol/ESP32_CAN_BUS_Debugger/build_dev/bootloader/bootloader.bin 0x8000 /opt/calsol/ESP32_CAN_BUS_Debugger/build_dev/partition_table/partition-table.bin 0x10000 /opt/calsol/ESP32_CAN_BUS_Debugger/build_dev/CAN_driver_API.bin"` |
 
 ---
 

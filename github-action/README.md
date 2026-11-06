@@ -153,7 +153,7 @@ Every ECU or subsystem directory in the repository declares its hardware require
 ## 4. Code-Level Walkthrough: What Every File Does
 
 ### A. Master Test Runner: `github-action/cal-test.sh`
-Located at [`github-action/cal-test.sh`](file:///C:/JuneKim0712/CAN_TestBench/github-action/cal-test.sh).
+Located at [`github-action/cal-test.sh`](cal-test.sh).
 
 This bash script is executed directly on the Raspberry Pi runner (or locally by an engineer at the bench).
 
@@ -192,7 +192,7 @@ This bash script is executed directly on the Raspberry Pi runner (or locally by 
 ---
 
 ### B. Standalone Flasher: `github-action/cal-flash.sh`
-Located at [`github-action/cal-flash.sh`](file:///C:/JuneKim0712/CAN_TestBench/github-action/cal-flash.sh).
+Located at [`github-action/cal-flash.sh`](cal-flash.sh).
 
 Used by engineers for rapid flashing of pre-compiled binaries without running tests:
 ```bash
@@ -205,7 +205,7 @@ Used by engineers for rapid flashing of pre-compiled binaries without running te
 ---
 
 ### C. Pre-Hardware Cloud Quality Gate: `static-check.sh` & `lib/static_check.py`
-Located at [`github-action/static-check.sh`](file:///C:/JuneKim0712/CAN_TestBench/github-action/static-check.sh) and [`github-action/lib/static_check.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/static_check.py).
+Located at [`github-action/static-check.sh`](static-check.sh) and [`github-action/lib/static_check.py`](lib/static_check.py).
 
 Executes inside free GitHub Cloud containers (`ubuntu-24.04`) in **~13 seconds** before physical microcontrollers are touched.
 
@@ -231,7 +231,7 @@ Executes inside free GitHub Cloud containers (`ubuntu-24.04`) in **~13 seconds**
 ---
 
 ### D. Subsystem Auto-Discovery: `lib/auto_discover.py`
-Located at [`github-action/lib/auto_discover.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/auto_discover.py).
+Located at [`github-action/lib/auto_discover.py`](lib/auto_discover.py).
 
 The dynamic heart of the monorepo pipeline. It dynamically builds the matrix for GitHub Actions.
 
@@ -253,7 +253,7 @@ The dynamic heart of the monorepo pipeline. It dynamically builds the matrix for
 ---
 
 ### E. UART Stream Parser & Reporter: `lib/unity_parser.py`
-Located at [`github-action/lib/unity_parser.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/unity_parser.py).
+Located at [`github-action/lib/unity_parser.py`](lib/unity_parser.py).
 
 Monitors serial communication during hardware test execution.
 
@@ -274,7 +274,7 @@ Monitors serial communication during hardware test execution.
 ---
 
 ### F. Crash Post-Mortem & Backtrace Decoder: `lib/crash_decoder.py`
-Located at [`github-action/lib/crash_decoder.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/crash_decoder.py).
+Located at [`github-action/lib/crash_decoder.py`](lib/crash_decoder.py).
 
 Automatically decodes raw microcontroller crashes in CI without requiring an interactive debugger.
 
@@ -301,7 +301,7 @@ Automatically decodes raw microcontroller crashes in CI without requiring an int
 ---
 
 ### G. Status Dashboard & PR Reporter Bot: `lib/pr_reporter.py`
-Located at [`github-action/lib/pr_reporter.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/pr_reporter.py).
+Located at [`github-action/lib/pr_reporter.py`](lib/pr_reporter.py).
 
 Maintains a unified status dashboard across GitHub Actions Step Summaries (`$GITHUB_STEP_SUMMARY`) and Pull Request comments.
 
@@ -323,8 +323,8 @@ Maintains a unified status dashboard across GitHub Actions Step Summaries (`$GIT
 
 ### H. Workflow Definitions: `unit-test.yml` & `testbench.yml`
 
-- [`.github/workflows/unit-test.yml`](file:///C:/JuneKim0712/CAN_TestBench/.github/workflows/unit-test.yml): Primary monorepo workflow with triggers for `push`, `pull_request`, and `workflow_dispatch`. Includes the `static-analysis`, `discover`, `testbench` matrix, and `report` jobs.
-- [`.github/workflows/testbench.yml`](file:///C:/JuneKim0712/CAN_TestBench/.github/workflows/testbench.yml): Centralized reusable workflow (`workflow_call`) that other CalSol repositories (e.g. `Gen11-FW`) can call in a single line.
+- [`.github/workflows/unit-test.yml`](../.github/workflows/unit-test.yml): Primary monorepo workflow with triggers for `push`, `pull_request`, and `workflow_dispatch`. Includes the `static-analysis`, `discover`, `testbench` matrix, and `report` jobs.
+- [`.github/workflows/testbench.yml`](../.github/workflows/testbench.yml): Centralized reusable workflow (`workflow_call`) that other CalSol repositories (e.g. `Gen11-FW`) can call in a single line.
 - Both workflows target **Node 24** (`actions/checkout@v5`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`) on **Ubuntu 24.04 LTS** (`ubuntu-24.04`), ensuring clean builds without deprecation warnings.
 
 ---
@@ -440,19 +440,19 @@ Trackside engineers can download pre-compiled, tested binaries to flash at the c
 - **Cause:** Another CI job, interactive SSH terminal, or background script is holding the `/tmp/calsol_locks/<board>.lock` advisory lock.
 - **Diagnostic:**
   ```bash
-  ssh jkim@stolerpi "lsof /tmp/calsol_locks/*.lock"
-  ssh jkim@stolerpi "ps aux | grep -E 'cal-test|idf.py|python3'"
+  ssh <user>@stolerpi "lsof /tmp/calsol_locks/*.lock"
+  ssh <user>@stolerpi "ps aux | grep -E 'cal-test|idf.py|python3'"
   ```
 - **Resolution:** If an orphaned process remains, kill it:
   ```bash
-  ssh jkim@stolerpi "kill -9 <PID>"
+  ssh <user>@stolerpi "kill -9 <PID>"
   ```
 
 ### Issue 2: "Process completed with exit code 143 (Runner Shutdown)"
 - **Cause:** Systemd user lingering is disabled on the host, causing SSH disconnects to terminate running tests.
 - **Resolution:**
   ```bash
-  ssh jkim@stolerpi "loginctl enable-linger jkim"
+  ssh <user>@stolerpi "loginctl enable-linger <runner-user>"
   ```
 
 ### Issue 3: "Quality Gate FAILED: Critical defects detected"
