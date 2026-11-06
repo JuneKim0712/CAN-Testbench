@@ -4,6 +4,8 @@ This manual is the definitive, beginner-accessible guide to the **CalSol Hardwar
 
 Whether you are a new firmware developer writing your first driver or a test engineer evaluating vehicle safety, this guide provides the concepts, architectural diagrams, and step-by-step commands needed to operate the bench without prior knowledge of the codebase.
 
+> **Technical Reference:** For detailed function signatures, struct layouts, FreeRTOS queue mechanics, and script internals, refer to the [Code & Architecture Reference Manual](CODE_DOCUMENTATION.md).
+
 ---
 
 ## Table of Contents

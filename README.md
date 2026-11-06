@@ -4,6 +4,10 @@ Continuous hardware integration, automated on-target silicon testing, and CAN bu
 
 This platform validates embedded vehicle firmware on physical microcontrollers and differential bus hardware before deployment to the Gen 11 solar car, serving both as the automated Hardware-in-the-Loop (HIL) test harness and as the reusable CI workflow engine for [`CalSol/Gen11-FW`](https://github.com/CalSol/Gen11-FW).
 
+> **Documentation Quick Links:**
+> - [📘 Code & Architecture Reference Manual](docs/CODE_DOCUMENTATION.md): Complete technical reference for all C drivers, Python daemons, FreeRTOS tasks, and CI scripts.
+> - [🛠️ Stage-by-Stage Operational Manual](docs/CAN_TESTBENCH_STAGE_GUIDE.md): Beginner-friendly hardware and bench walkthrough.
+
 ---
 
 ## 1. System Overview & Capabilities
@@ -80,6 +84,8 @@ CAN_TestBench/
 │   └── virtual_ecus/               # Software-defined mock ECUs (BMS, Motor Controller, Steering)
 │
 ├── docs/                           # Hardware testbench architectural & stage guides
+│   ├── CODE_DOCUMENTATION.md       # Complete code & architectural reference manual
+│   └── CAN_TESTBENCH_STAGE_GUIDE.md # Stage-by-stage operational & engineering manual
 │
 └── github-action/                  # Testbench runner scripts & ingestion libraries
     ├── action.yml                  # Standalone GitHub Composite Action definition
