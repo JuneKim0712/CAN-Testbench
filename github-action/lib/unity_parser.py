@@ -169,6 +169,11 @@ class LiveCANMonitor(threading.Thread):
         if self.can_port and os.path.exists(self.can_port):
             try:
                 ser = serial.Serial(self.can_port, self.can_baud, timeout=0.1)
+                try:
+                    ser.setDTR(True)
+                    ser.setRTS(False)
+                except Exception:
+                    pass
                 self.source = f"serial:{self.can_port}"
                 buf = bytearray()
                 while self.running:

@@ -104,8 +104,11 @@ class CANBridgeDaemon:
             try:
                 import serial
                 self.serial = serial.Serial(self.port, baudrate=self.baud, timeout=0.1)
-                self.serial.setDTR(False)
-                self.serial.setRTS(False)
+                try:
+                    self.serial.setDTR(True)
+                    self.serial.setRTS(False)
+                except Exception:
+                    pass
                 print(f"[*] Connected to CAN Debugger on {self.port}")
             except Exception as e:
                 print(f"[-] Serial unavailable ({e}), using virtual mode.")
