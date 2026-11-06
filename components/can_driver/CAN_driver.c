@@ -1,4 +1,6 @@
 #include "CAN.h"
+#include "esp_log.h"
+#include <stdio.h>
 
 //private
 static twai_node_handle_t s_node = NULL;
@@ -59,11 +61,12 @@ esp_err_t CAN_init(void)
     twai_onchip_node_config_t node_config = {
         .io_cfg.tx = CAN_TX,
         .io_cfg.rx = CAN_RX,
+        .io_cfg.quanta_clk_out = GPIO_NUM_NC,
+        .io_cfg.bus_off_indicator = GPIO_NUM_NC,
 
-        //TODO: Changeable, deafult is 500,000
         .bit_timing.bitrate = 500000,
-
         .tx_queue_depth = 8,
+        .flags.enable_self_test = 1,
     };
 
     esp_err_t ret = twai_new_node_onchip(&node_config, &s_node);
@@ -143,6 +146,13 @@ esp_err_t CAN_send(const CAN_message_t *frame, uint32_t timeout_ms)
         .buffer     = (len > 0) ? buf : NULL,
         .buffer_len = len,
     };
+
+    // Telemetry log for automated testbench capture and tracing
+    char hex_buf[17] = {0};
+    for (size_t i = 0; i < len; i++) {
+        snprintf(&hex_buf[i * 2], 3, "%02X", buf[i]);
+    }
+    ESP_LOGI("CAN", "[CAN_FRAME] ID:0x%03lX DLC:%zu DATA:%s", (unsigned long)frame->id, len, hex_buf);
 
     // Node API timeouts are in milliseconds 
     esp_err_t ret = twai_node_transmit(s_node, &tx, (int)timeout_ms);

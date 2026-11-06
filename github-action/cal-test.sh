@@ -186,6 +186,13 @@ SERIAL_LOG="${LOG_DIR}/${SUBSYSTEM_SLUG}_serial.log"
 RESULTS_JSON="${LOG_DIR}/${SUBSYSTEM_SLUG}_test_results.json"
 CAN_TRACE_FILE="${LOG_DIR}/${SUBSYSTEM_SLUG}_can_trace.jsonl"
 
+# Clean up any stale or orphaned socket
+if [ -S "/tmp/calsol_can.sock" ]; then
+    if ! python3 -c "import socket; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect('/tmp/calsol_can.sock'); s.close()" 2>/dev/null; then
+        rm -f "/tmp/calsol_can.sock" 2>/dev/null || true
+    fi
+fi
+
 # Spin up CAN bridge daemon on debugger port if not already active
 DAEMON_PID=""
 if [ ! -S "/tmp/calsol_can.sock" ] && [ -e "$CAN_DEBUGGER_PORT" ]; then

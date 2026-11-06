@@ -171,13 +171,16 @@ static void test_pedal_can_transmission(void)
     TEST_ASSERT_EQUAL_UINT8(1, pedal_msg.dlc);
     TEST_ASSERT_EQUAL_UINT8(50, pedal_msg.data[0]);
 
-    // Transmit periodic pedal frames over physical bus (20 Hz)
-    for (int i = 0; i < 5; i++) {
-        esp_err_t err = CAN_send(&pedal_msg, 50);
+    // Transmit pedal frames representing driver throttle input sweep
+    for (int i = 0; i < 10; i++) {
+        uint8_t sweep_throttle = (uint8_t)(10 * (i + 1)); // 10%, 20%, ... 100%
+        CAN_message_t sweep_msg = build_packet_no_ext(0x11, &sweep_throttle, 1);
+        esp_err_t err = CAN_send(&sweep_msg, 50);
         TEST_ASSERT_EQUAL(ESP_OK, err);
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 
+    vTaskDelay(pdMS_TO_TICKS(100));
     CAN_deinit();
 }
 
