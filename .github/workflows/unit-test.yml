@@ -60,7 +60,7 @@ jobs:
   discover:
     name: Auto-Discover Subsystems & Settings
     if: github.repository != 'CalSol/CAN_TestBench'
-    runs-on: [ self-hosted, linux, ARM64 ]
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.discovery.outputs.matrix }}
       has_changes: ${{ steps.discovery.outputs.has_changes }}

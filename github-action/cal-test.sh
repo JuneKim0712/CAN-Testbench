@@ -109,16 +109,6 @@ BOARD_NAME="$(basename "$PORT")"
 LOG_DIR="${SCRIPT_DIR}/.logs"
 mkdir -p "$LOG_DIR"
 
-# 5. Mutex lock on the hardware device to prevent concurrent flashing
-LOCK_DIR="/tmp/calsol_locks"
-mkdir -p "$LOCK_DIR"
-LOCK_FILE="${LOCK_DIR}/${BOARD_NAME}.lock"
-exec 200>"$LOCK_FILE"
-if ! flock -w 15 200; then
-    echo "[-] ERROR: Board '${BOARD_NAME}' is currently in use by another process!"
-    exit 1
-fi
-
 echo "=================================================="
 echo " 🏎️ CalSol Hardware Testbench: ${SUBSYSTEM_SLUG}"
 echo " DUT Port:     ${PORT} (${BOARD_NAME})"
@@ -128,13 +118,20 @@ echo " Flashing:     ${BAUD} baud"
 echo " Test Timeout: ${TIMEOUT}s"
 echo "=================================================="
 
-# 6. Build & Flash
+# 5. Build Firmware (Host compilation does not require hardware serial lock)
 if [ -d "$TARGET" ]; then
     cd "$TARGET"
     gh_group "🔨 Building Firmware (${SUBSYSTEM_SLUG})"
     export IDF_CCACHE_ENABLE=1
     export CCACHE_DIR="${HOME}/.ccache"
-    [ ! -f "sdkconfig" ] && idf.py set-target esp32s3 > "$LOG_DIR/build.log" 2>&1
+    export CCACHE_BASEDIR="$REPO_ROOT"
+    export CCACHE_NOHASHDIR=1
+    export CCACHE_SLOPPINESS="time_macros,file_macro,include_file_mtime"
+
+    # Fast target resolution: skip redundant set-target if target is already configured
+    if [ ! -f "sdkconfig" ] && [ ! -f "sdkconfig.defaults" ]; then
+        idf.py set-target esp32s3 > "$LOG_DIR/build.log" 2>&1
+    fi
     if idf.py build > "$LOG_DIR/build.log" 2>&1; then
         echo "[+] Build completed successfully."
     else
@@ -153,7 +150,20 @@ if [ -d "$TARGET" ]; then
     cp -f build/bootloader/bootloader.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
     cp -f build/partition_table/partition-table.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
     cp -f build/flasher_args.json "$ARTIFACTS_DIR/" 2>/dev/null || true
+fi
 
+# 6. Mutex lock on the hardware device (Scoped strictly to physical flashing and test execution)
+LOCK_DIR="/tmp/calsol_locks"
+mkdir -p "$LOCK_DIR"
+LOCK_FILE="${LOCK_DIR}/${BOARD_NAME}.lock"
+exec 200>"$LOCK_FILE"
+if ! flock -w 30 200; then
+    echo "[-] ERROR: Board '${BOARD_NAME}' is currently in use by another process!"
+    exit 1
+fi
+
+# 7. Flash Silicon
+if [ -d "$TARGET" ]; then
     gh_group "⚡ Flashing Silicon (${BOARD_NAME} @ ${BAUD} baud)"
     # Try high-speed app partition flashing first; fallback to full flash if needed
     if idf.py -p "$PORT" -b "$BAUD" app-flash > "$LOG_DIR/flash.log" 2>&1; then
