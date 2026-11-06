@@ -73,7 +73,9 @@ if [ -n "$PORT" ] && [ ! -e "$PORT" ]; then
 fi
 
 if [ -z "$PORT" ]; then
-    for candidate in "/dev/steering" "/dev/esp32_johnathan" "/dev/bms" "/dev/esp32_ahmed" "/dev/ttyACM0" "/dev/ttyACM1"; do
+    # Dedicated CAN Debugger (/dev/esp32_ahmed / ttyACM0) is permanently reserved.
+    # Only probe valid DUT candidate ports:
+    for candidate in "/dev/steering" "/dev/esp32_johnathan" "/dev/bms" "/dev/ttyACM1"; do
         if [ -e "$candidate" ]; then
             PORT="$candidate"
             break

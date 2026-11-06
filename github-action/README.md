@@ -130,7 +130,7 @@ Every ECU or subsystem directory in the repository declares its hardware require
 {
   "name": "pedals_fw",
   "target": "pedals_fw/test",
-  "port": "/dev/esp32_ahmed",
+  "port": "/dev/esp32_johnathan",
   "baud": 921600,
   "timeout": 12,
   "description": "Pedals & Throttle Plausibility ECU Unit Tests"
@@ -167,7 +167,7 @@ This bash script is executed directly on the Raspberry Pi runner (or locally by 
    - If missing, automatically sources `/opt/esp-idf/export.sh` or `~/esp/esp-idf/export.sh`.
 3. **Port Auto-Detection & Fallback:**
    - Checks if the configured port exists in `/dev/`.
-   - If not found or left blank, probes known persistent device symlinks (`/dev/steering`, `/dev/esp32_johnathan`, `/dev/bms`, `/dev/esp32_ahmed`, `/dev/ttyACM0`).
+   - If not found or left blank, probes known persistent DUT device symlinks (`/dev/steering`, `/dev/esp32_johnathan`, `/dev/bms`, `/dev/ttyACM1`). Note that `/dev/esp32_ahmed` is permanently reserved as the CAN Debugger.
 4. **Hardware Mutual Exclusion Locking (`flock`):**
    - Opens file descriptor 200 on `/tmp/calsol_locks/<board_name>.lock`.
    - Executes `flock -w 15 200`. If another process holds the port, waits up to 15 seconds. If the lock cannot be acquired, aborts cleanly to prevent UART and flash corruption.
@@ -196,7 +196,7 @@ Located at [`github-action/cal-flash.sh`](file:///C:/JuneKim0712/CAN_TestBench/g
 
 Used by engineers for rapid flashing of pre-compiled binaries without running tests:
 ```bash
-./github-action/cal-flash.sh build/pedals_fw.bin /dev/esp32_ahmed 921600
+./github-action/cal-flash.sh build/pedals_fw.bin /dev/esp32_johnathan 921600
 ```
 - Acquires `flock` on the designated port.
 - Calls `esptool.py write_flash 0x10000 <binary>`.
@@ -342,7 +342,7 @@ In your firmware repository, place a `testbench.json` in the root folder of each
 {
   "name": "bms_fw",
   "target": "bms_fw/test",
-  "port": "/dev/esp32_ahmed",
+  "port": "/dev/esp32_johnathan",
   "baud": 921600,
   "timeout": 15,
   "description": "Battery Management System ECU unit test suite"
@@ -352,7 +352,7 @@ In your firmware repository, place a `testbench.json` in the root folder of each
 #### Field Explanations:
 - `name`: Display name shown in GitHub Actions jobs and reports.
 - `target`: Path to the ESP-IDF test project containing `CMakeLists.txt` and `main/`.
-- `port`: The designated symlink of the microcontroller on the bench (e.g. `/dev/esp32_ahmed` or `/dev/esp32_johnathan`). Omit or leave empty `""` to auto-detect any connected ESP32.
+- `port`: The designated symlink of the microcontroller on the bench (e.g. `/dev/esp32_johnathan`). Omit or leave empty `""` to auto-detect any connected DUT ESP32 (`/dev/esp32_ahmed` is reserved for the CAN debugger).
 - `baud`: Flashing baud rate (`921600` recommended).
 - `timeout`: Maximum test duration in seconds (default: `12`).
 
@@ -419,7 +419,7 @@ You can trigger hardware tests on demand without making a commit:
    - `"auto"`: Tests only modified subsystems.
    - `"all"`: Forces tests across every subsystem in the repository.
    - Specific path (e.g. `pedals_fw`): Tests only that ECU.
-4. Under **Serial port override**, enter an optional port (e.g. `/dev/esp32_ahmed`), or leave blank to use `testbench.json`.
+4. Under **Serial port override**, enter an optional port (e.g. `/dev/esp32_johnathan`), or leave blank to use `testbench.json`.
 5. Click **Run workflow**.
 
 ### Downloading Trackside Binaries

@@ -44,9 +44,10 @@ def github_api_request(url, token, data=None, method="GET"):
 def find_reports(artifacts_dir):
     test_reports = []
     crash_reports = []
+    hil_reports = []
 
     if not artifacts_dir or not os.path.exists(artifacts_dir):
-        return test_reports, crash_reports
+        return test_reports, crash_reports, hil_reports
 
     for root, _, files in os.walk(artifacts_dir):
         for f in files:
@@ -70,10 +71,17 @@ def find_reports(artifacts_dir):
                         crash_reports.append(data)
                 except Exception:
                     pass
+            elif f.endswith("hil_report.json"):
+                try:
+                    with open(path, "r", encoding="utf-8") as jf:
+                        data = json.load(jf)
+                        hil_reports.append(data)
+                except Exception:
+                    pass
 
-    return test_reports, crash_reports
+    return test_reports, crash_reports, hil_reports
 
-def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports):
+def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports, hil_reports=None):
     short_sha = commit_sha[:7] if commit_sha else "unknown"
     run_url = f"https://github.com/{repo}/actions/runs/{run_id}" if repo and run_id else ""
 
@@ -166,7 +174,31 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
                     md.append(f"| {t.get('status', 'INFO')} | `{t.get('name', '')}` | `{t.get('details', '')}` |")
                 md.append("")
 
-    # 4. Decoded Crash Reports if any
+    # 4. Automated HIL Road Testing Suite
+    if hil_reports:
+        md.append("### Automated HIL Road Testing Suite\n")
+        for hr in hil_reports:
+            total_scenarios = hr.get("total_scenarios", 0)
+            passed_scenarios = hr.get("passed_scenarios", 0)
+            failed_scenarios = hr.get("failed_scenarios", 0)
+            pass_rate = hr.get("pass_rate_percent", 0.0)
+            km = hr.get("simulated_km", 0.0)
+            frames = hr.get("total_frames_verified", 0)
+
+            status = "Passed" if failed_scenarios == 0 else "Failed"
+            md.append(f"- **Suite Status:** `{status}` ({passed_scenarios}/{total_scenarios} scenarios passed, {pass_rate:.1f}%)")
+            md.append(f"- **Telemetry Checked:** {frames} CAN frames across {km:.1f} km simulated road testing.\n")
+
+            failed_list = [s for s in hr.get("scenarios", []) if not s.get("passed")]
+            if failed_list:
+                md.append("#### Failed Road Scenarios\n")
+                md.append("| Scenario ID | Scenario Name | Category | Error |")
+                md.append("| :---: | :--- | :--- | :--- |")
+                for fs in failed_list:
+                    md.append(f"| `{fs.get('id')}` | {fs.get('name')} | {fs.get('category')} | `{fs.get('error')}` |")
+                md.append("")
+
+    # 5. Decoded Crash Reports if any
     crashed_count = sum(1 for cr in crash_reports if cr.get("has_crashed"))
     if crashed_count > 0:
         md.append("### Decoded Crash Backtrace\n")
@@ -230,10 +262,10 @@ def main():
         jobs = jobs_data.get("jobs", []) if jobs_data else []
 
     # Parse reports
-    test_reports, crash_reports = find_reports(args.artifacts_dir)
-    print(f"[*] Found {len(test_reports)} test reports, {len(crash_reports)} crash reports.")
+    test_reports, crash_reports, hil_reports = find_reports(args.artifacts_dir)
+    print(f"[*] Found {len(test_reports)} test reports, {len(crash_reports)} crash reports, {len(hil_reports)} HIL road reports.")
 
-    dashboard_body = build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
+    dashboard_body = build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports, hil_reports)
 
     # 1. Always output to GITHUB_STEP_SUMMARY if available
     gh_summary = os.environ.get("GITHUB_STEP_SUMMARY")
