@@ -167,7 +167,7 @@ def main():
                 active_subsystems.append(load_subsystem_config(repo_root, folder, cfg_file, port_override))
         else:
             # Check for shared changes that affect all subsystems
-            shared_triggers = ["components/", "lib/", "common/", ".github/", "CMakeLists.txt"]
+            shared_triggers = ["components/", "lib/", "common/", ".github/", "github-action/", "CMakeLists.txt"]
             has_shared_change = any(any(f.startswith(trig) or f == trig for trig in shared_triggers) for f in changed_files)
             
             # Exclude purely documentation changes (.md files) from triggering all
