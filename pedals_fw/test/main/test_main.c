@@ -171,9 +171,12 @@ static void test_pedal_can_transmission(void)
     TEST_ASSERT_EQUAL_UINT8(1, pedal_msg.dlc);
     TEST_ASSERT_EQUAL_UINT8(50, pedal_msg.data[0]);
 
-    // Transmit frame over physical bus
-    esp_err_t err = CAN_send(&pedal_msg, 100);
-    TEST_ASSERT_EQUAL(ESP_OK, err);
+    // Transmit periodic pedal frames over physical bus (20 Hz)
+    for (int i = 0; i < 5; i++) {
+        esp_err_t err = CAN_send(&pedal_msg, 50);
+        TEST_ASSERT_EQUAL(ESP_OK, err);
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 
     CAN_deinit();
 }
