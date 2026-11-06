@@ -310,22 +310,21 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
     if gh_summary_file:
         try:
             with open(gh_summary_file, "a", encoding="utf-8") as f:
-                status_title = "Passed" if passed else "Failed"
+                status_title = "PASSED" if passed else "FAILED"
                 sub_title = f": {subsystem}" if subsystem else ""
-                f.write(f"\n### CalSol Testbench Results ({status_title}){sub_title}\n\n")
+                f.write(f"\n### Subsystem Test Results{sub_title} ({status_title})\n\n")
                 f.write("| Status | Test Function | Details |\n")
                 f.write("| :---: | :--- | :--- |\n")
                 for status, test_name, raw in results:
-                    icon = "✅" if status == "PASS" else "❌"
-                    f.write(f"| {icon} {status} | `{test_name}` | `{raw}` |\n")
+                    f.write(f"| `{status}` | `{test_name}` | `{raw}` |\n")
                 if summary:
                     f.write(f"\n**Summary:** {summary}\n")
                 else:
                     f.write(f"\n**Summary:** Timed out ({timeout}s) with no response from board.\n")
 
                 if captured_frames:
-                    f.write(f"\n<details open>\n<summary><b>📡 Live CAN Bus Traffic Captured ({len(captured_frames)} frames)</b></summary>\n\n")
-                    f.write("| Time | CAN ID | Message Name | DLC | Payload | Decoded Signal Interpretation |\n")
+                    f.write(f"\n<details open>\n<summary><b>CAN Bus Telemetry ({len(captured_frames)} frames captured)</b></summary>\n\n")
+                    f.write("| Time (rel) | CAN ID | Message Name | DLC | Payload | Decoded Signal Interpretation |\n")
                     f.write("| :---: | :---: | :--- | :---: | :---: | :--- |\n")
                     for fr in captured_frames[:25]:  # show up to 25 frames cleanly
                         f.write(f"| `{fr['rel_time']}` | `{fr['id']}` | `{fr['name']}` | {fr['dlc']} | `0x{fr['data']}` | {fr['decoded']} |\n")
@@ -334,7 +333,7 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
                     f.write("\n</details>\n")
                 else:
                     target_dbg = can_port if can_port else "/dev/esp32_ahmed"
-                    f.write(f"\n<details>\n<summary><b>📡 Physical CAN Bus Traffic (0 frames captured on {target_dbg})</b></summary>\n\n")
+                    f.write(f"\n<details>\n<summary><b>CAN Bus Telemetry (0 frames captured on {target_dbg})</b></summary>\n\n")
                     f.write(f"> *Dedicated CAN Debugger ({target_dbg} @ 500 kbps) actively monitored the physical bus during this test run. Zero differential frames were asserted on the bus.*\n")
                     f.write("\n</details>\n")
         except Exception as e:

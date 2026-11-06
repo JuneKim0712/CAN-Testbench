@@ -106,15 +106,13 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
     md.append(IDENTIFIER_TAG)
 
     # 1. Executive Status Header
-    if overall_success:
-        md.append("## 🏎️ CalSol Hardware Testbench: All Systems Nominal\n")
-        md.append(f"> **Verification Status:** `🟢 ALL PASSED` | **Target Commit:** [`{short_sha}`]({run_url}) | **Environment:** `stolerpi (ARM64 HIL)`\n")
-    else:
-        md.append("## 🚨 CalSol Hardware Testbench: Action Required\n")
-        md.append(f"> **Verification Status:** `🔴 FAILURE DETECTED` | **Target Commit:** [`{short_sha}`]({run_url}) | **Environment:** `stolerpi (ARM64 HIL)`\n")
+    status_str = "PASSED" if overall_success else "FAILED"
+    status_badge = "✅ Passed" if overall_success else "❌ Failed"
+    md.append(f"## CalSol Hardware-in-the-Loop Testbench: {status_str}\n")
+    md.append(f"> **Status:** {status_badge} | **Commit:** [`{short_sha}`]({run_url}) | **Environment:** `stolerpi (ARM64 HIL)`\n")
 
     # 2. Bench Hardware Node Map & Summary
-    md.append("### 🛰️ Hardware Testbench Summary\n")
+    md.append("### Subsystem Execution Summary\n")
     md.append("| Subsystem | Target Node & Port | Unit Test Results | CAN Traffic | Status |")
     md.append("| :--- | :---: | :---: | :---: | :---: |")
 
@@ -133,36 +131,36 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
                 results_text = f"**{tr.get('passed_count', 0)}** passed / {tr.get('failed_count', 0)} failed"
                 port_text = tr.get("port", "/dev/esp32_johnathan")
                 can_count = len(tr.get("can_traffic", []))
-                can_text = f"📡 `{can_count} frames`" if can_count > 0 else "📡 `0 frames (quiet)`"
+                can_text = f"{can_count} frames" if can_count > 0 else "0 frames (bus quiet)"
             else:
                 results_text = "Completed" if conclusion == "success" else "Check logs"
                 port_text = "/dev/esp32_johnathan"
                 can_text = "—"
 
-            badge = "🟢 Passed" if conclusion == "success" else ("🔴 Failed" if conclusion == "failure" else "⏳ Running")
+            badge = "✅ Passed" if conclusion == "success" else ("❌ Failed" if conclusion == "failure" else "In Progress")
             md.append(f"| `{sub_name}` | `{port_text}` | {results_text} | {can_text} | {badge} |")
     elif test_reports:
         for tr in test_reports:
             sub = tr.get("subsystem", "ECU")
-            status = "🟢 Passed" if tr.get("passed") else "🔴 Failed"
+            status = "✅ Passed" if tr.get("passed") else "❌ Failed"
             results_text = f"**{tr.get('passed_count', 0)}** passed / {tr.get('failed_count', 0)} failed"
             can_count = len(tr.get("can_traffic", []))
-            can_text = f"📡 `{can_count} frames`" if can_count > 0 else "📡 `0 frames (quiet)`"
+            can_text = f"{can_count} frames" if can_count > 0 else "0 frames (bus quiet)"
             md.append(f"| `{sub}` | `{tr.get('port', '/dev/esp32_johnathan')}` | {results_text} | {can_text} | {status} |")
     else:
-        md.append("| *No Subsystems Tested* | — | — | — | ⚪ Skipped |")
+        md.append("| *No Subsystems Tested* | — | — | — | Skipped |")
     md.append("")
 
     # Static Analysis Gate Status
     if static_job:
-        status_sym = "🟢 Passed" if static_ok else "🔴 Failed"
-        md.append(f"- **Static Analysis Quality Gate (cppcheck):** `{status_sym}` (Zero critical memory/syntax defects)\n")
+        status_sym = "Passed" if static_ok else "Failed"
+        md.append(f"- **Static Analysis (cppcheck):** {status_sym} (0 critical memory/syntax defects)\n")
 
     # 3. Live Physical CAN Bus Traffic Inspection
-    md.append("### 📡 Physical CAN Bus Telemetry & Traffic\n")
+    md.append("### CAN Bus Telemetry & Traffic\n")
     if all_can_traffic:
-        md.append(f"> **Listener Status:** `🟢 Active & Captured` on `/dev/esp32_ahmed` (500 kbps) | **Total Frames:** `{len(all_can_traffic)}`\n")
-        md.append("<details open>\n<summary><b>Click to inspect decoded bus packets</b></summary>\n")
+        md.append(f"> **Bus Monitor:** Active on `/dev/esp32_ahmed` (500 kbps) | **Total Captured Frames:** {len(all_can_traffic)}\n")
+        md.append("<details open>\n<summary><b>Decoded Bus Packets</b></summary>\n")
         md.append("")
         md.append("| Time (rel) | Subsystem | CAN ID | Message Name | DLC | Payload | Decoded Signal Interpretation |")
         md.append("| :---: | :---: | :---: | :--- | :---: | :---: | :--- |")
@@ -170,27 +168,27 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
             sub = fr.get("subsystem", "ECU")
             md.append(f"| `{fr.get('rel_time')}` | `{sub}` | `{fr.get('id')}` | **{fr.get('name')}** | `{fr.get('dlc')}` | `0x{fr.get('data')}` | {fr.get('decoded')} |")
         if len(all_can_traffic) > 30:
-            md.append(f"\n*... and {len(all_can_traffic) - 30} more frames recorded in downloadable `can_trace.jsonl` artifact.*")
+            md.append(f"\n*... and {len(all_can_traffic) - 30} additional frames recorded in `can_trace.jsonl` artifact.*")
         md.append("\n</details>\n")
     else:
-        md.append("> **Listener Status:** `🟢 Active & Synchronized` on `/dev/esp32_ahmed` (500 kbps) | **Captured:** `0 frames (quiet)`\n")
-        md.append("> \n> *Node 1 CAN Debugger (`/dev/esp32_ahmed`) actively monitored the physical differential bus throughout this test suite. Zero differential frames were detected during this execution window (bus idle or tests evaluated logic internally).*\n")
+        md.append("> **Bus Monitor:** Active on `/dev/esp32_ahmed` (500 kbps) | **Captured Frames:** 0\n")
+        md.append("> \n> *The dedicated CAN Debugger monitored the physical differential bus during the test suite execution. No differential frames were detected during this window (the bus remained idle or tests executed internal logic).*\n")
 
     # 4. Detailed Unit Test Assertions
     if test_reports:
-        md.append("### 🧪 Detailed Unit Test Breakdown\n")
+        md.append("### Unit Test Assertions\n")
         for tr in test_reports:
             sub = tr.get("subsystem", "ECU")
             tests = tr.get("tests", [])
-            sub_status = "🟢 Passed" if tr.get("passed") else "🔴 Failed"
-            md.append(f"<details>\n<summary><b>Subsystem: <code>{sub}</code> ({sub_status} — {tr.get('passed_count', 0)}/{tr.get('total_assertions', 0)} tests passed)</b></summary>\n")
+            sub_status = "Passed" if tr.get("passed") else "Failed"
+            md.append(f"<details>\n<summary><b>Subsystem: <code>{sub}</code> ({sub_status} — {tr.get('passed_count', 0)}/{tr.get('total_assertions', 0)} passed)</b></summary>\n")
             md.append("")
             if tests:
-                md.append("| Status | Test Function | Assertion / Result Details |")
+                md.append("| Status | Test Function | Result Details |")
                 md.append("| :---: | :--- | :--- |")
                 for t in tests:
-                    icon = "✅" if t.get("status") == "PASS" else "❌"
-                    md.append(f"| {icon} `{t.get('status', 'INFO')}` | `{t.get('name', '')}` | `{t.get('details', '')}` |")
+                    icon = "PASS" if t.get("status") == "PASS" else "FAIL"
+                    md.append(f"| `{icon}` | `{t.get('name', '')}` | `{t.get('details', '')}` |")
             md.append("\n</details>\n")
 
     # 5. Post-Mortem Crash Diagnostics (Only shown on failure)
@@ -198,9 +196,9 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
     failed_tests = [t for tr in test_reports for t in tr.get("tests", []) if t.get("status") == "FAIL"]
 
     if crashed_count > 0 or failed_tests:
-        md.append("### 🔬 Post-Mortem Failure Diagnostics\n")
+        md.append("### Failure Diagnostics\n")
         if failed_tests:
-            md.append("#### ❌ Failed Test Assertions\n")
+            md.append("#### Failed Assertions\n")
             md.append("| Subsystem | Failed Test Function | Failure Details |")
             md.append("| :--- | :--- | :--- |")
             for tr in test_reports:
@@ -211,12 +209,12 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
             md.append("")
 
         if crashed_count > 0:
-            md.append("#### 💥 Decoded Panic Register & Stack Backtrace\n")
+            md.append("#### Hardware Exception & Stack Backtrace\n")
             for cr in crash_reports:
                 if cr.get("has_crashed"):
                     sub = cr.get("subsystem", "ECU")
                     reason = cr.get("crash_reason", "Hardware Exception / Panic")
-                    md.append(f"> **Target:** `{sub}` | **Panic Reason:** `{reason}`\n")
+                    md.append(f"> **Target Subsystem:** `{sub}` | **Exception Reason:** `{reason}`\n")
                     frames = cr.get("frames", [])
                     if frames:
                         md.append("| Frame | Address | Function | Source Location |")
@@ -225,14 +223,13 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
                             md.append(f"| `#{f.get('frame')}` | `{f.get('address')}` | `{f.get('function')}` | `{f.get('location')}` |")
                         md.append("")
 
-    # 6. Trackside Binaries & Artifacts Notice
-    md.append("### 📦 Trackside Deployment Binaries\n")
-    md.append("Compiled and tested `.bin`, `.elf`, `bootloader.bin`, and `can_trace.jsonl` are archived under **GitHub Run Artifacts** for immediate trackside bench flashing:\n")
-    md.append("```bash\n# One-line trackside binary flash\npython3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 <subsystem>.bin\n```\n")
+    # 6. Deployment Binaries
+    md.append("### Deployment Binaries\n")
+    md.append("Compiled firmware binaries (`.bin`, `.elf`, `bootloader.bin`) and bus traces (`can_trace.jsonl`) are archived in the **Run Artifacts**:\n")
+    md.append("```bash\n# Flashing trackside via esptool\npython3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 <subsystem>.bin\n```\n")
 
-    md.append("---\n*CalSol Hardware Testbench Engine — Automated CI & Bus Telemetry*")
+    md.append("---\n*CalSol Hardware Testbench CI*")
     return "\n".join(md)
-
 
 def post_or_update_pr_comment(repo, pr_number, token, body):
     comments_url = f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments"

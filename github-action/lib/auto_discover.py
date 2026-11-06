@@ -213,18 +213,18 @@ def main():
     gh_summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if gh_summary:
         with open(gh_summary, "a", encoding="utf-8") as f:
-            f.write("### 🔍 CalSol Testbench Subsystem Discovery\n\n")
+            f.write("### Subsystem Discovery & Execution Plan\n\n")
             if active_subsystems:
                 f.write("| Subsystem | Target Directory | Assigned Board | Timeout | Status |\n")
                 f.write("| :--- | :--- | :--- | :---: | :---: |\n")
                 for s in active_subsystems:
                     port_disp = f"`{s['port']}`" if s['port'] else "*auto-detect*"
-                    f.write(f"| **{s['name']}** | `{s['target']}` | {port_disp} | {s['timeout']}s | 🚀 **Scheduled** |\n")
+                    f.write(f"| **{s['name']}** | `{s['target']}` | {port_disp} | {s['timeout']}s | Scheduled |\n")
                 for s in skipped_subsystems:
                     port_disp = f"`{s['port']}`" if s['port'] else "*auto-detect*"
-                    f.write(f"| {s['name']} | `{s['target']}` | {port_disp} | {s['timeout']}s | ⏭️ *Skipped (Unchanged)* |\n")
+                    f.write(f"| {s['name']} | `{s['target']}` | {port_disp} | {s['timeout']}s | Skipped (Unchanged) |\n")
             else:
-                f.write("ℹ️ *No modified firmware subsystems with `testbench.json` detected. Hardware tests skipped.*\n")
+                f.write("*No modified firmware subsystems with `testbench.json` detected. Hardware tests skipped.*\n")
             f.write("\n")
 
 if __name__ == "__main__":
