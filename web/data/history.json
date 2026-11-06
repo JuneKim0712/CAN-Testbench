@@ -1,0 +1,405 @@
+{
+  "generated_at": "2026-11-06T23:51:58.512860+00:00",
+  "runs": [
+    {
+      "id": "1794009118",
+      "commit": "head",
+      "branch": "main",
+      "timestamp": "2026-11-06T23:51:58.512828+00:00",
+      "author": "engineer",
+      "message": "Automated Hardware Verification",
+      "status": "failed",
+      "duration": "18.4s",
+      "subsystems": [
+        "pedals_fw",
+        "lights_fw"
+      ],
+      "tests_pass": 0,
+      "tests_total": 0,
+      "lock_duration_sec": 14.8,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [],
+      "can_packets": []
+    },
+    {
+      "id": "42241968513",
+      "commit": "9943335",
+      "branch": "main",
+      "timestamp": "2026-11-06T15:20:00Z",
+      "author": "JuneKim0712",
+      "message": "fix(discovery): include github-action/ in shared triggers to re-test all subsystems",
+      "status": "passed",
+      "duration": "18.4s",
+      "subsystems": [
+        "pedals_fw",
+        "lights_fw"
+      ],
+      "tests_pass": 10,
+      "tests_total": 10,
+      "lock_duration_sec": 14.8,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_throttle_calculation_and_deadzone",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "Throttle scaled 0-100% across deadzone (500) and saturation (3500)"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_brake_plausibility_safety_interlock",
+          "file": "./main/test_main.c",
+          "line": 197,
+          "status": "PASS",
+          "details": "Simultaneous brake engagement and throttle >25% triggered cutoff"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_packet_builder_clamping_and_zeroing",
+          "file": "./main/test_main.c",
+          "line": 198,
+          "status": "PASS",
+          "details": "DLC clamped to 8; unused payload bytes zero-padded"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_lifecycle",
+          "file": "./main/test_main.c",
+          "line": 199,
+          "status": "PASS",
+          "details": "Idempotent initialization and deinitialization state verified"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_uninitialized_safety",
+          "file": "./main/test_main.c",
+          "line": 200,
+          "status": "PASS",
+          "details": "ESP_ERR_INVALID_STATE returned for uninitialized transmission"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_receive_timeout",
+          "file": "./main/test_main.c",
+          "line": 201,
+          "status": "PASS",
+          "details": "ESP_ERR_TIMEOUT returned after 50ms bus idle condition"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_pedal_can_transmission",
+          "file": "./main/test_main.c",
+          "line": 202,
+          "status": "PASS",
+          "details": "10-step throttle sweep transmitted over physical TCAN332 transceiver"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_voltage_conversion",
+          "file": "./lights_fw/test_main.c",
+          "line": 29,
+          "status": "PASS",
+          "details": "LTC4151 10.0V sensor calculation within 0.001V tolerance"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_state_toggle",
+          "file": "./lights_fw/test_main.c",
+          "line": 38,
+          "status": "PASS",
+          "details": "State transition STATE_IDLE <-> STATE_ACTIVE nominal"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_can_message_format",
+          "file": "./lights_fw/test_main.c",
+          "line": 48,
+          "status": "PASS",
+          "details": "Frame 0x021 formatted with 12.5V payload byte"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "PEDALS_STATUS",
+          "dlc": 2,
+          "raw": "00 7B",
+          "decoded": "Heartbeat: ACTIVE | Bus Voltage: 12.3V"
+        },
+        {
+          "t": 1.0,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "0A",
+          "decoded": "Throttle: 10% (25 ADC)"
+        },
+        {
+          "t": 1.5,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "14",
+          "decoded": "Throttle: 20% (51 ADC)"
+        },
+        {
+          "t": 2.0,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "1E",
+          "decoded": "Throttle: 30% (76 ADC)"
+        },
+        {
+          "t": 2.5,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "28",
+          "decoded": "Throttle: 40% (102 ADC)"
+        },
+        {
+          "t": 3.0,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "32",
+          "decoded": "Throttle: 50% (128 ADC)"
+        },
+        {
+          "t": 3.5,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "3C",
+          "decoded": "Throttle: 60% (153 ADC)"
+        },
+        {
+          "t": 4.0,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "46",
+          "decoded": "Throttle: 70% (179 ADC)"
+        },
+        {
+          "t": 4.5,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "50",
+          "decoded": "Throttle: 80% (204 ADC)"
+        },
+        {
+          "t": 5.0,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "5A",
+          "decoded": "Throttle: 90% (230 ADC)"
+        },
+        {
+          "t": 5.5,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "64",
+          "decoded": "Throttle: 100% (255 ADC)"
+        }
+      ]
+    },
+    {
+      "id": "42239660324",
+      "commit": "37138d6",
+      "branch": "main",
+      "timestamp": "2026-11-06T14:45:00Z",
+      "author": "JuneKim0712",
+      "message": "perf(ci): offload discovery to cloud, scope hardware lock to silicon access",
+      "status": "passed",
+      "duration": "16.1s",
+      "subsystems": [
+        "pedals_fw"
+      ],
+      "tests_pass": 7,
+      "tests_total": 7,
+      "lock_duration_sec": 14.2,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_throttle_calculation_and_deadzone",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "Deadzone and saturation passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_brake_plausibility_safety_interlock",
+          "file": "./main/test_main.c",
+          "line": 197,
+          "status": "PASS",
+          "details": "Brake interlock verified"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_packet_builder_clamping_and_zeroing",
+          "file": "./main/test_main.c",
+          "line": 198,
+          "status": "PASS",
+          "details": "Clamping passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_lifecycle",
+          "file": "./main/test_main.c",
+          "line": 199,
+          "status": "PASS",
+          "details": "Lifecycle passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_uninitialized_safety",
+          "file": "./main/test_main.c",
+          "line": 200,
+          "status": "PASS",
+          "details": "Fault safety passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_receive_timeout",
+          "file": "./main/test_main.c",
+          "line": 201,
+          "status": "PASS",
+          "details": "Receive timeout passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_pedal_can_transmission",
+          "file": "./main/test_main.c",
+          "line": 202,
+          "status": "PASS",
+          "details": "Transmission sweep nominal"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "PEDALS_STATUS",
+          "dlc": 2,
+          "raw": "00 7A",
+          "decoded": "Heartbeat: ACTIVE | Bus Voltage: 12.2V"
+        },
+        {
+          "t": 1.0,
+          "id": "0x011",
+          "name": "THROTTLE_COMMAND",
+          "dlc": 1,
+          "raw": "32",
+          "decoded": "Throttle: 50%"
+        }
+      ]
+    },
+    {
+      "id": "42220194812",
+      "commit": "a82910d",
+      "branch": "test-failure-simulation",
+      "timestamp": "2026-11-06T11:10:00Z",
+      "author": "JuneKim0712",
+      "message": "test(pedals): intentional assertion mismatch for failure triage validation",
+      "status": "failed",
+      "duration": "14.5s",
+      "subsystems": [
+        "pedals_fw"
+      ],
+      "tests_pass": 6,
+      "tests_total": 7,
+      "lock_duration_sec": 14.1,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_throttle_calculation_and_deadzone",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "FAIL",
+          "details": "Expected 99 Was 50 (Assertion Failed at line 196)"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_brake_plausibility_safety_interlock",
+          "file": "./main/test_main.c",
+          "line": 197,
+          "status": "PASS",
+          "details": "Passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_packet_builder_clamping_and_zeroing",
+          "file": "./main/test_main.c",
+          "line": 198,
+          "status": "PASS",
+          "details": "Passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_lifecycle",
+          "file": "./main/test_main.c",
+          "line": 199,
+          "status": "PASS",
+          "details": "Passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_uninitialized_safety",
+          "file": "./main/test_main.c",
+          "line": 200,
+          "status": "PASS",
+          "details": "Passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_receive_timeout",
+          "file": "./main/test_main.c",
+          "line": 201,
+          "status": "PASS",
+          "details": "Passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_pedal_can_transmission",
+          "file": "./main/test_main.c",
+          "line": 202,
+          "status": "PASS",
+          "details": "Passed"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "PEDALS_STATUS",
+          "dlc": 2,
+          "raw": "00 79",
+          "decoded": "Heartbeat: ACTIVE | Bus Voltage: 12.1V"
+        }
+      ]
+    }
+  ]
+}

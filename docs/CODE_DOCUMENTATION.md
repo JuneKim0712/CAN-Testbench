@@ -501,6 +501,18 @@ Aggregates test results across all parallel matrix jobs and static analysis step
 
 ---
 
+### 6.7 Telemetry Ingestion & Pages Compiler (`pages_compiler.py`)
+
+Located at [`github-action/lib/pages_compiler.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/pages_compiler.py).
+
+- **Purpose:** Compiles post-test execution artifacts (`test_results.json`, `can_trace.jsonl`, `static_check.json`) into the historical dataset powering the GitHub Pages interactive web portal.
+- **Execution Lifecycle:**
+  - Discovers all subsystem test result files across the repository.
+  - Ingests CAN traces, mapping absolute timestamps to relative test seconds ($t = 0.0\,	ext{s}$).
+  - Appends the latest run record to [`web/data/history.json`](file:///C:/JuneKim0712/CAN_TestBench/web/data/history.json), maintaining a rolling archive of the last 50 verified hardware runs.
+
+---
+
 ## 7. Continuous Integration Pipelines (`.github/workflows/`)
 
 ### 7.1 Monorepo CI Pipeline (`unit-test.yml`)
