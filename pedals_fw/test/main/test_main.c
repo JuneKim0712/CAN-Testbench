@@ -33,7 +33,7 @@ static bool is_throttle_plausible(uint8_t throttle_percent, bool brake_engaged)
 // -----------------------------------------------------------------------------
 static void test_throttle_calculation_and_deadzone(void)
 {
-    TEST_ASSERT_EQUAL_UINT8(1, calculate_throttle_percent(0));
+    TEST_ASSERT_EQUAL_UINT8(0, calculate_throttle_percent(0));
     TEST_ASSERT_EQUAL_UINT8(0, calculate_throttle_percent(499));
     TEST_ASSERT_EQUAL_UINT8(0, calculate_throttle_percent(500));
     TEST_ASSERT_EQUAL_UINT8(50, calculate_throttle_percent(2000));
