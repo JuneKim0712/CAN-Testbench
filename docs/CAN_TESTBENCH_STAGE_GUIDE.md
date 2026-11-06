@@ -56,33 +56,33 @@ graph TD
         Power["12V Bench DC Power Supply"] -.-> WireH
     end
 
-    subgraph Node1 ["Node 1: Device Under Test (DUT)"]
-        DUT_ESP["ESP32-S3 Silicon (/dev/esp32_ahmed)<br/>Running: pedals_fw / lights_fw"]
-        DUT_XCVR["TI TCAN332 Transceiver<br/>TX: GPIO 17 | RX: GPIO 18"]
-    end
-
-    subgraph Node2 ["Node 2: Dedicated CAN Debugger"]
-        DBG_ESP["ESP32-S3 Silicon (/dev/esp32_johnathan)<br/>Running: ESP32_CAN_BUS_Debugger"]
+    subgraph Node1 ["Node 1: Dedicated CAN Debugger"]
+        DBG_ESP["ESP32-S3 Silicon (/dev/esp32_ahmed)<br/>Running: ESP32_CAN_BUS_Debugger"]
         DBG_XCVR["TI TCAN332 Transceiver<br/>TX: GPIO 17 | RX: GPIO 18"]
     end
 
+    subgraph Node2 ["Node 2: Device Under Test (DUT)"]
+        DUT_ESP["ESP32-S3 Silicon (/dev/esp32_johnathan)<br/>Running: pedals_fw / lights_fw"]
+        DUT_XCVR["TI TCAN332 Transceiver<br/>TX: GPIO 17 | RX: GPIO 18"]
+    end
+
     %% Connections
-    MasterController <===>|USB CDC Serial| DUT_ESP
     MasterController <===>|High-Speed USB CDC| DBG_ESP
+    MasterController <===>|USB CDC Serial| DUT_ESP
 
-    DUT_ESP <--->|TTL UART| DUT_XCVR
     DBG_ESP <--->|TTL UART| DBG_XCVR
+    DUT_ESP <--->|TTL UART| DUT_XCVR
 
-    DUT_XCVR <===>|Differential Signal| WireH
-    DUT_XCVR <===>|Differential Signal| WireL
     DBG_XCVR <===>|Differential Signal| WireH
     DBG_XCVR <===>|Differential Signal| WireL
+    DUT_XCVR <===>|Differential Signal| WireH
+    DUT_XCVR <===>|Differential Signal| WireL
 ```
 
 ### Hardware Inventory & Device Mapping
 - **Raspberry Pi 5 (`stolerpi` @ `100.120.92.102`):** Quad-core ARM Cortex-A76 host running Linux. Manages all compilation, flashing, bridge daemon, and network sockets.
-- **Node 1 (DUT):** Permanent symlink `/dev/esp32_ahmed` (MAC `E0:72:A1:FD:24:38`). Test target flashed on-demand with firmware under review.
-- **Node 2 (CAN Debugger):** Permanent symlink `/dev/esp32_johnathan` (MAC `E0:72:A1:FC:DC:94`). Dedicated sniffer/injector running `ESP32_CAN_BUS_Debugger`.
+- **Node 1 (CAN Debugger):** Permanent symlink `/dev/esp32_ahmed` (MAC `E0:72:A1:FD:24:38`). Dedicated sniffer/injector running `ESP32_CAN_BUS_Debugger`.
+- **Node 2 (DUT):** Permanent symlink `/dev/esp32_johnathan` (MAC `E0:72:A1:FC:DC:94`). Test target flashed on-demand with firmware under review (`pedals_fw` / `lights_fw`).
 - **Transceivers (TI TCAN332):** Convert 3.3V logic to high-speed differential CAN voltages ($CAN\_H \approx 3.5V$, $CAN\_L \approx 1.5V$). Silicon pinout is **TX = GPIO 17**, **RX = GPIO 18**.
 - **Bus Termination:** Two 120Ω resistors at each bus end to prevent signal reflection.
 
@@ -100,8 +100,8 @@ sequenceDiagram
     participant Lock as Lockfile (/tmp/calsol_locks/)
     participant ESP as ESP32-S3 Hardware Silicon
 
-    Dev->>Host: ssh stolerpi-jkim "bash github-action/cal-test.sh pedals_fw/test /dev/esp32_ahmed 12"
-    Host->>Lock: flock -w 15 /tmp/calsol_locks/esp32_ahmed.lock
+    Dev->>Host: ssh stolerpi-jkim "bash github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan 12"
+    Host->>Lock: flock -w 15 /tmp/calsol_locks/esp32_johnathan.lock
     Note over Lock: Prevents simultaneous writes by other devs/CI
     Host->>ESP: idf.py build && esptool flash (921,600 baud)
     Host->>ESP: Trigger RTS/DTR Hard Reset
@@ -119,11 +119,11 @@ To prevent two engineers or a GitHub Actions runner from flashing the same micro
 ### How to Flash & Test a Board
 From your workstation terminal:
 ```bash
-# 1. Connect and run automated Unity unit tests on Node 1 (DUT)
-ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-test.sh pedals_fw/test /dev/esp32_ahmed 15"
+# 1. Connect and run automated Unity unit tests on Node 2 (DUT)
+ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan 15"
 
 # 2. Flash standalone firmware binary without running Unity tests
-ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-flash.sh pedals_fw/test /dev/esp32_ahmed"
+ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-flash.sh pedals_fw/test /dev/esp32_johnathan"
 ```
 
 ---
@@ -264,9 +264,9 @@ flowchart TD
 | **Inject Single Packet** | `python3 github-action/lib/calsol_inject.py --id 0x501 --data DEADBEEF` |
 | **Inject Periodic Packet (20 Hz)** | `python3 github-action/lib/calsol_inject.py --id 0x11 --data 80 --rate 20` |
 | **Start Virtual Vehicle** | `python3 sim/virtual_ecus/car_runner.py` |
-| **Run Unit Tests on DUT** | `ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-test.sh pedals_fw/test /dev/esp32_ahmed 15"` |
-| **Flash DUT Standalone** | `ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-flash.sh pedals_fw/test /dev/esp32_ahmed"` |
-| **Restore Debugger to Node 2** | `ssh stolerpi-jkim "python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write-flash 0x0 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/bootloader/bootloader.bin 0x8000 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/partition_table/partition-table.bin 0x10000 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/CAN_driver_API.bin"` |
+| **Run Unit Tests on DUT** | `ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan 15"` |
+| **Flash DUT Standalone** | `ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-flash.sh pedals_fw/test /dev/esp32_johnathan"` |
+| **Restore Debugger to Node 1** | `ssh stolerpi-jkim "python3 -m esptool --chip esp32s3 -p /dev/esp32_ahmed -b 921600 write-flash 0x0 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/bootloader/bootloader.bin 0x8000 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/partition_table/partition-table.bin 0x10000 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/CAN_driver_API.bin"` |
 
 ---
 

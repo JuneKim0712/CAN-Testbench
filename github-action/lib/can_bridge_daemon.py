@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CalSol Hardware CAN Testbench: High-Speed CAN Bridge Daemon
-Connects to ESP32 CAN Debugger (/dev/esp32_johnathan), decodes COBS frames,
+Connects to ESP32 CAN Debugger (/dev/esp32_ahmed), decodes COBS frames,
 exposes Unix / TCP sockets for injection and live event broadcasting,
 and logs traffic to can_trace.jsonl.
 """
@@ -73,7 +73,7 @@ def unpack_frame(raw: bytes) -> tuple[int, int, bytes] | None:
 # ─── CAN Bridge Daemon ────────────────────────────────────────────────────────
 
 class CANBridgeDaemon:
-    def __init__(self, port: str = "/dev/esp32_johnathan", baud: int = 115200,
+    def __init__(self, port: str = "/dev/esp32_ahmed", baud: int = 115200,
                  unix_socket: str = "/tmp/calsol_can.sock", tcp_port: int = 0,
                  log_path: str = "can_trace.jsonl", virtual: bool = False):
         self.port = port
@@ -305,7 +305,7 @@ class CANBridgeDaemon:
 
 def main():
     parser = argparse.ArgumentParser(description="CalSol CAN Bridge Daemon")
-    parser.add_argument("--port", default="/dev/esp32_johnathan", help="Serial port to ESP32 CAN Debugger")
+    parser.add_argument("--port", default="/dev/esp32_ahmed", help="Serial port to ESP32 CAN Debugger")
     parser.add_argument("--baud", type=int, default=115200, help="Baud rate (default 115200)")
     parser.add_argument("--unix-socket", default="/tmp/calsol_can.sock", help="Unix domain socket path")
     parser.add_argument("--tcp-port", type=int, default=0, help="TCP port (0 to disable)")
