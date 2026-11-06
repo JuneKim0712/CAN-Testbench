@@ -12,9 +12,8 @@ Whether you are a new firmware developer writing your first driver or a test eng
 3. [Stage 2: Remote Flashing & Interactive Serial Monitoring](#stage-2-remote-flashing--interactive-serial-monitoring)
 4. [Stage 3: Remote CAN Packet Snooping & Injection](#stage-3-remote-can-packet-snooping--injection)
 5. [Stage 4: Software Board Emulation (Virtual ECUs)](#stage-4-software-board-emulation-virtual-ecus)
-6. [Stage 5: Automated HIL Road Testing Suite (100 Scenarios)](#stage-5-automated-hil-road-testing-suite-100-scenarios)
-7. [Stage 6: GitHub Actions CI Pipeline & PR Status Dashboard](#stage-6-github-actions-ci-pipeline--pr-status-dashboard)
-8. [Stage 7: Developer & Operator Quick Reference Cheat Sheet](#stage-7-developer--operator-quick-reference-cheat-sheet)
+6. [Stage 5: GitHub Actions CI Pipeline & PR Status Dashboard](#stage-5-github-actions-ci-pipeline--pr-status-dashboard)
+7. [Stage 6: Developer & Operator Quick Reference Cheat Sheet](#stage-6-developer--operator-quick-reference-cheat-sheet)
 
 ---
 
@@ -32,7 +31,7 @@ The **CalSol CAN Testbench** bridges this gap. Hosted on a dedicated Raspberry P
 2. **Remote Access:** Seamless firmware flashing and terminal monitoring over the secure Tailscale mesh network.
 3. **Dedicated Bus Debugger:** Real-time hardware snooping and injection running [ESP32_CAN_BUS_Debugger](https://github.com/CalSol/ESP32_CAN_BUS_Debugger).
 4. **Software Vehicle Simulation:** Realistic virtual vehicle models (Virtual BMS, Virtual Motor, Virtual Steering) that fill in for missing car hardware.
-5. **Continuous Verification:** 100 automated driving cycles, fault injections, and electrical stress tests executed on every GitHub Pull Request.
+5. **Continuous Verification:** Automated on-target compilation, device flashing, and Unity test verification on every GitHub Pull Request.
 
 ---
 
@@ -44,7 +43,6 @@ The testbench is structured into three distinct hardware tiers: the **Master Con
 graph TD
     subgraph MasterController ["Master Controller: Raspberry Pi 5 (stolerpi)"]
         Daemon["can_bridge_daemon.py<br/>(COBS & Sockets)"]
-        HIL["hil_road_tester.py<br/>(100 Road Scenarios)"]
         Runner["GitHub Actions Runner"]
     end
 
@@ -233,42 +231,7 @@ python3 sim/virtual_ecus/car_runner.py --duration 30
 
 ---
 
-## Stage 5: Automated HIL Road Testing Suite (100 Scenarios)
-
-The testbench transforms isolated unit tests into a full automotive proving ground via [`hil_road_tester.py`](file:///C:/JuneKim0712/CAN_TestBench/github-action/lib/hil_road_tester.py). It executes **100 standardized road scenarios** across 3 categories:
-
-```mermaid
-pie title 100 Automated Road Scenarios Distribution
-    "Category 1: Drive Cycles (Highway Speeds & Grades)" : 30
-    "Category 2: Safety Interlocks & Fault Injections" : 40
-    "Category 3: Electrical & CAN Bus Stress" : 30
-```
-
-### Scenario Categories
-1. **Category 1: Standard Drive Cycles (30 Scenarios):**
-   - Tests speeds from $40\text{ km/h}$ to $90\text{ km/h}$ across road grades from $-4\%$ (downhill) to $+4\%$ (hill climb).
-   - Verifies that vehicle physics, RPM calculations, and motor commands maintain stable bus timing.
-2. **Category 2: Safety Interlocks & Fault Injections (40 Scenarios):**
-   - Injects real vehicle emergency events: Overvoltage, Undervoltage, Thermal Runaway ($>60^\circ\text{C}$), Accelerator/Brake Implausibility (pressing brake and gas simultaneously), Loss of Motor Heartbeat, and Precharge Failures.
-   - Evaluates that failsafes trigger, contactors open, and motor commands zero out.
-3. **Category 3: Electrical & CAN Bus Stress (30 Scenarios):**
-   - Injects arbitration storms, corrupted CRC bursts, extended frame glitches, and bit-stuffing stress at bus utilizations ranging from $20\%$ to $95\%$.
-   - Asserts that high-priority safety frames (e.g., BMS contactor cutoff) successfully arbitrate over non-critical traffic.
-
-### How to Run the Road Test Suite
-```bash
-# Run 100 scenarios against the virtual environment (standalone / cloud)
-python3 github-action/lib/hil_road_tester.py --virtual --scenarios 100 --report-json hil_report.json
-
-# Run against physical bench silicon
-python3 github-action/lib/hil_road_tester.py --socket /tmp/calsol_can.sock --report-json hil_report.json
-```
-
-**Output:** Generates a structured certification report in `hil_report.json` containing total scenarios, pass rate, simulated road kilometers, and frames verified.
-
----
-
-## Stage 6: GitHub Actions CI Pipeline & PR Status Dashboard
+## Stage 5: GitHub Actions CI Pipeline & PR Status Dashboard
 
 On every Pull Request or push to `main`, GitHub Actions automatically orchestrates the entire verification process via [`.github/workflows/unit-test.yml`](file:///C:/JuneKim0712/CAN_TestBench/.github/workflows/unit-test.yml).
 
@@ -276,25 +239,21 @@ On every Pull Request or push to `main`, GitHub Actions automatically orchestrat
 flowchart TD
     A["Push / PR Event"] --> B["Cloud Quality Gate<br/>(cppcheck Static Analysis)"]
     B -->|Fast-Fail if defects exist| C["Auto-Discovery Job<br/>(Detects Changed Subsystems)"]
-    B --> D["HIL Road Testing Suite<br/>(100 Scenarios in Cloud)"]
-    C -->|Matrix Generated| E["Physical Bench Testbench<br/>(Flashes DUT on stolerpi)"]
-    D --> F["Upload hil_report.json"]
-    E --> G["Upload test_results.json"]
-    F --> H["Consolidated PR Status Dashboard<br/>(pr_reporter.py)"]
-    G --> H
-    H --> I["Post Sticky PR Comment & Step Summary"]
+    C -->|Matrix Generated| D["Physical Bench Testbench<br/>(Flashes DUT on stolerpi)"]
+    D --> E["Upload test_results.json & Binaries"]
+    E --> F["Consolidated PR Status Dashboard<br/>(pr_reporter.py)"]
+    F --> G["Post Sticky PR Comment & Step Summary"]
 ```
 
-### The 4 Pipeline Gates:
+### The Pipeline Gates:
 1. **Cloud Lint & Static Analysis Gate (`static-analysis`):** Runs on Ubuntu Cloud in 13 seconds. Fast-fails if syntax errors, null pointers, or memory leaks are detected before touching physical hardware.
 2. **Subsystem Auto-Discovery (`discover`):** Runs on `stolerpi`. Analyzes git diff against `main`. If only `pedals_fw` was modified, it dispatches only `pedals_fw` tests, skipping unaffected boards.
 3. **Hardware Execution Matrix (`testbench`):** Compiles firmware using ESP-IDF v6.1 and Ninja, acquires the device mutex lock, flashes the microcontroller at 921,600 baud, and monitors Unity assertions.
-4. **HIL Road Testing Suite (`hil-road-tests`):** Executes all 100 simulated road scenarios, verifying automotive safety interlocks.
-5. **Consolidated Dashboard Bot (`report`):** Downloads test reports and road test certificates, compiling a clean Markdown summary into GitHub Actions `$GITHUB_STEP_SUMMARY` and posting an interactive sticky comment on the PR.
+4. **Consolidated Dashboard Bot (`report`):** Downloads test reports and crash dumps, compiling a clean Markdown summary into GitHub Actions `$GITHUB_STEP_SUMMARY` and posting an interactive sticky comment on the PR.
 
 ---
 
-## Stage 7: Developer & Operator Quick Reference Cheat Sheet
+## Stage 6: Developer & Operator Quick Reference Cheat Sheet
 
 ### Common Operator Commands
 
@@ -305,7 +264,6 @@ flowchart TD
 | **Inject Single Packet** | `python3 github-action/lib/calsol_inject.py --id 0x501 --data DEADBEEF` |
 | **Inject Periodic Packet (20 Hz)** | `python3 github-action/lib/calsol_inject.py --id 0x11 --data 80 --rate 20` |
 | **Start Virtual Vehicle** | `python3 sim/virtual_ecus/car_runner.py` |
-| **Run 100 HIL Road Tests** | `python3 github-action/lib/hil_road_tester.py --virtual --scenarios 100` |
 | **Run Unit Tests on DUT** | `ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-test.sh pedals_fw/test /dev/esp32_ahmed 15"` |
 | **Flash DUT Standalone** | `ssh stolerpi-jkim "bash ~/actions-runner/_work/CAN-Testbench/CAN-Testbench/github-action/cal-flash.sh pedals_fw/test /dev/esp32_ahmed"` |
 | **Restore Debugger to Node 2** | `ssh stolerpi-jkim "python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write-flash 0x0 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/bootloader/bootloader.bin 0x8000 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/partition_table/partition-table.bin 0x10000 /home/jkim/ESP32_CAN_BUS_Debugger/build_dev/CAN_driver_API.bin"` |

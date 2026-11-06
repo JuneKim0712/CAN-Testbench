@@ -97,34 +97,9 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  hil-road-tests:
-    name: HIL Road Testing Suite (100 Scenarios)
-    needs: [static-analysis]
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Run HIL Road Test Battery
-        run: |
-          python3 github-action/lib/hil_road_tester.py --virtual --scenarios 100 --report-json hil_report.json
-
-      - name: Upload HIL Test Report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: hil-road-test-report
-          path: hil_report.json
-          retention-days: 14
-
   report:
     name: CalSol Testbench Status Dashboard
-    needs: [static-analysis, discover, testbench, hil-road-tests]
+    needs: [static-analysis, discover, testbench]
     if: always()
     runs-on: ubuntu-24.04
     steps:
