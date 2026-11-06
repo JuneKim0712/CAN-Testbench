@@ -8,6 +8,7 @@ outputs for GitHub Actions ($GITHUB_STEP_SUMMARY), and writes structured JSON.
 """
 
 import os
+import re
 import sys
 import time
 import json
@@ -199,6 +200,14 @@ class LiveCANMonitor(threading.Thread):
             except Exception as e:
                 print(f"[-] LiveCANMonitor serial open error on {self.can_port}: {e}", file=sys.stderr)
 
+    def record_external_frame(self, can_id: int, dlc: int, data: bytes):
+        now = time.time()
+        hex_str = data.hex().upper()
+        for prev in reversed(self.frames[-10:]):
+            if prev["id_int"] == can_id and prev["data"] == hex_str and (now - prev["timestamp"]) < 0.1:
+                return
+        self._record_frame(can_id, dlc, data)
+
     def _record_frame(self, can_id: int, dlc: int, data: bytes):
         t_rel = time.time() - self.start_time
         msg_name, signal_desc = decode_calsol_message(can_id, data)
@@ -251,6 +260,21 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
 
             if verbose:
                 print(f"  [RAW] {line}")
+
+            if "[CAN_FRAME]" in line:
+                m_id = re.search(r"ID:(0x[0-9a-fA-F]+|\d+)", line)
+                m_dlc = re.search(r"DLC:(\d+)", line)
+                m_data = re.search(r"DATA:([0-9a-fA-F]*)", line)
+                if m_id and m_dlc:
+                    try:
+                        cid_str = m_id.group(1)
+                        can_id = int(cid_str, 16 if cid_str.lower().startswith("0x") else 10)
+                        dlc = int(m_dlc.group(1))
+                        payload_hex = m_data.group(1) if m_data else ""
+                        payload = bytes.fromhex(payload_hex) if payload_hex else b""
+                        can_monitor.record_external_frame(can_id, dlc, payload)
+                    except Exception:
+                        pass
 
             if ":PASS" in line:
                 parts = line.split(":")
