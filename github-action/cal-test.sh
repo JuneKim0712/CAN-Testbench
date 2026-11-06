@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# CalSol Testbench: Automated On-Target Unit Test Runner
-# Designed for both GitHub Actions (CI) and local terminal execution.
-# Supports per-folder testbench.json configurations.
+# CalSol Testbench: Automated On-Target Unit Test & Live CAN Runner
+# Designed for both GitHub Actions (CI) and local bench engineering.
+# Supports per-folder testbench.json configurations and live CAN tapping.
 # ==============================================================================
 
 set -e
@@ -10,8 +10,24 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# GitHub Actions log grouping helpers
+gh_group() {
+    if [ -n "$GITHUB_ACTIONS" ]; then
+        echo "::group::$1"
+    else
+        echo "=================================================="
+        echo " $1"
+        echo "=================================================="
+    fi
+}
+gh_endgroup() {
+    if [ -n "$GITHUB_ACTIONS" ]; then
+        echo "::endgroup::"
+    fi
+}
+
 # 1. Resolve target directory or binary
-INPUT_TARGET="${1:-lights_fw/test}"
+INPUT_TARGET="${1:-pedals_fw/test}"
 CLI_PORT="${2}"
 CLI_TIMEOUT="${3}"
 
@@ -50,9 +66,10 @@ if [ -n "$CONFIG_FILE" ]; then
 fi
 
 PORT="${CLI_PORT:-$CONFIG_PORT}"
-TIMEOUT="${CLI_TIMEOUT:-${CONFIG_TIMEOUT:-12}}"
+TIMEOUT="${CLI_TIMEOUT:-${CONFIG_TIMEOUT:-15}}"
 BAUD="${CONFIG_BAUD:-921600}"
 SUBSYSTEM_SLUG="${CONFIG_NAME:-$(basename "$TARGET")}"
+CAN_DEBUGGER_PORT="/dev/esp32_ahmed"
 
 # 3. Source ESP-IDF if idf.py is not in PATH
 if ! command -v idf.py >/dev/null 2>&1; then
@@ -103,30 +120,32 @@ if ! flock -w 15 200; then
 fi
 
 echo "=================================================="
-echo " CalSol Hardware Testbench: ${SUBSYSTEM_SLUG}"
-echo " Port:    ${PORT} (${BOARD_NAME})"
-echo " Target:  ${TARGET}"
-echo " Baud:    ${BAUD}"
-echo " Timeout: ${TIMEOUT}s"
+echo " 🏎️ CalSol Hardware Testbench: ${SUBSYSTEM_SLUG}"
+echo " DUT Port:     ${PORT} (${BOARD_NAME})"
+echo " Debugger Port: ${CAN_DEBUGGER_PORT}"
+echo " Target Path:  ${TARGET}"
+echo " Flashing:     ${BAUD} baud"
+echo " Test Timeout: ${TIMEOUT}s"
 echo "=================================================="
 
 # 6. Build & Flash
 if [ -d "$TARGET" ]; then
     cd "$TARGET"
-    printf "[*] Building firmware (ccache enabled)... "
+    gh_group "🔨 Building Firmware (${SUBSYSTEM_SLUG})"
     export IDF_CCACHE_ENABLE=1
     export CCACHE_DIR="${HOME}/.ccache"
     [ ! -f "sdkconfig" ] && idf.py set-target esp32s3 > "$LOG_DIR/build.log" 2>&1
     if idf.py build > "$LOG_DIR/build.log" 2>&1; then
-        echo "OK"
+        echo "[+] Build completed successfully."
     else
-        echo "FAILED"
-        echo "=== Build Error Log ==="
-        tail -n 30 "$LOG_DIR/build.log"
+        echo "[-] Build failed!"
+        cat "$LOG_DIR/build.log"
+        gh_endgroup
         exit 1
     fi
+    gh_endgroup
 
-    # Feature B: Stage trackside flashable binaries
+    # Stage trackside flashable binaries
     ARTIFACTS_DIR="${TARGET}/build/artifacts"
     mkdir -p "$ARTIFACTS_DIR"
     cp -f build/*.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
@@ -135,62 +154,102 @@ if [ -d "$TARGET" ]; then
     cp -f build/partition_table/partition-table.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
     cp -f build/flasher_args.json "$ARTIFACTS_DIR/" 2>/dev/null || true
 
-    printf "[*] Flashing %s (%s baud, fast app-flash)... " "$BOARD_NAME" "$BAUD"
+    gh_group "⚡ Flashing Silicon (${BOARD_NAME} @ ${BAUD} baud)"
     # Try high-speed app partition flashing first; fallback to full flash if needed
     if idf.py -p "$PORT" -b "$BAUD" app-flash > "$LOG_DIR/flash.log" 2>&1; then
-        echo "OK"
+        echo "[+] Fast differential app-flash succeeded."
     elif idf.py -p "$PORT" -b "$BAUD" flash > "$LOG_DIR/flash.log" 2>&1; then
-        echo "OK (full flash fallback)"
+        echo "[+] Full partition flash succeeded."
     else
-        echo "FAILED"
-        echo "=== Flash Error Log ==="
-        tail -n 30 "$LOG_DIR/flash.log"
+        echo "[-] Flashing failed!"
+        cat "$LOG_DIR/flash.log"
+        gh_endgroup
         exit 1
     fi
+    gh_endgroup
 elif [ -f "$TARGET" ]; then
-    printf "[*] Flashing pre-built binary %s... " "$BOARD_NAME"
+    gh_group "⚡ Flashing Pre-built Binary (${BOARD_NAME})"
     if esptool.py --port "$PORT" --baud "$BAUD" write_flash 0x10000 "$TARGET" > "$LOG_DIR/flash.log" 2>&1; then
-        echo "OK"
+        echo "[+] Flash succeeded."
     else
-        echo "FAILED"
-        echo "=== Flash Error Log ==="
-        tail -n 30 "$LOG_DIR/flash.log"
+        echo "[-] Flash failed!"
+        cat "$LOG_DIR/flash.log"
+        gh_endgroup
         exit 1
     fi
+    gh_endgroup
 fi
 
-# 7. Parse Unity test results over serial & Feature C Crash Decoding
+# 7. Parse Unity test results over serial & live CAN stream
 PARSER="${SCRIPT_DIR}/lib/unity_parser.py"
 SERIAL_LOG="${LOG_DIR}/${SUBSYSTEM_SLUG}_serial.log"
 RESULTS_JSON="${LOG_DIR}/${SUBSYSTEM_SLUG}_test_results.json"
+CAN_TRACE_FILE="${LOG_DIR}/${SUBSYSTEM_SLUG}_can_trace.jsonl"
 
-echo "[*] Monitoring Unity test output (${TIMEOUT}s timeout)..."
+# Spin up CAN bridge daemon on debugger port if not already active
+DAEMON_PID=""
+if [ ! -S "/tmp/calsol_can.sock" ] && [ -e "$CAN_DEBUGGER_PORT" ]; then
+    python3 "${SCRIPT_DIR}/lib/can_bridge_daemon.py" --port "$CAN_DEBUGGER_PORT" --unix-socket "/tmp/calsol_can.sock" > /dev/null 2>&1 &
+    DAEMON_PID=$!
+    sleep 0.3
+fi
+
+gh_group "🧪 On-Target Silicon Execution & Live CAN Stream (${SUBSYSTEM_SLUG})"
+echo "[*] Monitoring DUT UART output & physical CAN bus traffic..."
 set +e
-python3 "$PARSER" --port "$PORT" --subsystem "$SUBSYSTEM_SLUG" --timeout "$TIMEOUT" --log-file "$SERIAL_LOG" --output-json "$RESULTS_JSON"
+python3 "$PARSER" \
+    --port "$PORT" \
+    --subsystem "$SUBSYSTEM_SLUG" \
+    --timeout "$TIMEOUT" \
+    --log-file "$SERIAL_LOG" \
+    --output-json "$RESULTS_JSON" \
+    --can-port "$CAN_DEBUGGER_PORT" \
+    --can-trace-file "$CAN_TRACE_FILE"
 TEST_EXIT_CODE=$?
 set -e
+gh_endgroup
 
-# Feature C: If test failed or aborted, run crash decoder to extract backtrace
+# Clean up daemon if launched by this run
+if [ -n "$DAEMON_PID" ]; then
+    kill "$DAEMON_PID" 2>/dev/null || true
+    rm -f "/tmp/calsol_can.sock" 2>/dev/null || true
+fi
+
+# Stage CAN trace into artifacts
+if [ -f "$CAN_TRACE_FILE" ] && [ -d "${TARGET}/build/artifacts" ]; then
+    cp -f "$CAN_TRACE_FILE" "${TARGET}/build/artifacts/" 2>/dev/null || true
+fi
+
+# 8. Post-mortem Crash Decoding on Failure
 ELF_FILE=""
 if [ -d "$TARGET" ]; then
     ELF_FILE=$(ls "${TARGET}/build"/*.elf 2>/dev/null | head -n 1 || true)
 fi
 
-if [ -n "$ELF_FILE" ] && [ -f "$SERIAL_LOG" ]; then
+if [ "$TEST_EXIT_CODE" -ne 0 ] && [ -n "$ELF_FILE" ] && [ -f "$SERIAL_LOG" ]; then
+    gh_group "🔬 Post-Mortem Crash Backtrace Decoder"
     CRASH_JSON="${LOG_DIR}/${SUBSYSTEM_SLUG}_crash_report.json"
     python3 "${SCRIPT_DIR}/lib/crash_decoder.py" \
         --log-file "$SERIAL_LOG" \
         --elf-file "$ELF_FILE" \
-        --output-json "$CRASH_JSON" >/dev/null 2>&1 || true
+        --output-json "$CRASH_JSON" || true
 
     if [ -f "$CRASH_JSON" ] && [ -d "${TARGET}/build/artifacts" ]; then
         cp -f "$CRASH_JSON" "${TARGET}/build/artifacts/" 2>/dev/null || true
     fi
+    gh_endgroup
 fi
 
-# Copy test result JSON into artifacts if directory exists
+# Copy test result JSON into artifacts
 if [ -f "$RESULTS_JSON" ] && [ -d "${TARGET}/build/artifacts" ]; then
     cp -f "$RESULTS_JSON" "${TARGET}/build/artifacts/" 2>/dev/null || true
 fi
 
-exit $TEST_EXIT_CODE
+if [ "$TEST_EXIT_CODE" -ne 0 ]; then
+    if [ -n "$GITHUB_ACTIONS" ]; then
+        echo "::error file=${SUBSYSTEM_SLUG}::Hardware test failure detected on ${BOARD_NAME} (exit code ${TEST_EXIT_CODE})"
+    fi
+    exit "$TEST_EXIT_CODE"
+fi
+
+exit 0
