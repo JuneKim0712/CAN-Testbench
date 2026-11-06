@@ -80,11 +80,19 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
     short_sha = commit_sha[:7] if commit_sha else "local-HEAD"
     run_url = f"https://github.com/{repo}/actions/runs/{run_id}" if repo and run_id else ""
 
-    # Determine overall status
+    # Determine static analysis status
     static_job = next((j for j in jobs if "static-analysis" in j.get("name", "").lower() or "lint" in j.get("name", "").lower()), None)
     static_ok = (static_job.get("conclusion") == "success") if static_job else True
     
+    hw_jobs = [j for j in jobs if j.get("name", "").startswith("Test ")]
+    report_map = {tr.get("subsystem", ""): tr for tr in test_reports}
+
+    # Verify that all hardware jobs succeeded
     hw_all_passed = True
+    for j in hw_jobs:
+        if j.get("conclusion") == "failure":
+            hw_all_passed = False
+
     total_tests_run = 0
     total_tests_passed = 0
     all_can_traffic = []
@@ -100,7 +108,8 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
             fr_copy["subsystem"] = sub_name
             all_can_traffic.append(fr_copy)
 
-    overall_success = static_ok and hw_all_passed and (len(crash_reports) == 0)
+    has_crashes = any(cr.get("has_crashed") for cr in crash_reports)
+    overall_success = static_ok and hw_all_passed and not has_crashes
 
     md = []
     md.append(IDENTIFIER_TAG)
@@ -116,10 +125,6 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
     md.append("| Subsystem | Target Node & Port | Unit Test Results | CAN Traffic | Status |")
     md.append("| :--- | :---: | :---: | :---: | :---: |")
 
-    # Map reports by subsystem
-    report_map = {tr.get("subsystem", ""): tr for tr in test_reports}
-
-    hw_jobs = [j for j in jobs if j.get("name", "").startswith("Test ")]
     if hw_jobs:
         for j in hw_jobs:
             raw_name = j.get("name", "").replace("Test ", "").strip()
@@ -132,12 +137,13 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
                 port_text = tr.get("port", "/dev/esp32_johnathan")
                 can_count = len(tr.get("can_traffic", []))
                 can_text = f"{can_count} frames" if can_count > 0 else "0 frames (bus quiet)"
+                badge = "✅ Passed" if tr.get("passed") else "❌ Failed"
             else:
-                results_text = "Completed" if conclusion == "success" else "Check logs"
+                results_text = "Completed" if conclusion == "success" else "Check build/flash logs"
                 port_text = "/dev/esp32_johnathan"
                 can_text = "—"
+                badge = "✅ Passed" if conclusion == "success" else ("❌ Failed" if conclusion == "failure" else "In Progress")
 
-            badge = "✅ Passed" if conclusion == "success" else ("❌ Failed" if conclusion == "failure" else "In Progress")
             md.append(f"| `{sub_name}` | `{port_text}` | {results_text} | {can_text} | {badge} |")
     elif test_reports:
         for tr in test_reports:
@@ -180,8 +186,10 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
         for tr in test_reports:
             sub = tr.get("subsystem", "ECU")
             tests = tr.get("tests", [])
-            sub_status = "Passed" if tr.get("passed") else "Failed"
-            md.append(f"<details>\n<summary><b>Subsystem: <code>{sub}</code> ({sub_status} — {tr.get('passed_count', 0)}/{tr.get('total_assertions', 0)} passed)</b></summary>\n")
+            sub_passed = tr.get("passed", False)
+            sub_status = "Passed" if sub_passed else "Failed"
+            open_attr = " open" if not sub_passed else ""
+            md.append(f"<details{open_attr}>\n<summary><b>Subsystem: <code>{sub}</code> ({sub_status} — {tr.get('passed_count', 0)}/{tr.get('total_assertions', 0)} passed)</b></summary>\n")
             md.append("")
             if tests:
                 md.append("| Status | Test Function | Result Details |")
@@ -191,37 +199,46 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
                     md.append(f"| `{icon}` | `{t.get('name', '')}` | `{t.get('details', '')}` |")
             md.append("\n</details>\n")
 
-    # 5. Post-Mortem Crash Diagnostics (Only shown on failure)
-    crashed_count = sum(1 for cr in crash_reports if cr.get("has_crashed"))
-    failed_tests = [t for tr in test_reports for t in tr.get("tests", []) if t.get("status") == "FAIL"]
+    # 5. Post-Mortem Failure Diagnostics
+    failed_tests = [
+        (tr.get("subsystem", "ECU"), t)
+        for tr in test_reports
+        for t in tr.get("tests", [])
+        if t.get("status") == "FAIL"
+    ]
+    crashed_reports = [cr for cr in crash_reports if cr.get("has_crashed")]
+    failed_build_jobs = [
+        j.get("name", "") for j in hw_jobs 
+        if j.get("conclusion") == "failure" and not any(sub in j.get("name", "") for sub in report_map)
+    ]
 
-    if crashed_count > 0 or failed_tests:
+    if failed_tests or crashed_reports or failed_build_jobs or not overall_success:
         md.append("### Failure Diagnostics\n")
+        if failed_build_jobs:
+            md.append("#### Build & Silicon Flashing Errors\n")
+            for jn in failed_build_jobs:
+                md.append(f"> **`{jn}`** failed prior to test completion (compilation or flashing failure). Check workflow step logs for error trace.\n")
         if failed_tests:
-            md.append("#### Failed Assertions\n")
+            md.append("#### Failed Unit Test Assertions\n")
             md.append("| Subsystem | Failed Test Function | Failure Details |")
             md.append("| :--- | :--- | :--- |")
-            for tr in test_reports:
-                sub = tr.get("subsystem", "ECU")
-                for t in tr.get("tests", []):
-                    if t.get("status") == "FAIL":
-                        md.append(f"| `{sub}` | `{t.get('name')}` | `{t.get('details')}` |")
+            for sub, t in failed_tests:
+                md.append(f"| `{sub}` | `{t.get('name')}` | `{t.get('details')}` |")
             md.append("")
 
-        if crashed_count > 0:
+        if crashed_reports:
             md.append("#### Hardware Exception & Stack Backtrace\n")
-            for cr in crash_reports:
-                if cr.get("has_crashed"):
-                    sub = cr.get("subsystem", "ECU")
-                    reason = cr.get("crash_reason", "Hardware Exception / Panic")
-                    md.append(f"> **Target Subsystem:** `{sub}` | **Exception Reason:** `{reason}`\n")
-                    frames = cr.get("frames", [])
-                    if frames:
-                        md.append("| Frame | Address | Function | Source Location |")
-                        md.append("| :---: | :---: | :--- | :--- |")
-                        for f in frames:
-                            md.append(f"| `#{f.get('frame')}` | `{f.get('address')}` | `{f.get('function')}` | `{f.get('location')}` |")
-                        md.append("")
+            for cr in crashed_reports:
+                sub = cr.get("subsystem", "ECU")
+                reason = cr.get("crash_reason", "Hardware Exception / Panic")
+                md.append(f"> **Target Subsystem:** `{sub}` | **Exception Reason:** `{reason}`\n")
+                frames = cr.get("frames", [])
+                if frames:
+                    md.append("| Frame | Address | Function | Source Location |")
+                    md.append("| :---: | :---: | :--- | :--- |")
+                    for f in frames:
+                        md.append(f"| `#{f.get('frame')}` | `{f.get('address')}` | `{f.get('function')}` | `{f.get('location')}` |")
+                    md.append("")
 
     # 6. Deployment Binaries
     md.append("### Deployment Binaries\n")

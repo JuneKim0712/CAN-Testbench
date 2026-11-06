@@ -277,16 +277,27 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
                         pass
 
             if ":PASS" in line:
-                parts = line.split(":")
-                test_name = parts[-2] if len(parts) >= 2 else line
+                idx = line.find(":PASS")
+                prefix = line[:idx]
+                test_name = prefix.split(":")[-1]
                 results.append(("PASS", test_name, line))
                 print(f"    [PASS] {test_name}")
             elif ":FAIL" in line:
-                parts = line.split(":")
-                test_name = parts[-2] if len(parts) >= 2 else line
-                results.append(("FAIL", test_name, line))
-                print(f"    [FAIL] {test_name}")
-                print(f"      {line}")
+                idx = line.find(":FAIL")
+                prefix = line[:idx]
+                test_name = prefix.split(":")[-1]
+                msg = line[idx + 5:].lstrip(":").strip()
+                src_loc = ":".join(prefix.split(":")[:-1])
+                details = f"{msg} ({src_loc})" if (msg and src_loc) else (msg or line)
+                results.append(("FAIL", test_name, details))
+                print(f"    [FAIL] {test_name}: {msg if msg else line}")
+            elif ":IGNORE" in line:
+                idx = line.find(":IGNORE")
+                prefix = line[:idx]
+                test_name = prefix.split(":")[-1]
+                msg = line[idx + 7:].lstrip(":").strip()
+                results.append(("IGNORE", test_name, msg if msg else line))
+                print(f"    [IGNORE] {test_name}")
             elif "Tests" in line and "Failures" in line:
                 summary = line
                 if "0 Failures" in line:
@@ -337,6 +348,19 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
                 status_title = "PASSED" if passed else "FAILED"
                 sub_title = f": {subsystem}" if subsystem else ""
                 f.write(f"\n### Subsystem Test Results{sub_title} ({status_title})\n\n")
+
+                failed_items = [r for r in results if r[0] == "FAIL"]
+                if failed_items:
+                    f.write("#### ❌ Failed Assertions\n\n")
+                    f.write("| Test Function | Details |\n")
+                    f.write("| :--- | :--- |\n")
+                    for _, name, details in failed_items:
+                        f.write(f"| `{name}` | `{details}` |\n")
+                    f.write("\n")
+
+                open_attr = " open" if not passed else ""
+                f.write(f"<details{open_attr}>\n")
+                f.write(f"<summary><b>All Unit Test Assertions ({len(results)} total)</b></summary>\n\n")
                 f.write("| Status | Test Function | Details |\n")
                 f.write("| :---: | :--- | :--- |\n")
                 for status, test_name, raw in results:
@@ -345,6 +369,7 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
                     f.write(f"\n**Summary:** {summary}\n")
                 else:
                     f.write(f"\n**Summary:** Timed out ({timeout}s) with no response from board.\n")
+                f.write("\n</details>\n")
 
                 if captured_frames:
                     f.write(f"\n<details open>\n<summary><b>CAN Bus Telemetry ({len(captured_frames)} frames captured)</b></summary>\n\n")
