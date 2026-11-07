@@ -116,9 +116,9 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
 
     # 1. Executive Unit Tests Header
     status_str = "PASSED" if overall_success else "FAILED"
-    status_badge = "✅ Passed" if overall_success else "❌ Failed"
+    status_badge = "[Passed]" if overall_success else "[Failed]"
     md.append(f"## CalSol Hardware Unit Tests: {status_str} ({total_tests_passed} / {total_tests_run} Passed)\n")
-    md.append(f"> 🌐 **Interactive Telemetry & Waveform Portal:** [{web_portal_url}]({web_portal_url})\n")
+    md.append(f"> **Interactive Telemetry & Waveform Portal:** [{web_portal_url}]({web_portal_url})\n")
     md.append(f"> **Status:** {status_badge} | **Action Run:** [`#{run_id}`]({run_url}) | **Commit:** [`{short_sha}`]({commit_url}) | **Target:** `stolerpi (ARM64 HIL)`\n")
 
     # 2. Dedicated Unit Test Assertions Breakdown Table
@@ -129,7 +129,7 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
         for t in all_tests_flat:
             st = t.get("status", "PASS")
             icon = "PASS" if st == "PASS" else "FAIL"
-            loc = f"{t.get('file', '')}:{t.get('line', '')}" if t.get('file') else "—"
+            loc = f"{t.get('file', '')}:{t.get('line', '')}" if t.get('file') else "-"
             details = t.get("details", "")
             md.append(f"| `{icon}` | `{t.get('subsystem', '')}` | `{t.get('name', '')}` | `{loc}` | `{details}` |")
         md.append("")
@@ -147,7 +147,7 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
             md.append("| Subsystem | Failed Test Function | Location | Failure Details |")
             md.append("| :--- | :--- | :--- | :--- |")
             for t in failed_tests:
-                loc = f"{t.get('file', '')}:{t.get('line', '')}" if t.get('file') else "—"
+                loc = f"{t.get('file', '')}:{t.get('line', '')}" if t.get('file') else "-"
                 md.append(f"| `{t.get('subsystem', '')}` | `{t.get('name')}` | `{loc}` | `{t.get('details')}` |")
             md.append("")
             first_sub = failed_tests[0].get('subsystem', 'pedals_fw')

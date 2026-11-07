@@ -212,24 +212,7 @@
           "details": "../main/test_main.c:71:test_can_message_format:PASS"
         }
       ],
-      "can_packets": [
-        {
-          "t": 0.5,
-          "id": "0x001",
-          "name": "FRAME_0x001",
-          "dlc": 2,
-          "raw": "00 7B",
-          "decoded": "0x007B (Dec: [0, 123])"
-        },
-        {
-          "t": 1.0,
-          "id": "0x021",
-          "name": "FRAME_0x021",
-          "dlc": 1,
-          "raw": "7D",
-          "decoded": "0x7D (Dec: 125)"
-        }
-      ],
+      "can_packets": [],
       "parent_run_id": "42325039593",
       "subsystem": "lights_fw"
     },
@@ -319,32 +302,7 @@
           "details": "Pending completion of preceding tests"
         }
       ],
-      "can_packets": [
-        {
-          "t": 0.5,
-          "id": "0x001",
-          "name": "FRAME_0x001",
-          "dlc": 2,
-          "raw": "00 7B",
-          "decoded": "0x007B (Dec: [0, 123])"
-        },
-        {
-          "t": 1.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "0A",
-          "decoded": "0x0A (Dec: 10)"
-        },
-        {
-          "t": 1.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "14",
-          "decoded": "0x14 (Dec: 20)"
-        }
-      ],
+      "can_packets": [],
       "parent_run_id": "42325000000",
       "subsystem": "pedals_fw"
     },
@@ -556,24 +514,7 @@
           "details": "../main/test_main.c:71:test_can_message_format:PASS"
         }
       ],
-      "can_packets": [
-        {
-          "t": 0.5,
-          "id": "0x001",
-          "name": "FRAME_0x001",
-          "dlc": 2,
-          "raw": "00 7B",
-          "decoded": "0x007B (Dec: [0, 123])"
-        },
-        {
-          "t": 1.0,
-          "id": "0x021",
-          "name": "FRAME_0x021",
-          "dlc": 1,
-          "raw": "7D",
-          "decoded": "0x7D (Dec: 125)"
-        }
-      ],
+      "can_packets": [],
       "failure_type": null,
       "parent_run_id": "42318556434",
       "subsystem": "lights_fw"
@@ -655,96 +596,7 @@
           "details": "10-step throttle sweep transmitted over physical TCAN332 transceiver"
         }
       ],
-      "can_packets": [
-        {
-          "t": 0.5,
-          "id": "0x001",
-          "name": "FRAME_0x001",
-          "dlc": 2,
-          "raw": "00 7B",
-          "decoded": "0x007B (Dec: [0, 123])"
-        },
-        {
-          "t": 1.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "0A",
-          "decoded": "0x0A (Dec: 10)"
-        },
-        {
-          "t": 1.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "14",
-          "decoded": "0x14 (Dec: 20)"
-        },
-        {
-          "t": 2.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "1E",
-          "decoded": "0x1E (Dec: 30)"
-        },
-        {
-          "t": 2.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "28",
-          "decoded": "0x28 (Dec: 40)"
-        },
-        {
-          "t": 3.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "32",
-          "decoded": "0x32 (Dec: 50)"
-        },
-        {
-          "t": 3.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "3C",
-          "decoded": "0x3C (Dec: 60)"
-        },
-        {
-          "t": 4.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "46",
-          "decoded": "0x46 (Dec: 70)"
-        },
-        {
-          "t": 4.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "50",
-          "decoded": "0x50 (Dec: 80)"
-        },
-        {
-          "t": 5.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "5A",
-          "decoded": "0x5A (Dec: 90)"
-        },
-        {
-          "t": 5.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "64",
-          "decoded": "0x64 (Dec: 100)"
-        }
-      ],
+      "can_packets": [],
       "failure_type": "assertion_failure",
       "failure_details": {
         "title": "Silicon Unit Test Assertion Failure Detected",
@@ -877,24 +729,7 @@
           "details": "0x021 frame payload formatted"
         }
       ],
-      "can_packets": [
-        {
-          "t": 0.5,
-          "id": "0x001",
-          "name": "FRAME_0x001",
-          "dlc": 2,
-          "raw": "00 7B",
-          "decoded": "0x007B (Dec: [0, 123])"
-        },
-        {
-          "t": 1.0,
-          "id": "0x021",
-          "name": "FRAME_0x021",
-          "dlc": 1,
-          "raw": "7D",
-          "decoded": "0x7D (Dec: 125)"
-        }
-      ],
+      "can_packets": [],
       "parent_run_id": "42315000002",
       "subsystem": "lights_fw"
     },
@@ -1008,96 +843,7 @@
           "details": "10-step throttle sweep transmitted over physical TCAN332 transceiver"
         }
       ],
-      "can_packets": [
-        {
-          "t": 0.5,
-          "id": "0x001",
-          "name": "FRAME_0x001",
-          "dlc": 2,
-          "raw": "00 7B",
-          "decoded": "0x007B (Dec: [0, 123])"
-        },
-        {
-          "t": 1.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "0A",
-          "decoded": "0x0A (Dec: 10)"
-        },
-        {
-          "t": 1.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "14",
-          "decoded": "0x14 (Dec: 20)"
-        },
-        {
-          "t": 2.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "1E",
-          "decoded": "0x1E (Dec: 30)"
-        },
-        {
-          "t": 2.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "28",
-          "decoded": "0x28 (Dec: 40)"
-        },
-        {
-          "t": 3.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "32",
-          "decoded": "0x32 (Dec: 50)"
-        },
-        {
-          "t": 3.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "3C",
-          "decoded": "0x3C (Dec: 60)"
-        },
-        {
-          "t": 4.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "46",
-          "decoded": "0x46 (Dec: 70)"
-        },
-        {
-          "t": 4.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "50",
-          "decoded": "0x50 (Dec: 80)"
-        },
-        {
-          "t": 5.0,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "5A",
-          "decoded": "0x5A (Dec: 90)"
-        },
-        {
-          "t": 5.5,
-          "id": "0x011",
-          "name": "FRAME_0x011",
-          "dlc": 1,
-          "raw": "64",
-          "decoded": "0x64 (Dec: 100)"
-        }
-      ],
+      "can_packets": [],
       "parent_run_id": "42241968513",
       "subsystem": "pedals_fw"
     },
@@ -1146,24 +892,7 @@
           "details": "Frame 0x021 formatted with 12.5V payload byte"
         }
       ],
-      "can_packets": [
-        {
-          "t": 0.5,
-          "id": "0x001",
-          "name": "FRAME_0x001",
-          "dlc": 2,
-          "raw": "00 7B",
-          "decoded": "0x007B (Dec: [0, 123])"
-        },
-        {
-          "t": 1.0,
-          "id": "0x021",
-          "name": "FRAME_0x021",
-          "dlc": 1,
-          "raw": "7D",
-          "decoded": "0x7D (Dec: 125)"
-        }
-      ],
+      "can_packets": [],
       "parent_run_id": "42241968513",
       "subsystem": "lights_fw"
     },

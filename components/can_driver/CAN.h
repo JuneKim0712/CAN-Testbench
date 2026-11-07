@@ -33,9 +33,22 @@
 #include "freertos/queue.h"
 #include "freertos/portmacro.h"
 
-/* ESP -> TCAN322 connection on ESP32 Dev */
-#define CAN_TX GPIO_NUM_17 //17
-#define CAN_RX GPIO_NUM_18 //18
+/* Transceiver GPIO pin configuration with Kconfig / external override support */
+#ifndef CAN_TX
+#ifdef CONFIG_CAN_TX_GPIO
+#define CAN_TX CONFIG_CAN_TX_GPIO
+#else
+#define CAN_TX GPIO_NUM_17
+#endif
+#endif
+
+#ifndef CAN_RX
+#ifdef CONFIG_CAN_RX_GPIO
+#define CAN_RX CONFIG_CAN_RX_GPIO
+#else
+#define CAN_RX GPIO_NUM_18
+#endif
+#endif
 
 typedef struct {
     uint32_t id;

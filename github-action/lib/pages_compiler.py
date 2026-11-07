@@ -182,17 +182,48 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
         # Subsystem-specific CAN packets
         if sub_name == "lights_fw":
             sub_can = [p for p in can_packets if p.get("id") in ["0x021", "0x001"]]
-            if not sub_can:
-                sub_can = [
-                    {"t": 0.5, "id": "0x001", "name": "FRAME_0x001", "dlc": 2, "raw": "00 7B", "decoded": "0x007B (Dec: [0, 123])"},
-                    {"t": 1.0, "id": "0x021", "name": "FRAME_0x021", "dlc": 1, "raw": "7D", "decoded": "0x7D (Dec: 125)"}
-                ]
         else:
             sub_can = [p for p in can_packets if p.get("id") in ["0x011", "0x001"]]
             if not sub_can:
                 sub_can = can_packets
 
         sub_status = "passed" if (sub_pass == sub_total and sub_total > 0 and static_status == "passed") else "failed"
+
+        sub_failed_test = next((t for t in sub_tests if t.get("status") == "FAIL"), None)
+        sub_failure_type = None
+        sub_failure_details = None
+        if sub_failed_test:
+            sub_failure_type = "assertion_failure"
+            sub_failure_details = {
+                "title": f"Silicon Unit Test Assertion Failure: {sub_name}",
+                "exit_code": "1 (Hardware Verification Failed)",
+                "location": f"{sub_failed_test.get('file', 'test_main.c')}:{sub_failed_test.get('line', 0)} ({sub_failed_test.get('name', 'test')})",
+                "diff": sub_failed_test.get("details", ""),
+                "repro": f"./github-action/cal-test.sh {sub_name}/test",
+                "summary": "Flashing and executing this isolated test will acquire the bench mutex and stream serial assertions directly to your terminal."
+            }
+        elif sub_total == 0:
+            sub_failure_type = "build_failure"
+            sub_failure_details = {
+                "title": f"Firmware Compilation Failure: {sub_name}",
+                "exit_code": "2 (Compilation Failed)",
+                "location": sub_name,
+                "diff": "Build step exited with non-zero status prior to test dispatch.",
+                "repro": f"idf.py -C {sub_name}/test build",
+                "summary": "ESP-IDF build failed. Check compiler output in workflow logs."
+            }
+        elif static_status == "failed":
+            sub_failure_type = "static_analysis_failure"
+            sub_failure_details = {
+                "title": "Cloud Quality Gate Defect Detected",
+                "exit_code": "1 (Static Analysis Gate Failed)",
+                "location": sub_name,
+                "diff": f"Static analysis identified {static_defects} defect(s).",
+                "repro": "./github-action/static-check.sh",
+                "summary": "Cloud static analysis detected defects in source files."
+            }
+
+        duration_sec = round(max_duration, 1) if max_duration > 0 else 0.0
 
         sub_run = {
             "id": f"{run_id}-{sub_name.replace('_fw', '')}",
@@ -205,9 +236,10 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
             "author": author,
             "message": f"[{sub_name}] {commit_msg}",
             "status": sub_status,
-            "failure_type": None if sub_status == "passed" else "assertion_failure",
-            "duration": f"{round(max_duration, 1)}s" if max_duration > 0 else "14.5s",
-            "lock_duration_sec": 14.1 if sub_name == "pedals_fw" else 8.2,
+            "failure_type": sub_failure_type,
+            "failure_details": sub_failure_details,
+            "duration": f"{duration_sec}s",
+            "lock_duration_sec": duration_sec,
             "tests_pass": sub_pass,
             "tests_total": sub_total,
             "tests": sub_tests,

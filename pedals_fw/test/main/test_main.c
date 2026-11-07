@@ -147,6 +147,9 @@ static void test_can_receive_timeout(void)
     TEST_ASSERT_EQUAL(ESP_OK, CAN_init());
 
     CAN_message_t rx_msg = {0};
+    // Drain any pending frames from previous test executions before asserting timeout
+    while (CAN_receive(&rx_msg, 5) == ESP_OK) {}
+
     // Expect timeout after 50ms when bus has no inbound frames
     esp_err_t err = CAN_receive(&rx_msg, 50);
     TEST_ASSERT_EQUAL(ESP_ERR_TIMEOUT, err);

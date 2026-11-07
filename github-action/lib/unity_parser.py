@@ -200,7 +200,7 @@ class LiveCANMonitor(threading.Thread):
             "decoded": signal_desc
         }
         self.frames.append(frame_obj)
-        print(f"    [CAN LIVE] 📡 {frame_obj['id']} ({msg_name}) DLC:{dlc} [{hex_str}] -> {signal_desc}")
+        print(f"    [CAN LIVE] {frame_obj['id']} ({msg_name}) DLC:{dlc} [{hex_str}] -> {signal_desc}")
 
     def stop(self):
         self.running = False
