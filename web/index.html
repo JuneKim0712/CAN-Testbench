@@ -76,9 +76,6 @@
         <button onclick="setActiveTab('runs')" id="navTabRuns" class="px-3 py-1 text-neutral-400 hover:text-white font-bold uppercase transition">
           Test Runs
         </button>
-        <button onclick="setActiveTab('can')" id="navTabCan" class="px-3 py-1 text-neutral-400 hover:text-white font-bold uppercase transition">
-          CAN Explorer
-        </button>
       </nav>
 
       <!-- System Quick Links & Status Indicators -->
@@ -127,333 +124,215 @@
   <!-- ========================================================================= -->
   <div id="viewOverview" class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
 
-    <!-- HERO / STATUS EXECUTIVE SUMMARY -->
+    <!-- 1. CURRENT DEVICE STATUS (Raspberry Pi, ESP32, Debugger) -->
     <section class="border border-neutral-800 bg-neutral-950 p-5 space-y-4">
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
-        <div>
-          <div class="flex items-center gap-2">
-            <h1 class="text-sm font-bold text-white uppercase tracking-wider font-mono">
-              CalSol Gen 11 Hardware Testbench Overview
-            </h1>
-            <span class="border border-neutral-700 bg-neutral-900 text-neutral-300 px-2 py-0.5 text-[10px] uppercase font-mono">
-              Release v1.2
-            </span>
-          </div>
-          <p class="text-xs text-neutral-400 mt-1 max-w-3xl leading-relaxed">
-            Continuous silicon-in-the-loop verification pipeline for CalSol EV firmware. Automates Cppcheck static safety gates, remote ESP32-S3 firmware flashing, Unity hardware unit testing, and physical 500 kbps differential CAN bus telemetry analysis on self-hosted ARM64 lab runners.
-          </p>
-        </div>
-
-        <!-- Direct Actions -->
-        <div class="flex flex-wrap items-center gap-2.5 shrink-0">
-          <button onclick="setActiveTab('telemetry')" class="px-3.5 py-1.5 bg-white text-black font-bold uppercase tracking-wider text-xs hover:bg-neutral-200 transition">
-            Launch Live Telemetry →
-          </button>
-          <button onclick="setActiveTab('runs')" class="px-3 py-1.5 bg-neutral-900 text-neutral-200 border border-neutral-700 font-bold uppercase tracking-wider text-xs hover:border-white transition">
-            Browse Test Runs
-          </button>
-          <a href="https://github.com/JuneKim0712/CAN-Testbench" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 bg-neutral-900 text-pastel-cyan border border-neutral-700 font-bold uppercase tracking-wider text-xs hover:border-pastel-cyan transition">
-            GitHub Repo ↗
-          </a>
-        </div>
-      </div>
-
-      <!-- KEY METRICS CARDS -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-1">
-        <div class="border border-neutral-800 bg-black p-3 space-y-1">
-          <div class="text-[10px] uppercase text-neutral-500 tracking-wider">Unit Verification Status</div>
-          <div class="text-lg font-bold text-pastel-green uppercase flex items-baseline gap-2 font-mono" id="ovSuiteStatus">
-            [10 / 10 PASS]
-          </div>
-          <div class="text-[10px] text-neutral-400 font-mono">100% assertions nominal</div>
-        </div>
-
-        <div class="border border-neutral-800 bg-black p-3 space-y-1">
-          <div class="text-[10px] uppercase text-neutral-500 tracking-wider">Active Subsystems</div>
-          <div class="text-lg font-bold text-white font-mono">2 Firmware ECUs</div>
-          <div class="text-[10px] text-neutral-400 font-mono">pedals_fw + lights_fw</div>
-        </div>
-
-        <div class="border border-neutral-800 bg-black p-3 space-y-1">
-          <div class="text-[10px] uppercase text-neutral-500 tracking-wider">Physical CAN Bus</div>
-          <div class="text-lg font-bold text-pastel-yellow font-mono">500 kbps (120Ω)</div>
-          <div class="text-[10px] text-neutral-400 font-mono">TI TCAN332 Transceiver</div>
-        </div>
-
-        <div class="border border-neutral-800 bg-black p-3 space-y-1">
-          <div class="text-[10px] uppercase text-neutral-500 tracking-wider">Critical Section Scope</div>
-          <div class="text-lg font-bold text-pastel-cyan font-mono" id="ovAvgDuration">~14.5s Total</div>
-          <div class="text-[10px] text-neutral-400 font-mono">flock -x Hardware Lock</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- SECTION 1: FIRMWARE CODES & SUBSYSTEMS ARCHITECTURE -->
-    <section class="border border-neutral-800 bg-neutral-950 p-5 space-y-4">
-      <div class="flex items-center justify-between border-b border-neutral-800 pb-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3">
         <div>
           <h2 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
-            [CODES & SUBSYSTEMS] Firmware Architecture & On-Target Test Suites
+            [DEVICE STATUS] Connected Hardware Nodes &amp; Execution Environment
           </h2>
-          <p class="text-[11px] text-neutral-500 uppercase mt-0.5">
-            ECU codebase breakdown, verified silicon assertions, and hardware pin mappings
+          <p class="text-[11px] text-neutral-500 uppercase mt-0.5 font-mono">
+            Physical hardware nodes commissioned on HIL bench
           </p>
         </div>
-        <span class="text-[10px] font-mono text-neutral-400 uppercase hidden sm:inline">
-          ESP-IDF v5.1+ • Target: ESP32-S3
-        </span>
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 bg-pastel-green inline-block"></span>
+          <span class="text-[10px] font-mono text-pastel-green uppercase font-semibold">All 3 Nodes Online</span>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         
-        <!-- Card 1: pedals_fw -->
-        <div class="border border-neutral-800 bg-black p-4 flex flex-col justify-between space-y-3">
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-1.5 py-0.5 text-[10px] font-bold font-mono">
-                PEDALS_FW
-              </span>
-              <span class="text-neutral-500 text-[10px] font-mono">7 Unit Tests</span>
-            </div>
-            <h3 class="text-xs font-bold text-white uppercase font-mono">Pedals & Safety Interlock ECU</h3>
-            <p class="text-[11px] text-neutral-400 leading-relaxed font-sans">
-              Reads dual throttle potentiometers (ADC1_CH3 / ADC1_CH4), computes travel percentages, applies 5% deadzone clamping, and enforces brake implausibility interlocks (brakes &gt; 10% clamps throttle to 0%). Broadcasts calibrated pedal data over CAN at 100 Hz.
-            </p>
-            <div class="border-t border-neutral-900 pt-2 space-y-1 text-[10px] font-mono text-neutral-400">
-              <div>Source: <span class="text-neutral-200">main/</span> &amp; <span class="text-neutral-200">main/test_main.c</span></div>
-              <div>CAN ID: <span class="text-pastel-yellow font-bold">0x011</span> (PEDAL_THROTTLE_OUTPUT)</div>
-              <div>Hardware Pinout: <span class="text-neutral-200">GPIO 17 (TX), GPIO 18 (RX)</span></div>
-            </div>
-          </div>
-          <button onclick="setSubsystemFilter('pedals_fw'); setActiveTab('telemetry');" class="w-full text-center py-1.5 bg-neutral-900 border border-neutral-700 hover:border-white text-white font-mono text-[10px] uppercase font-bold transition">
-            Inspect pedals_fw Telemetry →
-          </button>
-        </div>
-
-        <!-- Card 2: lights_fw -->
-        <div class="border border-neutral-800 bg-black p-4 flex flex-col justify-between space-y-3">
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="border border-pastel-cyanBorder/40 bg-pastel-cyanBg/30 text-pastel-cyan px-1.5 py-0.5 text-[10px] font-bold font-mono">
-                LIGHTS_FW
-              </span>
-              <span class="text-neutral-500 text-[10px] font-mono">3 Unit Tests</span>
-            </div>
-            <h3 class="text-xs font-bold text-white uppercase font-mono">Exterior Lighting & Hazard ECU</h3>
-            <p class="text-[11px] text-neutral-400 leading-relaxed font-sans">
-              Controls left/right turn signal flashers, emergency hazards, regenerative brake illumination, and headlight relays. Validates analog voltage conversions and monitors incoming brake interlock packets across the differential bus.
-            </p>
-            <div class="border-t border-neutral-900 pt-2 space-y-1 text-[10px] font-mono text-neutral-400">
-              <div>Source: <span class="text-neutral-200">lights_fw/</span> &amp; <span class="text-neutral-200">lights_fw/test_main.c</span></div>
-              <div>CAN ID: <span class="text-pastel-cyan font-bold">0x021</span> (LIGHT_COMMAND)</div>
-              <div>Hardware Pinout: <span class="text-neutral-200">GPIO 17 (TX), GPIO 18 (RX)</span></div>
-            </div>
-          </div>
-          <button onclick="setSubsystemFilter('lights_fw'); setActiveTab('telemetry');" class="w-full text-center py-1.5 bg-neutral-900 border border-neutral-700 hover:border-white text-white font-mono text-[10px] uppercase font-bold transition">
-            Inspect lights_fw Telemetry →
-          </button>
-        </div>
-
-        <!-- Card 3: components/can_driver -->
-        <div class="border border-neutral-800 bg-black p-4 flex flex-col justify-between space-y-3">
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="border border-pastel-yellowBorder/40 bg-pastel-yellowBg/30 text-pastel-yellow px-1.5 py-0.5 text-[10px] font-bold font-mono">
-                CAN_DRIVER
-              </span>
-              <span class="text-neutral-500 text-[10px] font-mono">Core HAL</span>
-            </div>
-            <h3 class="text-xs font-bold text-white uppercase font-mono">Hardware CAN Controller HAL</h3>
-            <p class="text-[11px] text-neutral-400 leading-relaxed font-sans">
-              Low-level wrapper over the ESP32-S3 Two-Wire Automotive Interface (TWAI). Manages FreeRTOS queue ring buffers (RX/TX), hardware interrupt handlers, bus-off auto-recovery, and uninitialized safety guarantees.
-            </p>
-            <div class="border-t border-neutral-900 pt-2 space-y-1 text-[10px] font-mono text-neutral-400">
-              <div>Header: <span class="text-neutral-200">components/can_driver/include/CAN.h</span></div>
-              <div>Implementation: <span class="text-neutral-200">components/can_driver/CAN_driver.c</span></div>
-              <div>Bitrate: <span class="text-pastel-green font-bold">500 kbps (TWAI_TIMING_CONFIG_500KBITS)</span></div>
-            </div>
-          </div>
-          <a href="https://github.com/JuneKim0712/CAN-Testbench/blob/main/docs/CODE_DOCUMENTATION.md#2-can-driver-component-componentscan_driver" target="_blank" rel="noopener noreferrer" class="w-full text-center py-1.5 bg-neutral-900 border border-neutral-700 hover:border-white text-white font-mono text-[10px] uppercase font-bold transition">
-            Read CAN Driver Docs ↗
-          </a>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- SECTION 2: LIVE CAN TRAFFIC & MESSAGE INJECTION -->
-    <section class="border border-neutral-800 bg-neutral-950 p-5 space-y-4">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3">
-        <div>
-          <h2 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
-            [CAN TELEMETRY & INJECTION] Live Bus Frames & Packet Injection Workflow
-          </h2>
-          <p class="text-[11px] text-neutral-500 uppercase mt-0.5">
-            Physical frame format, message arbitration IDs, and automated on-target injection mechanics
-          </p>
-        </div>
-        <button onclick="setActiveTab('can')" class="text-pastel-yellow hover:underline font-mono text-[11px] uppercase font-bold flex items-center gap-1 self-start sm:self-auto">
-          <span>Explore CAN Dictionary</span>
-          <span>→</span>
-        </button>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        
-        <!-- Live Traffic Snapshot Table -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between text-[10px] uppercase text-neutral-400 font-mono">
-            <span>Primary CalSol CAN Message IDs</span>
-            <span class="text-neutral-500">Rate: 500 kbps</span>
-          </div>
-          <div class="border border-neutral-800 bg-black overflow-x-auto">
-            <table class="w-full text-left font-mono text-[11px]">
-              <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 text-[10px] uppercase">
-                <tr>
-                  <th class="py-1.5 px-3">CAN ID</th>
-                  <th class="py-1.5 px-3">Identifier</th>
-                  <th class="py-1.5 px-3">Freq</th>
-                  <th class="py-1.5 px-3">DLC</th>
-                  <th class="py-1.5 px-3">Decoded Description</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-neutral-900 text-neutral-200">
-                <tr class="hover:bg-neutral-900 transition">
-                  <td class="py-2 px-3 font-bold text-pastel-green">0x001</td>
-                  <td class="py-2 px-3 font-semibold text-white">SYS_HEARTBEAT</td>
-                  <td class="py-2 px-3 text-neutral-400">1 Hz</td>
-                  <td class="py-2 px-3 text-neutral-400">2 B</td>
-                  <td class="py-2 px-3 text-neutral-300">System status flag &amp; watchdog token</td>
-                </tr>
-                <tr class="hover:bg-neutral-900 transition">
-                  <td class="py-2 px-3 font-bold text-pastel-yellow">0x011</td>
-                  <td class="py-2 px-3 font-semibold text-white">PEDAL_THROTTLE</td>
-                  <td class="py-2 px-3 text-neutral-400">100 Hz</td>
-                  <td class="py-2 px-3 text-neutral-400">1 B</td>
-                  <td class="py-2 px-3 text-neutral-300">Calculated pedal travel [0x00 - 0x64 = 0-100%]</td>
-                </tr>
-                <tr class="hover:bg-neutral-900 transition">
-                  <td class="py-2 px-3 font-bold text-pastel-cyan">0x021</td>
-                  <td class="py-2 px-3 font-semibold text-white">LIGHT_COMMAND</td>
-                  <td class="py-2 px-3 text-neutral-400">20 Hz</td>
-                  <td class="py-2 px-3 text-neutral-400">1 B</td>
-                  <td class="py-2 px-3 text-neutral-300">Exterior state: Hazards, Brake Light, Blinkers</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="flex items-center justify-between text-[10px] font-mono text-neutral-500 pt-1">
-            <span>Captured via `/dev/esp32_ahmed` (CAN Sniffer)</span>
-            <button onclick="setActiveTab('telemetry')" class="text-white hover:underline uppercase">Inspect Full Waveform →</button>
-          </div>
-        </div>
-
-        <!-- How Message Injection Works -->
-        <div class="border border-neutral-800 bg-black p-4 space-y-3">
+        <!-- Node 1: Raspberry Pi Runner -->
+        <div class="border border-neutral-800 bg-black p-4 space-y-2.5">
           <div class="flex items-center justify-between border-b border-neutral-900 pb-2">
-            <span class="text-[10px] uppercase font-bold text-neutral-400 font-mono">CAN Message Injection Mechanics</span>
-            <span class="text-[10px] font-mono text-pastel-yellow uppercase font-semibold">Dual-Node HIL</span>
+            <span class="border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-1.5 py-0.5 text-[9px] font-bold font-mono uppercase">
+              RUNNER HOST
+            </span>
+            <span class="text-pastel-green text-[10px] font-mono font-semibold flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 bg-pastel-green inline-block"></span>
+              ONLINE (24/7)
+            </span>
           </div>
-
-          <p class="text-[11px] text-neutral-300 leading-relaxed font-sans">
-            Unit tests inject synthetic CAN messages over physical copper to verify that the Device Under Test (DUT: <code class="text-pastel-cyan font-mono">/dev/esp32_johnathan</code>) responds safely to edge conditions, invalid ranges, and bus timeouts.
-          </p>
-
-          <div class="space-y-1.5 font-mono text-[10px]">
-            <div class="text-neutral-500 uppercase">Local Injection &amp; Test Commands:</div>
-            <div class="bg-neutral-950 border border-neutral-800 p-2 space-y-1 text-neutral-300 select-all leading-normal">
-              <span class="text-neutral-500 block"># 1. Trigger automated on-target test with CAN injection:</span>
-              <span class="text-pastel-yellow block">./github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan</span>
-              <span class="text-neutral-500 block mt-1"># 2. Inject arbitrary CAN packet onto bus:</span>
-              <span class="text-pastel-cyan block">python3 -m calsol_can send --port /dev/esp32_ahmed --id 0x011 --data "1E 00"</span>
-            </div>
+          <div>
+            <div class="text-xs font-bold text-white uppercase font-mono">Raspberry Pi 4 (stolerpi)</div>
+            <div class="text-[10px] text-neutral-500 font-mono uppercase mt-0.5">ARM64 Lab Host &amp; CI Runner</div>
           </div>
+          <div class="space-y-1 text-[10px] font-mono text-neutral-400 pt-1 border-t border-neutral-900">
+            <div>• Mutex Lock: <span class="text-white font-semibold" id="cardPiMutex">/var/lock/calsol_hil.lock (Ready)</span></div>
+            <div>• Toolchain: <span class="text-neutral-200">ESP-IDF v5.3.1 • Python 3.11</span></div>
+            <div>• Role: <span class="text-neutral-200">Job Orchestration &amp; Serial Bridge</span></div>
+          </div>
+        </div>
 
-          <div class="flex items-center justify-between text-[10px] font-mono text-neutral-400 pt-1">
-            <span>Bus Mutex: <span class="text-white">flock -x /var/lock/calsol_hil.lock</span></span>
-            <a href="https://github.com/JuneKim0712/CAN-Testbench/blob/main/docs/TUTORIAL.md#4-remote-can-packet-snooping--injection" target="_blank" rel="noopener noreferrer" class="text-pastel-cyan hover:underline">
-              Injection Guide ↗
-            </a>
+        <!-- Node 2: ESP32 Target (DUT) -->
+        <div class="border border-neutral-800 bg-black p-4 space-y-2.5">
+          <div class="flex items-center justify-between border-b border-neutral-900 pb-2">
+            <span class="border border-pastel-cyanBorder/40 bg-pastel-cyanBg/30 text-pastel-cyan px-1.5 py-0.5 text-[9px] font-bold font-mono uppercase">
+              TARGET SILICON
+            </span>
+            <span class="text-pastel-cyan text-[10px] font-mono font-semibold flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 bg-pastel-cyan inline-block"></span>
+              FLASHED / NOMINAL
+            </span>
+          </div>
+          <div>
+            <div class="text-xs font-bold text-white uppercase font-mono">ESP32-S3 (Device Under Test)</div>
+            <div class="text-[10px] text-neutral-500 font-mono uppercase mt-0.5">Dual-Core Xtensa @ 240 MHz</div>
+          </div>
+          <div class="space-y-1 text-[10px] font-mono text-neutral-400 pt-1 border-t border-neutral-900">
+            <div>• Serial Port: <span class="text-pastel-cyan font-bold">/dev/esp32_johnathan</span></div>
+            <div>• Active Firmware: <span class="text-white font-semibold" id="cardDutFw">pedals_fw / lights_fw</span></div>
+            <div>• Transceiver: <span class="text-neutral-200">TI TCAN332 (GPIO 17 TX / GPIO 18 RX)</span></div>
+          </div>
+        </div>
+
+        <!-- Node 3: CAN Bus Debugger -->
+        <div class="border border-neutral-800 bg-black p-4 space-y-2.5">
+          <div class="flex items-center justify-between border-b border-neutral-900 pb-2">
+            <span class="border border-pastel-yellowBorder/40 bg-pastel-yellowBg/30 text-pastel-yellow px-1.5 py-0.5 text-[9px] font-bold font-mono uppercase">
+              BUS DEBUGGER
+            </span>
+            <span class="text-pastel-yellow text-[10px] font-mono font-semibold flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span>
+              SNIFFING 24/7
+            </span>
+          </div>
+          <div>
+            <div class="text-xs font-bold text-white uppercase font-mono">ESP32-S3 CAN Sniffer</div>
+            <div class="text-[10px] text-neutral-500 font-mono uppercase mt-0.5">Continuous Hardware Listener</div>
+          </div>
+          <div class="space-y-1 text-[10px] font-mono text-neutral-400 pt-1 border-t border-neutral-900">
+            <div>• Serial Port: <span class="text-pastel-yellow font-bold">/dev/esp32_ahmed</span></div>
+            <div>• Physical Bus: <span class="text-white font-semibold">500 kbps Differential (120Ω Split)</span></div>
+            <div>• Sampling Mode: <span class="text-neutral-200">Continuous 24/7 Packet Logger</span></div>
           </div>
         </div>
 
       </div>
     </section>
 
-    <!-- SECTION 3: RECENT UNIT TEST RUNS & VERIFICATION HISTORY -->
+    <!-- 2. LIVE TELEMETRY DATA (LISTENS 24/7) -->
     <section class="border border-neutral-800 bg-neutral-950 p-5 space-y-4">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
         <div>
-          <h2 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
-            [UNIT TEST RUNS] Recent Hardware Verification Activity
-          </h2>
-          <p class="text-[11px] text-neutral-500 uppercase mt-0.5">
-            Latest continuous integration runs executed on physical ESP32-S3 silicon
+          <div class="flex items-center gap-2">
+            <h2 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
+              [LIVE TELEMETRY DATA] Physical CAN Bus Stream
+            </h2>
+            <span class="border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-1.5 py-0.2 text-[9px] tracking-wide uppercase font-semibold flex items-center gap-1 font-mono">
+              <span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-ping"></span>
+              LISTENS 24/7
+            </span>
+          </div>
+          <p class="text-[11px] text-neutral-500 uppercase mt-0.5 font-mono">
+            Continuous packet snooping from TI TCAN332 transceiver over /dev/esp32_ahmed at 500 kbps
           </p>
         </div>
-        <button onclick="setActiveTab('runs')" class="text-pastel-cyan hover:underline font-mono text-[11px] uppercase font-bold flex items-center gap-1 self-start sm:self-auto">
-          <span>View All 13 Test Runs</span>
-          <span>→</span>
-        </button>
+
+        <div class="flex items-center gap-2">
+          <button onclick="setActiveTab('telemetry')" class="px-3 py-1.5 bg-white text-black font-bold uppercase tracking-wider text-xs hover:bg-neutral-200 transition font-mono">
+            Open Waveform &amp; Playhead →
+          </button>
+        </div>
       </div>
 
-      <div class="border border-neutral-800 bg-black overflow-x-auto">
+      <!-- Live Telem HUD Summary Strip -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 border border-neutral-800 bg-black p-3 text-[11px] font-mono">
+        <div>
+          <span class="text-[10px] uppercase text-neutral-500 block">Active Transmitter</span>
+          <span class="font-bold text-white truncate block" id="ovTelemActiveTx">pedals_fw (/dev/esp32_johnathan)</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-3">
+          <span class="text-[10px] uppercase text-neutral-500 block">Bus Rate &amp; Load</span>
+          <span class="font-bold text-pastel-green block">500 kbps • Nominal (~3.5%)</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-3">
+          <span class="text-[10px] uppercase text-neutral-500 block">Latest Packet Time</span>
+          <span class="font-bold text-white block" id="ovTelemLatestTime">t = +5.00s</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-3">
+          <span class="text-[10px] uppercase text-neutral-500 block">Latest Decoded State</span>
+          <span class="font-bold text-pastel-yellow truncate block" id="ovTelemDecoded">0x5A (Dec: 90%)</span>
+        </div>
+      </div>
+
+      <!-- Live Stream Table -->
+      <div class="border border-neutral-800 bg-black overflow-x-auto max-h-64">
         <table class="w-full text-left font-mono text-[11px]">
-          <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 text-[10px] uppercase">
+          <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 text-[10px] uppercase sticky top-0">
             <tr>
-              <th class="py-2 px-3">Verification Status</th>
+              <th class="py-1.5 px-3">Arrival Time</th>
+              <th class="py-1.5 px-3">Delta (Δt)</th>
+              <th class="py-1.5 px-3">CAN ID</th>
+              <th class="py-1.5 px-3">Message Identifier</th>
+              <th class="py-1.5 px-3">DLC</th>
+              <th class="py-1.5 px-3">Payload (Hex)</th>
+              <th class="py-1.5 px-3">Decoded Physical Payload</th>
+            </tr>
+          </thead>
+          <tbody id="overviewTelemTableBody" class="divide-y divide-neutral-900 text-neutral-200">
+            <!-- Dynamically populated via renderOverviewLiveTelem() -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between text-[10px] font-mono text-neutral-500 pt-1">
+        <span>Hardware Sniffer: <span class="text-neutral-300">/dev/esp32_ahmed</span> • Mode: <span class="text-pastel-green font-semibold">Continuous Bus Listen</span></span>
+        <button onclick="setActiveTab('telemetry')" class="text-pastel-cyan hover:underline uppercase font-bold">
+          Inspect Full Waveform &amp; Time Scrubber →
+        </button>
+      </div>
+    </section>
+
+    <!-- 3. PAST UNIT TEST RUNS -->
+    <section class="border border-neutral-800 bg-neutral-950 p-5 space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
+        <div>
+          <h2 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
+            [PAST UNIT TEST RUNS] Hardware Verification History
+          </h2>
+          <p class="text-[11px] text-neutral-500 uppercase mt-0.5 font-mono">
+            Historical CI test execution logs executed on physical ESP32-S3 silicon
+          </p>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] uppercase text-neutral-500 font-mono">Filter:</span>
+          <div class="flex items-center bg-black border border-neutral-800 p-0.5 text-[10px] font-mono">
+            <button onclick="setOverviewRunsFilter('all')" id="ovBtnRunsAll" class="px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase">All Runs</button>
+            <button onclick="setOverviewRunsFilter('passed')" id="ovBtnRunsPassed" class="px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase">Passed</button>
+            <button onclick="setOverviewRunsFilter('failed')" id="ovBtnRunsFailed" class="px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase">Failed</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="border border-neutral-800 bg-black overflow-x-auto max-h-80">
+        <table class="w-full text-left font-mono text-[11px]">
+          <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 text-[10px] uppercase sticky top-0">
+            <tr>
+              <th class="py-2 px-3">Result</th>
               <th class="py-2 px-3">Run ID</th>
               <th class="py-2 px-3">Target Subsystem</th>
               <th class="py-2 px-3">Commit</th>
               <th class="py-2 px-3">Assertions</th>
               <th class="py-2 px-3">Duration</th>
+              <th class="py-2 px-3">Mutex Lock</th>
               <th class="py-2 px-3">Action</th>
             </tr>
           </thead>
           <tbody id="overviewRunsTable" class="divide-y divide-neutral-900 text-neutral-200">
-            <!-- Populated dynamically via initData() -->
+            <!-- Populated dynamically via renderOverviewRunsTable() -->
           </tbody>
         </table>
       </div>
-    </section>
 
-    <!-- SECTION 4: HARDWARE BENCH QUICK COMMISSIONING & SETUP -->
-    <section class="border border-neutral-800 bg-neutral-950 p-5 space-y-4">
-      <div class="flex items-center justify-between border-b border-neutral-800 pb-3">
-        <div>
-          <h2 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
-            [COMMISSIONING] Bench Hardware Setup &amp; Wiring Summary
-          </h2>
-          <p class="text-[11px] text-neutral-500 uppercase mt-0.5">
-            Hardware wiring topology, persistent Linux udev symlinks, and flashing reference
-          </p>
-        </div>
-        <a href="https://github.com/JuneKim0712/CAN-Testbench/blob/main/docs/SETUP_GUIDE.md" target="_blank" rel="noopener noreferrer" class="text-white hover:underline font-mono text-[11px] uppercase font-bold">
-          Full Setup Guide ↗
-        </a>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
-        <div class="bg-black border border-neutral-800 p-4 space-y-2">
-          <div class="text-[10px] uppercase font-bold text-neutral-400">Hardware Transceiver Wiring</div>
-          <div class="space-y-1 text-neutral-300 text-[11px]">
-            <div>• <span class="text-white font-bold">2x ESP32-S3 DevKits</span> (Node 1 Sniffer, Node 2 DUT)</div>
-            <div>• <span class="text-white font-bold">2x TI TCAN332</span> 3.3V CAN Transceivers</div>
-            <div>• <span class="text-white">GPIO 17</span> → Transceiver TXD &amp; <span class="text-white">GPIO 18</span> → Transceiver RXD</div>
-            <div>• Differential Bus: Twisted Pair (CAN_H to CAN_H, CAN_L to CAN_L)</div>
-            <div>• Termination: Split <span class="text-pastel-green font-bold">120Ω resistors</span> at both physical ends (<span class="text-white">60Ω ±3Ω total</span>)</div>
-          </div>
-        </div>
-
-        <div class="bg-black border border-neutral-800 p-4 space-y-2">
-          <div class="text-[10px] uppercase font-bold text-neutral-400">Linux Persistent Symlinks (/etc/udev/rules.d/99-calsol-hil.rules)</div>
-          <div class="space-y-1 text-neutral-300 text-[11px]">
-            <div>• <code class="text-pastel-yellow">/dev/esp32_ahmed</code> → Node 1 CAN Sniffer &amp; Injector</div>
-            <div>• <code class="text-pastel-cyan">/dev/esp32_johnathan</code> → Node 2 Device Under Test (DUT)</div>
-            <div>• User Serial Groups: <code class="text-white">sudo usermod -a -G dialout,plugdev $USER</code></div>
-            <div>• Hardware Mutex Lock: <code class="text-pastel-green">/var/lock/calsol_hil.lock</code></div>
-          </div>
-        </div>
+      <div class="flex items-center justify-between text-[10px] font-mono text-neutral-500 pt-1">
+        <span>Hardware Mutex Scope: <span class="text-neutral-300">flock -x /var/lock/calsol_hil.lock</span></span>
+        <button onclick="setActiveTab('runs')" class="text-white hover:underline uppercase font-bold">
+          Open Dedicated Test Runs Tab →
+        </button>
       </div>
     </section>
 
@@ -860,110 +739,6 @@
 
   </div>
 
-  <!-- ========================================================================= -->
-  <!-- TAB 4: CAN BUS EXPLORER & MESSAGE DICTIONARY                             -->
-  <!-- ========================================================================= -->
-  <div id="viewCan" class="hidden max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-
-    <!-- CAN DICTIONARY HEADER -->
-    <section class="border border-neutral-800 bg-neutral-950 p-5 space-y-4">
-      <div class="border-b border-neutral-800 pb-3">
-        <h2 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
-          [CAN SPECIFICATION] CalSol Gen 11 CAN 2.0B Message Dictionary
-        </h2>
-        <p class="text-[11px] text-neutral-500 uppercase mt-0.5">
-          Bus bitrate: 500 kbps • Identifier standard: 11-bit Standard ID • Transceiver: TI TCAN332
-        </p>
-      </div>
-
-      <div class="border border-neutral-800 bg-black overflow-x-auto">
-        <table class="w-full text-left font-mono text-[11px]">
-          <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 text-[10px] uppercase">
-            <tr>
-              <th class="py-2 px-3">ID (Hex)</th>
-              <th class="py-2 px-3">Signal Name</th>
-              <th class="py-2 px-3">Transmitter ECU</th>
-              <th class="py-2 px-3">Rate</th>
-              <th class="py-2 px-3">DLC</th>
-              <th class="py-2 px-3">Byte Layout &amp; Signal Scaling</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-neutral-900 text-neutral-200">
-            <tr class="hover:bg-neutral-900 transition">
-              <td class="py-2.5 px-3 font-bold text-pastel-green">0x001</td>
-              <td class="py-2.5 px-3 font-semibold text-white">SYS_HEARTBEAT</td>
-              <td class="py-2.5 px-3 text-neutral-400">All Nodes</td>
-              <td class="py-2.5 px-3 text-neutral-400">1 Hz</td>
-              <td class="py-2.5 px-3 text-neutral-400">2 B</td>
-              <td class="py-2.5 px-3 text-neutral-300">Byte 0: Node ID (0x01=Pedals, 0x02=Lights) • Byte 1: Status Flag (0x7B=OK)</td>
-            </tr>
-            <tr class="hover:bg-neutral-900 transition">
-              <td class="py-2.5 px-3 font-bold text-pastel-yellow">0x011</td>
-              <td class="py-2.5 px-3 font-semibold text-white">PEDAL_THROTTLE</td>
-              <td class="py-2.5 px-3 text-neutral-400">pedals_fw</td>
-              <td class="py-2.5 px-3 text-neutral-400">100 Hz</td>
-              <td class="py-2.5 px-3 text-neutral-400">1 B</td>
-              <td class="py-2.5 px-3 text-neutral-300">Byte 0: Throttle Percentage [0x00=0% to 0x64=100%]; Clamped to 0 on brake</td>
-            </tr>
-            <tr class="hover:bg-neutral-900 transition">
-              <td class="py-2.5 px-3 font-bold text-pastel-cyan">0x021</td>
-              <td class="py-2.5 px-3 font-semibold text-white">LIGHT_COMMAND</td>
-              <td class="py-2.5 px-3 text-neutral-400">lights_fw</td>
-              <td class="py-2.5 px-3 text-neutral-400">20 Hz</td>
-              <td class="py-2.5 px-3 text-neutral-400">1 B</td>
-              <td class="py-2.5 px-3 text-neutral-300">Bit 0: Left Turn • Bit 1: Right Turn • Bit 2: Hazard • Bit 3: Brake Active</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- INJECTION TESTING REFERENCE -->
-    <section class="border border-neutral-800 bg-neutral-950 p-5 space-y-4">
-      <div class="border-b border-neutral-800 pb-3">
-        <h2 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
-          [INJECTION WORKFLOW] Automated &amp; Manual Fault Injection Scenarios
-        </h2>
-        <p class="text-[11px] text-neutral-500 uppercase mt-0.5">
-          Procedures for verifying vehicle ECU safety response under adverse CAN bus conditions
-        </p>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
-        <div class="border border-neutral-800 bg-black p-4 space-y-2">
-          <div class="text-[10px] uppercase font-bold text-pastel-yellow">Scenario 1: Brake-Throttle Interlock</div>
-          <p class="text-[11px] text-neutral-400 font-sans leading-normal">
-            Injects brake active packet (<code class="text-white font-mono">0x021 # 08</code>) while throttle pedal is depressed. Asserts that the pedals firmware immediately zeroes motor command output.
-          </p>
-          <div class="bg-neutral-950 border border-neutral-800 p-2 text-[10px] text-neutral-300 select-all">
-            cansend can0 021#08
-          </div>
-        </div>
-
-        <div class="border border-neutral-800 bg-black p-4 space-y-2">
-          <div class="text-[10px] uppercase font-bold text-pastel-red">Scenario 2: Watchdog Timeout</div>
-          <p class="text-[11px] text-neutral-400 font-sans leading-normal">
-            Suspends transmitter injection for &gt; 250 ms. Asserts that the receiver enters safe failover mode and illuminates the fault dashboard LED.
-          </p>
-          <div class="bg-neutral-950 border border-neutral-800 p-2 text-[10px] text-neutral-300 select-all">
-            # Withhold heartbeat frames
-          </div>
-        </div>
-
-        <div class="border border-neutral-800 bg-black p-4 space-y-2">
-          <div class="text-[10px] uppercase font-bold text-pastel-cyan">Scenario 3: Corrupt CRC Recovery</div>
-          <p class="text-[11px] text-neutral-400 font-sans leading-normal">
-            Forces dominant bits during transmission to trigger physical bus-off state. Asserts that the TWAI controller driver executes autonomous re-initialization.
-          </p>
-          <div class="bg-neutral-950 border border-neutral-800 p-2 text-[10px] text-neutral-300 select-all">
-            twai_initiate_recovery()
-          </div>
-        </div>
-      </div>
-    </section>
-
-  </div>
-
   <!-- FOOTER -->
   <footer class="border-t border-neutral-800 bg-neutral-950 px-4 py-3 mt-8">
     <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-mono text-neutral-500">
@@ -990,7 +765,7 @@
     });
 
     // ─── STATE MANAGEMENT ───────────────────────────────────────────────────
-    let activeTabId = 'overview';      // 'overview' | 'telemetry' | 'runs' | 'can'
+    let activeTabId = 'overview';      // 'overview' | 'telemetry' | 'runs'
     let historyState = { runs: [] };
     let currentRun = null;
     let playbackTime = 0.0;
@@ -998,6 +773,7 @@
     let testFilterMode = 'all';        // 'all' | 'fail'
     let currentSubsystemFilter = 'all';// 'all' | 'pedals_fw' | 'lights_fw'
     let historyStatusFilter = 'all';   // 'all' | 'passed' | 'failed'
+    let overviewRunsFilter = 'all';    // 'all' | 'passed' | 'failed'
     let hoverRaf = null;
 
     const CAN_COLORS = [
@@ -1015,18 +791,16 @@
       activeTabId = tabId;
       window.location.hash = tabId;
 
-      const tabs = ['overview', 'telemetry', 'runs', 'can'];
+      const tabs = ['overview', 'telemetry', 'runs'];
       const views = {
         overview: dom.viewOverview,
         telemetry: dom.viewTelemetry,
-        runs: dom.viewRuns,
-        can: dom.viewCan
+        runs: dom.viewRuns
       };
       const buttons = {
         overview: dom.navTabOverview,
         telemetry: dom.navTabTelemetry,
-        runs: dom.navTabRuns,
-        can: dom.navTabCan
+        runs: dom.navTabRuns
       };
 
       tabs.forEach(t => {
@@ -1147,45 +921,124 @@
         switchRun(filtered.length > 0 ? filtered[0].id : historyState.runs[0].id);
       }
 
-      // Render Overview and Runs tables
-      renderOverviewSummary();
+      // Render Homepage and Runs tables
+      renderOverviewLiveTelem();
+      renderOverviewRunsTable();
       renderHistoryTable();
 
       // Handle Initial Tab Hash
       const hash = window.location.hash.replace('#', '');
-      if (['overview', 'telemetry', 'runs', 'can'].includes(hash)) {
+      if (['overview', 'telemetry', 'runs'].includes(hash)) {
         setActiveTab(hash);
       } else {
         setActiveTab('overview');
       }
     }
 
-    // ─── OVERVIEW TABLE RENDERER ────────────────────────────────────────────
-    function renderOverviewSummary() {
+    // ─── HOMEPAGE LIVE TELEMETRY STREAM RENDERER ────────────────────────────
+    function renderOverviewLiveTelem() {
+      const tbody = dom.overviewTelemTableBody;
+      if (!tbody) return;
+
+      const packets = currentRun ? (currentRun.can_packets || []) : [];
+      if (packets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No live CAN bus frames logged. Sniffer listening on /dev/esp32_ahmed...</td></tr>';
+        if (dom.ovTelemLatestTime) dom.ovTelemLatestTime.innerText = 't = 0.00s';
+        if (dom.ovTelemDecoded) dom.ovTelemDecoded.innerText = 'Standby (No Frames)';
+        return;
+      }
+
+      const distinct = getDistinctIds();
+      const latestPacket = packets[packets.length - 1];
+      if (dom.ovTelemLatestTime) dom.ovTelemLatestTime.innerText = `t = +${latestPacket.t.toFixed(2)}s`;
+      if (dom.ovTelemDecoded) dom.ovTelemDecoded.innerText = `${latestPacket.id} -> ${latestPacket.decoded || latestPacket.raw}`;
+      
+      const sub = currentRun.subsystem || (currentRun.subsystems ? currentRun.subsystems[0] : 'DUT');
+      if (dom.ovTelemActiveTx) dom.ovTelemActiveTx.innerText = `${sub} (/dev/esp32_johnathan)`;
+
+      let rows = '';
+      for (let i = packets.length - 1; i >= 0; i--) {
+        const p = packets[i];
+        const prevP = i > 0 ? packets[i - 1] : null;
+        const deltaMs = prevP ? '+' + ((p.t - prevP.t) * 1000).toFixed(1) + ' ms' : 'Initial';
+        const color = getColorForId(p.id, distinct);
+        const isLatest = (i === packets.length - 1);
+        const rowClass = isLatest ? 'bg-neutral-800 border-l-2 border-white' : 'hover:bg-neutral-900';
+
+        rows += `
+          <tr class="${rowClass} transition font-mono text-[11px] cursor-pointer" onclick="seekToPacket(${p.t}); setActiveTab('telemetry');" title="Click to inspect this frame on waveform timeline">
+            <td class="py-1.5 px-3 text-neutral-300 font-bold">+${p.t.toFixed(2)}s</td>
+            <td class="py-1.5 px-3 text-neutral-500">${deltaMs}</td>
+            <td class="py-1.5 px-3 font-bold" style="color: ${color}">${p.id}</td>
+            <td class="py-1.5 px-3 text-white uppercase">${p.name}</td>
+            <td class="py-1.5 px-3 text-neutral-400">${p.dlc} B</td>
+            <td class="py-1.5 px-3 text-neutral-200 font-mono">${p.raw}</td>
+            <td class="py-1.5 px-3 text-pastel-green font-medium">${p.decoded}</td>
+          </tr>
+        `;
+      }
+      tbody.innerHTML = rows;
+    }
+
+    // ─── HOMEPAGE PAST UNIT TEST RUNS TABLE RENDERER ────────────────────────
+    function setOverviewRunsFilter(filter) {
+      overviewRunsFilter = filter;
+      dom.ovBtnRunsAll.className = (filter === 'all')
+        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase'
+        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      dom.ovBtnRunsPassed.className = (filter === 'passed')
+        ? 'px-2 py-0.5 bg-pastel-greenBg text-pastel-green font-bold uppercase border border-pastel-greenBorder/40'
+        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      dom.ovBtnRunsFailed.className = (filter === 'failed')
+        ? 'px-2 py-0.5 bg-pastel-redBg text-pastel-red font-bold uppercase border border-pastel-redBorder/40'
+        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      renderOverviewRunsTable();
+    }
+
+    function renderOverviewRunsTable() {
       const tbody = dom.overviewRunsTable;
       if (!tbody) return;
-      const recent = historyState.runs.slice(0, 6);
 
-      tbody.innerHTML = recent.map(r => {
+      const runs = historyState.runs.filter(r => {
+        if (overviewRunsFilter === 'all') return true;
+        if (overviewRunsFilter === 'passed') return r.status === 'passed';
+        if (overviewRunsFilter === 'failed') return r.status === 'failed';
+        return true;
+      });
+
+      if (runs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No past unit test runs matching filter.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = runs.map(r => {
         let badge = '<span class="border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-1.5 py-0.5 font-bold uppercase text-[10px]">[PASS]</span>';
         if (r.status === 'in_progress') {
           badge = '<span class="border border-pastel-cyanBorder/40 bg-pastel-cyanBg/30 text-pastel-cyan px-1.5 py-0.5 font-bold uppercase text-[10px] animate-pulse">[RUNNING]</span>';
         } else if (r.status === 'failed') {
-          badge = '<span class="border border-pastel-redBorder/50 bg-pastel-redBg/40 text-pastel-red px-1.5 py-0.5 font-bold uppercase text-[10px]">[FAIL]</span>';
+          let failTag = '[FAIL]';
+          if (r.failure_type === 'build_failure') failTag = '[FAIL: BUILD]';
+          else if (r.failure_type === 'lock_timeout') failTag = '[FAIL: TIMEOUT]';
+          else if (r.failure_type === 'static_analysis_failure') failTag = '[FAIL: STATIC]';
+          badge = `<span class="border border-pastel-redBorder/50 bg-pastel-redBg/40 text-pastel-red px-1.5 py-0.5 font-bold uppercase text-[10px]">${failTag}</span>`;
         }
 
         const sub = r.subsystem || (r.subsystems ? r.subsystems[0] : 'ECU');
         const pass = r.tests_pass !== undefined ? r.tests_pass : (r.tests ? r.tests.filter(t => t.status === 'PASS').length : 0);
         const total = r.tests_total !== undefined ? r.tests_total : (r.tests ? r.tests.length : 0);
+        const lockDuration = r.lock_duration_sec ? `${r.lock_duration_sec}s` : '—';
 
         return `
           <tr class="hover:bg-neutral-900 transition">
             <td class="py-2 px-3">${badge}</td>
-            <td class="py-2 px-3 font-bold text-white">${r.id}</td>
+            <td class="py-2 px-3 font-bold text-white font-mono">${r.id}</td>
             <td class="py-2 px-3 text-neutral-300 uppercase">${sub}</td>
-            <td class="py-2 px-3 text-neutral-400 font-mono">${r.commit}</td>
-            <td class="py-2 px-3 text-neutral-300 font-bold">${pass} / ${total}</td>
-            <td class="py-2 px-3 text-neutral-400">${r.duration || '0.0s'}</td>
+            <td class="py-2 px-3 text-neutral-400 font-mono">
+              <a href="https://github.com/JuneKim0712/CAN-Testbench/commit/${r.commit}" target="_blank" class="text-pastel-cyan hover:underline">${r.commit} ↗</a>
+            </td>
+            <td class="py-2 px-3 text-white font-bold">${pass} / ${total}</td>
+            <td class="py-2 px-3 text-neutral-300 font-mono">${r.duration || '0.0s'}</td>
+            <td class="py-2 px-3 text-neutral-400 font-mono">${lockDuration}</td>
             <td class="py-2 px-3">
               <button onclick="switchRun('${r.id}'); setActiveTab('telemetry');" class="text-pastel-cyan hover:underline uppercase font-bold text-[10px]">
                 Inspect Telemetry →
@@ -1196,7 +1049,7 @@
       }).join('');
     }
 
-    // ─── COMPLETE TEST RUNS HISTORY TABLE ───────────────────────────────────
+    // ─── COMPLETE TEST RUNS HISTORY TABLE (TAB 3) ───────────────────────────
     function setHistoryStatusFilter(filter) {
       historyStatusFilter = filter;
       dom.btnHistAll.className = (filter === 'all')
@@ -1351,6 +1204,7 @@
       const triageBox = dom.failureTriageBox;
       const inProgressBox = dom.inProgressBox;
       const navMutex = dom.navMutexStatus;
+      const cardPiMutex = dom.cardPiMutex;
 
       if (currentRun.status === 'passed') {
         badge.innerText = '[STATUS: ALL PASSED]';
@@ -1358,12 +1212,14 @@
         triageBox.classList.add('hidden');
         inProgressBox.classList.add('hidden');
         if (navMutex) navMutex.innerHTML = '<span class="text-white font-semibold uppercase">Unlocked (Ready)</span>';
+        if (cardPiMutex) cardPiMutex.innerText = '/var/lock/calsol_hil.lock (Ready)';
       } else if (currentRun.status === 'in_progress') {
         badge.innerText = '[STATUS: IN PROGRESS]';
         badge.className = 'border border-pastel-cyanBorder/40 bg-pastel-cyanBg/30 text-pastel-cyan px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center animate-pulse';
         triageBox.classList.add('hidden');
         inProgressBox.classList.remove('hidden');
         if (navMutex) navMutex.innerHTML = '<span class="text-pastel-yellow font-bold uppercase">Locked (Active Run)</span>';
+        if (cardPiMutex) cardPiMutex.innerText = '/var/lock/calsol_hil.lock (LOCKED)';
 
         const ip = currentRun.in_progress_details || {};
         dom.inProgressPhase.innerText = ip.current_phase || 'Silicon Flashing & Unity Suite Execution';
@@ -1375,6 +1231,7 @@
         inProgressBox.classList.add('hidden');
         triageBox.classList.remove('hidden');
         if (navMutex) navMutex.innerHTML = '<span class="text-white font-semibold uppercase">Unlocked (Ready)</span>';
+        if (cardPiMutex) cardPiMutex.innerText = '/var/lock/calsol_hil.lock (Ready)';
 
         const fType = currentRun.failure_type || 'assertion_failure';
         const fd = currentRun.failure_details || {};
@@ -1423,6 +1280,7 @@
       const sub = currentRun.subsystem || (currentRun.subsystems ? currentRun.subsystems[0] : 'ECU');
       const subBadgeLabel = sub === 'pedals_fw' ? 'PEDALS_FW (BRAKE / THROTTLE)' : (sub === 'lights_fw' ? 'LIGHTS_FW (LIGHTING SYSTEM)' : sub.toUpperCase());
       dom.subsystemList.innerHTML = `<span class="border border-neutral-700 bg-neutral-900 px-2 py-1 text-white font-mono uppercase text-[10px] font-semibold">${subBadgeLabel}</span>`;
+      if (dom.cardDutFw) dom.cardDutFw.innerText = sub;
 
       // Trackside Flash Command
       if (dom.flashCmd) {
@@ -1439,6 +1297,7 @@
       if (dom.scrubberMaxLabel) dom.scrubberMaxLabel.innerText = `+${maxPlaybackTime.toFixed(2)}s`;
 
       updateUI();
+      renderOverviewLiveTelem();
     }
 
     // ─── TEST TABLE FILTERING ───────────────────────────────────────────────
@@ -1908,7 +1767,7 @@
     window.addEventListener('DOMContentLoaded', initData);
     window.addEventListener('hashchange', () => {
       const hash = window.location.hash.replace('#', '');
-      if (['overview', 'telemetry', 'runs', 'can'].includes(hash) && hash !== activeTabId) {
+      if (['overview', 'telemetry', 'runs'].includes(hash) && hash !== activeTabId) {
         setActiveTab(hash);
       }
     });
