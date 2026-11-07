@@ -107,82 +107,82 @@
         {
           "t": 0.0,
           "id": "0x011",
-          "name": "PEDALS_THROTTLE",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "0A",
-          "decoded": "Throttle: 10% | Interlock: OK"
+          "decoded": "0x0A (Dec: 10)"
         },
         {
           "t": 0.04,
           "id": "0x011",
-          "name": "PEDALS_THROTTLE",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "14",
-          "decoded": "Throttle: 20% | Interlock: OK"
+          "decoded": "0x14 (Dec: 20)"
         },
         {
           "t": 0.09,
           "id": "0x011",
-          "name": "PEDALS_THROTTLE",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "1E",
-          "decoded": "Throttle: 30% | Interlock: OK"
+          "decoded": "0x1E (Dec: 30)"
         },
         {
           "t": 0.14,
           "id": "0x011",
-          "name": "PEDALS_THROTTLE",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "28",
-          "decoded": "Throttle: 40% | Interlock: OK"
+          "decoded": "0x28 (Dec: 40)"
         },
         {
           "t": 0.19,
           "id": "0x011",
-          "name": "PEDALS_THROTTLE",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "32",
-          "decoded": "Throttle: 50% | Interlock: OK"
+          "decoded": "0x32 (Dec: 50)"
         },
         {
           "t": 0.24,
           "id": "0x011",
-          "name": "PEDALS_THROTTLE",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "3C",
-          "decoded": "Throttle: 60% | Interlock: OK"
+          "decoded": "0x3C (Dec: 60)"
         },
         {
           "t": 0.29,
           "id": "0x011",
-          "name": "PEDALS_THROTTLE",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "46",
-          "decoded": "Throttle: 70% | Interlock: OK"
+          "decoded": "0x46 (Dec: 70)"
         },
         {
           "t": 0.34,
           "id": "0x011",
-          "name": "PEDALS_THROTTLE",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "50",
-          "decoded": "Throttle: 80% | Interlock: OK"
+          "decoded": "0x50 (Dec: 80)"
         },
         {
           "t": 0.39,
           "id": "0x011",
-          "name": "PEDALS_THROTTLE",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "5A",
-          "decoded": "Throttle: 90% | Interlock: OK"
+          "decoded": "0x5A (Dec: 90)"
         },
         {
           "t": 0.44,
           "id": "0x011",
-          "name": "PEDALS_THROTTLE",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "64",
-          "decoded": "Throttle: 100% | Interlock: OK"
+          "decoded": "0x64 (Dec: 100)"
         }
       ]
     },
@@ -267,90 +267,90 @@
         {
           "t": 0.5,
           "id": "0x001",
-          "name": "PEDALS_STATUS",
+          "name": "FRAME_0x001",
           "dlc": 2,
           "raw": "00 7B",
-          "decoded": "Heartbeat: ACTIVE | Bus Voltage: 12.3V"
+          "decoded": "0x007B (Dec: [0, 123])"
         },
         {
           "t": 1.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "0A",
-          "decoded": "Throttle: 10% (25 ADC)"
+          "decoded": "0x0A (Dec: 10)"
         },
         {
           "t": 1.5,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "14",
-          "decoded": "Throttle: 20% (51 ADC)"
+          "decoded": "0x14 (Dec: 20)"
         },
         {
           "t": 2.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "1E",
-          "decoded": "Throttle: 30% (76 ADC)"
+          "decoded": "0x1E (Dec: 30)"
         },
         {
           "t": 2.5,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "28",
-          "decoded": "Throttle: 40% (102 ADC)"
+          "decoded": "0x28 (Dec: 40)"
         },
         {
           "t": 3.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "32",
-          "decoded": "Throttle: 50% (128 ADC)"
+          "decoded": "0x32 (Dec: 50)"
         },
         {
           "t": 3.5,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "3C",
-          "decoded": "Throttle: 60% (153 ADC)"
+          "decoded": "0x3C (Dec: 60)"
         },
         {
           "t": 4.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "46",
-          "decoded": "Throttle: 70% (179 ADC)"
+          "decoded": "0x46 (Dec: 70)"
         },
         {
           "t": 4.5,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "50",
-          "decoded": "Throttle: 80% (204 ADC)"
+          "decoded": "0x50 (Dec: 80)"
         },
         {
           "t": 5.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "5A",
-          "decoded": "Throttle: 90% (230 ADC)"
+          "decoded": "0x5A (Dec: 90)"
         },
         {
           "t": 5.5,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "64",
-          "decoded": "Throttle: 100% (255 ADC)"
+          "decoded": "0x64 (Dec: 100)"
         }
       ]
     },
@@ -460,90 +460,90 @@
         {
           "t": 0.5,
           "id": "0x001",
-          "name": "PEDALS_STATUS",
+          "name": "FRAME_0x001",
           "dlc": 2,
           "raw": "00 7B",
-          "decoded": "Heartbeat: ACTIVE | Bus Voltage: 12.3V"
+          "decoded": "0x007B (Dec: [0, 123])"
         },
         {
           "t": 1.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "0A",
-          "decoded": "Throttle: 10% (25 ADC)"
+          "decoded": "0x0A (Dec: 10)"
         },
         {
           "t": 1.5,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "14",
-          "decoded": "Throttle: 20% (51 ADC)"
+          "decoded": "0x14 (Dec: 20)"
         },
         {
           "t": 2.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "1E",
-          "decoded": "Throttle: 30% (76 ADC)"
+          "decoded": "0x1E (Dec: 30)"
         },
         {
           "t": 2.5,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "28",
-          "decoded": "Throttle: 40% (102 ADC)"
+          "decoded": "0x28 (Dec: 40)"
         },
         {
           "t": 3.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "32",
-          "decoded": "Throttle: 50% (128 ADC)"
+          "decoded": "0x32 (Dec: 50)"
         },
         {
           "t": 3.5,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "3C",
-          "decoded": "Throttle: 60% (153 ADC)"
+          "decoded": "0x3C (Dec: 60)"
         },
         {
           "t": 4.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "46",
-          "decoded": "Throttle: 70% (179 ADC)"
+          "decoded": "0x46 (Dec: 70)"
         },
         {
           "t": 4.5,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "50",
-          "decoded": "Throttle: 80% (204 ADC)"
+          "decoded": "0x50 (Dec: 80)"
         },
         {
           "t": 5.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "5A",
-          "decoded": "Throttle: 90% (230 ADC)"
+          "decoded": "0x5A (Dec: 90)"
         },
         {
           "t": 5.5,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "64",
-          "decoded": "Throttle: 100% (255 ADC)"
+          "decoded": "0x64 (Dec: 100)"
         }
       ]
     },
@@ -628,18 +628,18 @@
         {
           "t": 0.5,
           "id": "0x001",
-          "name": "PEDALS_STATUS",
+          "name": "FRAME_0x001",
           "dlc": 2,
           "raw": "00 7A",
-          "decoded": "Heartbeat: ACTIVE | Bus Voltage: 12.2V"
+          "decoded": "0x007A (Dec: [0, 122])"
         },
         {
           "t": 1.0,
           "id": "0x011",
-          "name": "THROTTLE_COMMAND",
+          "name": "FRAME_0x011",
           "dlc": 1,
           "raw": "32",
-          "decoded": "Throttle: 50%"
+          "decoded": "0x32 (Dec: 50)"
         }
       ]
     }

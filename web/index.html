@@ -226,7 +226,7 @@
           <span class="font-bold text-white font-mono" id="hudTime">t = +0.00s</span>
         </div>
         <div class="border-l border-neutral-800 pl-2">
-          <span class="text-[10px] uppercase text-neutral-400 block">Active Message</span>
+          <span class="text-[10px] uppercase text-neutral-400 block">Active CAN ID</span>
           <span class="font-bold text-pastel-yellow font-mono truncate block" id="hudMessage">BUS STANDBY</span>
         </div>
         <div class="border-l border-neutral-800 pl-2">
@@ -238,7 +238,7 @@
           <span class="font-bold text-neutral-300 font-mono" id="hudPayload">-</span>
         </div>
         <div class="border-l border-neutral-800 pl-2 col-span-2 sm:col-span-1">
-          <span class="text-[10px] uppercase text-neutral-500 block">Decoded Information</span>
+          <span class="text-[10px] uppercase text-neutral-500 block">Payload (Dec / Value)</span>
           <span class="font-bold text-pastel-green font-mono truncate block" id="hudDecoded">No frames at playhead</span>
         </div>
       </div>
@@ -287,7 +287,7 @@
                 <th class="py-1.5 px-3">Message Identifier</th>
                 <th class="py-1.5 px-3">DLC</th>
                 <th class="py-1.5 px-3">Payload (Hex)</th>
-                <th class="py-1.5 px-3">Decoded Information</th>
+                <th class="py-1.5 px-3">Payload (Dec / Value)</th>
               </tr>
             </thead>
             <tbody id="packetTableBody" class="divide-y divide-neutral-900 bg-black text-neutral-200">
@@ -422,17 +422,17 @@
                 { subsystem: "lights_fw", name: "test_can_message_format", file: "./lights_fw/test_main.c", line: 48, status: "PASS", details: "0x021 frame payload formatted" }
               ],
               can_packets: [
-                { t: 0.5, id: "0x001", name: "PEDALS_STATUS", dlc: 2, raw: "00 7B", decoded: "Heartbeat: ACTIVE | Bus Voltage: 12.3V" },
-                { t: 1.0, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "0A", decoded: "Throttle: 10% (25 ADC)" },
-                { t: 1.5, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "14", decoded: "Throttle: 20% (51 ADC)" },
-                { t: 2.0, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "1E", decoded: "Throttle: 30% (76 ADC)" },
-                { t: 2.5, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "28", decoded: "Throttle: 40% (102 ADC)" },
-                { t: 3.0, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "32", decoded: "Throttle: 50% (128 ADC)" },
-                { t: 3.5, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "3C", decoded: "Throttle: 60% (153 ADC)" },
-                { t: 4.0, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "46", decoded: "Throttle: 70% (179 ADC)" },
-                { t: 4.5, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "50", decoded: "Throttle: 80% (204 ADC)" },
-                { t: 5.0, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "5A", decoded: "Throttle: 90% (230 ADC)" },
-                { t: 5.5, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "64", decoded: "Throttle: 100% (255 ADC)" }
+                { t: 0.5, id: "0x001", name: "FRAME_0x001", dlc: 2, raw: "00 7B", decoded: "0x007B (Dec: [0, 123])" },
+                { t: 1.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "0A", decoded: "0x0A (Dec: 10)" },
+                { t: 1.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "14", decoded: "0x14 (Dec: 20)" },
+                { t: 2.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "1E", decoded: "0x1E (Dec: 30)" },
+                { t: 2.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "28", decoded: "0x28 (Dec: 40)" },
+                { t: 3.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "32", decoded: "0x32 (Dec: 50)" },
+                { t: 3.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "3C", decoded: "0x3C (Dec: 60)" },
+                { t: 4.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "46", decoded: "0x46 (Dec: 70)" },
+                { t: 4.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "50", decoded: "0x50 (Dec: 80)" },
+                { t: 5.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "5A", decoded: "0x5A (Dec: 90)" },
+                { t: 5.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "64", decoded: "0x64 (Dec: 100)" }
               ]
             },
             {
@@ -456,7 +456,7 @@
                 { subsystem: "pedals_fw", name: "test_pedal_can_transmission", file: "./main/test_main.c", line: 202, status: "PASS", details: "Transmission valid" }
               ],
               can_packets: [
-                { t: 0.5, id: "0x001", name: "PEDALS_STATUS", dlc: 2, raw: "00 79", decoded: "Heartbeat: ACTIVE | Bus Voltage: 12.1V" }
+                { t: 0.5, id: "0x001", name: "FRAME_0x001", dlc: 2, raw: "00 79", decoded: "0x0079 (Dec: [0, 121])" }
               ]
             }
           ]
