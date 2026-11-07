@@ -171,7 +171,7 @@ if [ ! -S "/tmp/calsol_can.sock" ] && [ -e "$CAN_DEBUGGER_PORT" ]; then
     pkill -f can_bridge_daemon.py 2>/dev/null || true
     rm -f "/tmp/calsol_can.sock" 2>/dev/null || true
     sleep 0.5
-    python3 "${SCRIPT_DIR}/lib/can_bridge_daemon.py" \
+    python3 -u "${SCRIPT_DIR}/lib/can_bridge_daemon.py" \
         --port "$CAN_DEBUGGER_PORT" \
         --unix-socket "/tmp/calsol_can.sock" \
         --tcp-port 5555 \

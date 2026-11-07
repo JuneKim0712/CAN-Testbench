@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CalSol Gen 11 - Hardware Testbench Telemetry</title>
+  <link rel="shortcut icon" href="favicon.ico">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0a0a'/%3E%3Cpath d='M8 16h16M16 8v16' stroke='%2386efac' stroke-width='3' stroke-linecap='square'/%3E%3C/svg%3E">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -895,6 +897,10 @@
     const isLocalHost = ['localhost', '127.0.0.1', 'stolerpi', 'stolerpi.local'].includes(window.location.hostname);
     // On HTTPS (e.g. GitHub Pages), never auto-attempt unencrypted ws:// (Mixed Content block). Default to live_stream.json polling.
     let bridgeUrl = localStorage.getItem('calsol_bridge_url') || (isLocalHost && !isHttps ? `ws://${window.location.hostname}:8765/ws` : '');
+    if (isHttps && bridgeUrl && bridgeUrl.startsWith('ws://')) {
+      bridgeUrl = '';
+      try { localStorage.removeItem('calsol_bridge_url'); } catch (e) {}
+    }
     let bridgeConnected = false;
 
     // Dynamic, assumption-free CAN ID color hashing (works for any ID on the bus)
