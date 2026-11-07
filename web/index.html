@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CalSol Gen 11 - Hardware Testbench Telemetry</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0a0a'/%3E%3Cpath d='M8 16h16M16 8v16' stroke='%2386efac' stroke-width='3' stroke-linecap='square'/%3E%3C/svg%3E">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -244,10 +245,7 @@
           <div class="flex items-center gap-1 border border-neutral-800 bg-black px-2 py-1">
             <span class="text-neutral-500 uppercase">Filter ID:</span>
             <select id="streamIdFilter" onchange="applyStreamIdFilter(this.value)" class="bg-black text-white text-[10px] focus:outline-none">
-              <option value="all">ALL IDS (24/7 STREAM)</option>
-              <option value="0x001">0x001 (SYS_HEARTBEAT)</option>
-              <option value="0x011">0x011 (PEDAL_THROTTLE)</option>
-              <option value="0x021">0x021 (LIGHT_COMMAND)</option>
+              <option value="all">ALL IDS (DYNAMIC)</option>
             </select>
           </div>
         </div>
@@ -427,10 +425,7 @@
           <div class="flex items-center gap-2 font-mono text-[10px]">
             <span class="text-neutral-500 uppercase">Filter ID:</span>
             <select id="consoleIdFilter" onchange="applyStreamIdFilter(this.value)" class="bg-black border border-neutral-800 px-2 py-1 text-white text-[10px] focus:outline-none focus:border-neutral-600">
-              <option value="all">ALL IDS (24/7 STREAM)</option>
-              <option value="0x001">0x001 (SYS_HEARTBEAT)</option>
-              <option value="0x011">0x011 (PEDAL_THROTTLE)</option>
-              <option value="0x021">0x021 (LIGHT_COMMAND)</option>
+              <option value="all">ALL IDS (DYNAMIC)</option>
             </select>
           </div>
         </div>
@@ -891,25 +886,41 @@
     let streamSocket = null;
     let streamPollTimer = null;
     let streamReconnectTimer = null;
-    let bridgeUrl = localStorage.getItem('calsol_bridge_url') || (window.location.hostname ? `ws://${window.location.hostname}:8765/ws` : 'ws://localhost:8765/ws');
+
+    // Secure WebSocket & Mixed-Content Guard
+    const isHttps = window.location.protocol === 'https:';
+    const isLocalHost = ['localhost', '127.0.0.1', 'stolerpi', 'stolerpi.local'].includes(window.location.hostname);
+    // On HTTPS (e.g. GitHub Pages), never auto-attempt unencrypted ws:// (Mixed Content block). Default to live_stream.json polling.
+    let bridgeUrl = localStorage.getItem('calsol_bridge_url') || (isLocalHost && !isHttps ? `ws://${window.location.hostname}:8765/ws` : '');
     let bridgeConnected = false;
 
-    const CAN_COLORS_LIST = [
-      '#fde047', // Pastel Yellow
-      '#7dd3fc', // Pastel Cyan
-      '#86efac', // Pastel Green
-      '#fca5a5', // Pastel Red
-      '#c084fc', // Pastel Purple
-      '#fdba74', // Pastel Orange
-      '#f9a8d4'  // Pastel Pink
-    ];
+    // Dynamic, assumption-free CAN ID color hashing (works for any ID on the bus)
+    function getCanIdColor(canId) {
+      if (!canId) return '#ffffff';
+      let hash = 0;
+      for (let i = 0; i < canId.length; i++) {
+        hash = (hash << 5) - hash + canId.charCodeAt(i);
+        hash |= 0;
+      }
+      const palette = ['#86efac', '#fde047', '#7dd3fc', '#fca5a5', '#c084fc', '#fdba74', '#f9a8d4', '#6ee7b7', '#93c5fd'];
+      return palette[Math.abs(hash) % palette.length];
+    }
 
-    const CAN_COLORS_MAP = {
-      '0x001': '#86efac', // Pastel Green (Heartbeat)
-      '0x011': '#fde047', // Pastel Yellow (Throttle)
-      '0x021': '#7dd3fc', // Pastel Cyan (Lighting)
-      'default': '#ffffff'
-    };
+    // Auto-discover unique CAN IDs from real traffic without hardcoding
+    const discoveredCanIds = new Set();
+    function registerDiscoveredCanId(id, name) {
+      if (!id || discoveredCanIds.has(id)) return;
+      discoveredCanIds.add(id);
+      const label = (name && name !== id && !name.startsWith('FRAME_')) ? `${id} (${name})` : id;
+      [dom.streamIdFilter, dom.consoleIdFilter].forEach(selectEl => {
+        if (selectEl && !selectEl.querySelector(`option[value="${id}"]`)) {
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = label;
+          selectEl.appendChild(opt);
+        }
+      });
+    }
 
     // ─── TAB NAVIGATION CONTROLLER ──────────────────────────────────────────
     function setActiveTab(tabId) {
@@ -995,6 +1006,15 @@
     }
 
     function connectBridgeWebSocket() {
+      if (!bridgeUrl) {
+        updateBridgeStatusUI(false, 'Telemetry Active (live_stream.json)');
+        return;
+      }
+      if (isHttps && bridgeUrl.startsWith('ws://')) {
+        console.warn('Insecure WebSocket blocked on HTTPS origin. Use wss:// or live_stream.json polling.');
+        updateBridgeStatusUI(false, 'HTTPS origin requires wss:// (using live_stream.json)');
+        return;
+      }
       if (!window.WebSocket) {
         updateBridgeStatusUI(false, 'WebSocket Unsupported');
         return;
@@ -1066,14 +1086,17 @@
     }
 
     function formatRealPacket(f) {
+      const pId = f.id || (f.id_hex ? f.id_hex : `0x${Number(f.id_int || 0).toString(16).padStart(3, '0').toUpperCase()}`);
+      const pName = f.name || `FRAME_${pId}`;
+      registerDiscoveredCanId(pId, pName);
       return {
         time: f.time || getNowTimeString(),
         iface: f.iface || '/dev/esp32_ahmed',
-        id: f.id || (f.id_hex ? f.id_hex : `0x${Number(f.id_int || 0).toString(16).padStart(3, '0').toUpperCase()}`),
-        name: f.name || `FRAME_${f.id}`,
+        id: pId,
+        name: pName,
         dlc: f.dlc !== undefined ? f.dlc : (f.raw ? f.raw.split(' ').length : 0),
         raw: f.raw || (f.data ? f.data.toUpperCase().match(/.{1,2}/g)?.join(' ') : ''),
-        decoded: f.decoded || (f.raw ? `Raw Payload: ${f.raw}` : 'Empty')
+        decoded: f.decoded || (f.raw ? `Payload: 0x${f.raw}` : 'Empty')
       };
     }
 
@@ -1124,7 +1147,7 @@
       const html = filtered.length === 0
         ? '<tr><td colspan="7" class="py-6 text-center text-neutral-500 uppercase tracking-wider font-mono">Listening on /dev/esp32_ahmed (500 kbps)... Bus is silent / Awaiting physical CAN frames.</td></tr>'
         : filtered.map((p, idx) => {
-            const col = CAN_COLORS_MAP[p.id] || CAN_COLORS_MAP.default;
+            const col = getCanIdColor(p.id);
             const isNewest = (idx === 0);
             const rowClass = isNewest ? 'bg-neutral-800/80 border-l-2 border-pastel-green' : 'hover:bg-neutral-900';
 
@@ -1155,75 +1178,8 @@
           throw new Error('HTTP ' + res.status);
         }
       } catch (e) {
-        console.warn('Network fetch error, using fallback:', e);
-        historyState = {
-          runs: [
-            {
-              id: "42325039593-pedals",
-              parent_run_id: "42325039593",
-              subsystem: "pedals_fw",
-              subsystems: ["pedals_fw"],
-              commit: "f712294",
-              branch: "main",
-              timestamp: "2026-11-07T01:35:00Z",
-              author: "JuneKim0712",
-              message: "[pedals_fw] Automated Hardware Verification (7/7 Passed)",
-              status: "passed",
-              failure_type: null,
-              duration: "14.5s",
-              lock_duration_sec: 14.1,
-              tests_pass: 7,
-              tests_total: 7,
-              tests: [
-                { subsystem: "pedals_fw", name: "test_throttle_calculation_and_deadzone", file: "./main/test_main.c", line: 196, status: "PASS", details: "Deadzone calculation nominal" },
-                { subsystem: "pedals_fw", name: "test_brake_plausibility_safety_interlock", file: "./main/test_main.c", line: 197, status: "PASS", details: "Plausibility interlock nominal" },
-                { subsystem: "pedals_fw", name: "test_can_driver_lifecycle", file: "./main/test_main.c", line: 198, status: "PASS", details: "Lifecycle nominal" },
-                { subsystem: "pedals_fw", name: "test_can_packet_builder_clamping_and_zeroing", file: "./main/test_main.c", line: 199, status: "PASS", details: "Clamping nominal" },
-                { subsystem: "pedals_fw", name: "test_can_driver_uninitialized_safety", file: "./main/test_main.c", line: 200, status: "PASS", details: "Safety nominal" },
-                { subsystem: "pedals_fw", name: "test_can_receive_timeout", file: "./main/test_main.c", line: 201, status: "PASS", details: "Timeout nominal" },
-                { subsystem: "pedals_fw", name: "test_pedal_can_transmission", file: "./main/test_main.c", line: 202, status: "PASS", details: "Transmission nominal" }
-              ],
-              can_packets: [
-                { t: 0.5, id: "0x001", name: "SYS_HEARTBEAT", dlc: 2, raw: "00 7B", decoded: "Node 1 OK • Watchdog Token: 0x7B" },
-                { t: 1.0, id: "0x011", name: "PEDAL_THROTTLE", dlc: 1, raw: "0A", decoded: "Throttle: 10% [Travel Clamped Nominal]" },
-                { t: 1.5, id: "0x011", name: "PEDAL_THROTTLE", dlc: 1, raw: "14", decoded: "Throttle: 20% [Travel Clamped Nominal]" },
-                { t: 2.0, id: "0x011", name: "PEDAL_THROTTLE", dlc: 1, raw: "1E", decoded: "Throttle: 30% [Travel Clamped Nominal]" },
-                { t: 2.5, id: "0x011", name: "PEDAL_THROTTLE", dlc: 1, raw: "28", decoded: "Throttle: 40% [Travel Clamped Nominal]" },
-                { t: 3.0, id: "0x011", name: "PEDAL_THROTTLE", dlc: 1, raw: "32", decoded: "Throttle: 50% [Travel Clamped Nominal]" },
-                { t: 3.5, id: "0x011", name: "PEDAL_THROTTLE", dlc: 1, raw: "3C", decoded: "Throttle: 60% [Travel Clamped Nominal]" },
-                { t: 4.0, id: "0x011", name: "PEDAL_THROTTLE", dlc: 1, raw: "46", decoded: "Throttle: 70% [Travel Clamped Nominal]" },
-                { t: 4.5, id: "0x011", name: "PEDAL_THROTTLE", dlc: 1, raw: "50", decoded: "Throttle: 80% [Travel Clamped Nominal]" },
-                { t: 5.0, id: "0x011", name: "PEDAL_THROTTLE", dlc: 1, raw: "5A", decoded: "Throttle: 90% [Travel Clamped Nominal]" }
-              ]
-            },
-            {
-              id: "42325039593-lights",
-              parent_run_id: "42325039593",
-              subsystem: "lights_fw",
-              subsystems: ["lights_fw"],
-              commit: "f712294",
-              branch: "main",
-              timestamp: "2026-11-07T01:35:00Z",
-              author: "JuneKim0712",
-              message: "[lights_fw] Automated Hardware Verification (3/3 Passed)",
-              status: "passed",
-              failure_type: null,
-              duration: "9.2s",
-              lock_duration_sec: 8.2,
-              tests_pass: 3,
-              tests_total: 3,
-              tests: [
-                { subsystem: "lights_fw", name: "test_voltage_conversion", file: "./lights_fw/test_main.c", line: 29, status: "PASS", details: "Voltage conversion nominal" },
-                { subsystem: "lights_fw", name: "test_state_toggle", file: "./lights_fw/test_main.c", line: 38, status: "PASS", details: "State toggle nominal" },
-                { subsystem: "lights_fw", name: "test_can_message_format", file: "./lights_fw/test_main.c", line: 48, status: "PASS", details: "Message format nominal" }
-              ],
-              can_packets: [
-                { t: 0.5, id: "0x001", name: "SYS_HEARTBEAT", dlc: 2, raw: "00 7B", decoded: "Node 1 OK • Watchdog Token: 0x7B" },
-                { t: 1.0, id: "0x021", name: "LIGHT_COMMAND", dlc: 1, raw: "7D", decoded: "Headlights: ON • Hazards: OFF • Brake: OFF" }
-              ]
-            }
-          ]
-        };
+        console.warn('Network fetch error for history.json:', e);
+        historyState = { runs: [] };
       }
 
       // Defense-in-depth: Auto-sanitize any stale in_progress runs (> 30 minutes old)
@@ -1265,11 +1221,19 @@
       populateRunSelector();
 
       const requestedRun = urlParams.get('run');
-      if (requestedRun && historyState.runs.some(r => r.id === requestedRun)) {
-        switchRun(requestedRun);
+      if (requestedRun) {
+        const match = (historyState.runs || []).find(r => r.id === requestedRun || r.parent_run_id === requestedRun || String(r.id).startsWith(requestedRun));
+        if (match) {
+          switchRun(match.id);
+        } else {
+          const filtered = getFilteredRuns();
+          if (filtered.length > 0) switchRun(filtered[0].id);
+        }
+        // Direct link from CI: automatically switch to runs view
+        setActiveTab('runs');
       } else {
         const filtered = getFilteredRuns();
-        switchRun(filtered.length > 0 ? filtered[0].id : historyState.runs[0].id);
+        if (filtered.length > 0) switchRun(filtered[0].id);
       }
 
       // Render Homepage Runs and Complete Runs Archive
