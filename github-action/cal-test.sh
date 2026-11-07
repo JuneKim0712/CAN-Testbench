@@ -203,12 +203,16 @@ if [ -S "/tmp/calsol_can.sock" ]; then
     fi
 fi
 
-# Spin up CAN bridge daemon on debugger port if not already active
-DAEMON_PID=""
+# Spin up permanent CAN bridge daemon on debugger port if not already active
 if [ ! -S "/tmp/calsol_can.sock" ] && [ -e "$CAN_DEBUGGER_PORT" ]; then
-    python3 "${SCRIPT_DIR}/lib/can_bridge_daemon.py" --port "$CAN_DEBUGGER_PORT" --unix-socket "/tmp/calsol_can.sock" > /dev/null 2>&1 &
-    DAEMON_PID=$!
-    sleep 0.3
+    echo "[*] Launching permanent CAN Debugger daemon on ${CAN_DEBUGGER_PORT}..."
+    python3 "${SCRIPT_DIR}/lib/can_bridge_daemon.py" \
+        --port "$CAN_DEBUGGER_PORT" \
+        --unix-socket "/tmp/calsol_can.sock" \
+        --tcp-port 5555 \
+        --ws-port 8765 \
+        --json-out "${REPO_ROOT}/web/data/live_stream.json" > /tmp/calsol_can_daemon.log 2>&1 &
+    sleep 0.5
 fi
 
 gh_group "On-Target Silicon Execution & Live CAN Stream (${SUBSYSTEM_SLUG})"
@@ -226,11 +230,8 @@ TEST_EXIT_CODE=$?
 set -e
 gh_endgroup
 
-# Clean up daemon if launched by this run
-if [ -n "$DAEMON_PID" ]; then
-    kill "$DAEMON_PID" 2>/dev/null || true
-    rm -f "/tmp/calsol_can.sock" 2>/dev/null || true
-fi
+# Note: The dedicated CAN bridge daemon (/dev/esp32_ahmed) is kept permanently
+# active across runs to provide continuous 24/7 bus streaming to the web dashboard.
 
 # Stage test results, serial logs, and CAN trace into artifacts
 if [ -d "${TARGET}/build/artifacts" ]; then

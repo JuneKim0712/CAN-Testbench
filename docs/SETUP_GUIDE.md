@@ -123,4 +123,24 @@ sudo loginctl enable-linger $USER
 
 ---
 
+## 5. Setting Up the Permanent 24/7 CAN Bus Sniffer Service (`/dev/esp32_ahmed`)
+
+To maintain an uninterrupted, authentic stream of all physical CAN bus traffic transmitted across the bench:
+
+```bash
+# 1. Copy the systemd unit file
+sudo cp systemd/calsol-can-sniffer.service /etc/systemd/system/
+
+# 2. Reload daemon and enable the service across system reboots
+sudo systemctl daemon-reload
+sudo systemctl enable --now calsol-can-sniffer.service
+
+# 3. Verify real-time sniffer health
+sudo systemctl status calsol-can-sniffer.service
+```
+
+The daemon connects directly to `/dev/esp32_ahmed` at 500 kbps, automatically reconnects if the silicon is reset, broadcasts live frames over WebSocket (port `8765`), Unix socket (`/tmp/calsol_can.sock`), and TCP (`5555`), and atomically writes real packet captures to `web/data/live_stream.json`.
+
+---
+
 [↑ Back to top](#calsol-hardware-testbench-complete-host--hardware-setup-guide)

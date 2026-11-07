@@ -1,0 +1,7 @@
+{
+  "updated_at": null,
+  "interface": "/dev/esp32_ahmed",
+  "baud": 500000,
+  "total_captured": 0,
+  "frames": []
+}

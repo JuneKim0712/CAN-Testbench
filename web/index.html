@@ -238,6 +238,9 @@
           <button onclick="clearStreamLog()" class="px-2.5 py-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-500 text-neutral-300 uppercase transition">
             [CLEAR LOG]
           </button>
+          <button onclick="promptBridgeUrl()" class="px-2 py-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-400 text-pastel-cyan uppercase transition" title="Configure Raspberry Pi WebSocket Bridge URL">
+            [BRIDGE CONFIG]
+          </button>
           <div class="flex items-center gap-1 border border-neutral-800 bg-black px-2 py-1">
             <span class="text-neutral-500 uppercase">Filter ID:</span>
             <select id="streamIdFilter" onchange="applyStreamIdFilter(this.value)" class="bg-black text-white text-[10px] focus:outline-none">
@@ -265,11 +268,12 @@
           <span class="font-bold text-pastel-green block">500 kbps (120Ω Split)</span>
         </div>
         <div class="border-l border-neutral-800 pl-3">
-          <span class="text-[10px] uppercase text-neutral-500 block">Stream Status</span>
+          <span class="text-[10px] uppercase text-neutral-500 block">Bridge Status</span>
           <span class="font-bold text-pastel-green block flex items-center gap-1" id="streamStatusText">
             <span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span>
             ACTIVE 24/7
           </span>
+          <span class="text-[9px] text-neutral-500 font-mono block truncate" id="bridgeStatusLabel">WebSocket / live_stream.json</span>
         </div>
       </div>
 
@@ -382,6 +386,9 @@
           </button>
           <button onclick="clearStreamLog()" class="px-3 py-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-500 text-neutral-300 font-bold uppercase text-[10px] transition font-mono">
             [CLEAR BUFFER]
+          </button>
+          <button onclick="promptBridgeUrl()" class="px-2.5 py-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-400 text-pastel-cyan font-bold uppercase text-[10px] transition font-mono" title="Configure Raspberry Pi WebSocket Bridge URL">
+            [BRIDGE CONFIG]
           </button>
         </div>
       </div>
@@ -877,13 +884,15 @@
     let overviewRunsFilter = 'all';    // 'all' | 'passed' | 'failed'
     let hoverRaf = null;
 
-    // 24/7 Continuous CAN Debugger Stream State
+    // 24/7 Continuous CAN Debugger Stream State (Authentic /dev/esp32_ahmed listener)
     let streamPaused = false;
     let streamFilterId = 'all';
     let streamPackets = [];
-    let streamInterval = null;
-    let streamThrottleVal = 32;
-    let streamWatchdogToken = 123;
+    let streamSocket = null;
+    let streamPollTimer = null;
+    let streamReconnectTimer = null;
+    let bridgeUrl = localStorage.getItem('calsol_bridge_url') || (window.location.hostname ? `ws://${window.location.hostname}:8765/ws` : 'ws://localhost:8765/ws');
+    let bridgeConnected = false;
 
     const CAN_COLORS_LIST = [
       '#fde047', // Pastel Yellow
@@ -939,7 +948,7 @@
       }
     }
 
-    // ─── 24/7 CONTINUOUS STREAM GENERATOR & LOGGER ──────────────────────────
+    // ─── AUTHENTIC REAL-TIME CAN STREAM INGESTION (/dev/esp32_ahmed) ────────
     function getNowTimeString() {
       const d = new Date();
       const hh = String(d.getHours()).padStart(2, '0');
@@ -949,86 +958,129 @@
       return `${hh}:${mm}:${ss}.${ms}`;
     }
 
-    function initContinuousStream(initialPackets) {
-      const now = new Date();
-      streamPackets = (initialPackets || []).map((p, idx) => {
-        const offsetSec = (initialPackets.length - idx) * 0.4;
-        const pastTime = new Date(now.getTime() - offsetSec * 1000);
-        const hh = String(pastTime.getHours()).padStart(2, '0');
-        const mm = String(pastTime.getMinutes()).padStart(2, '0');
-        const ss = String(pastTime.getSeconds()).padStart(2, '0');
-        const ms = String(pastTime.getMilliseconds()).padStart(3, '0');
-        return {
-          time: `${hh}:${mm}:${ss}.${ms}`,
-          iface: '/dev/esp32_ahmed',
-          id: p.id,
-          name: p.name || (p.id === '0x001' ? 'SYS_HEARTBEAT' : (p.id === '0x011' ? 'PEDAL_THROTTLE' : 'LIGHT_COMMAND')),
-          dlc: p.dlc || (p.id === '0x001' ? 2 : 1),
-          raw: p.raw,
-          decoded: p.decoded
-        };
-      });
-
+    function initContinuousStream() {
+      streamPackets = [];
       renderStreamTables();
-
-      if (streamInterval) clearInterval(streamInterval);
-      streamInterval = setInterval(streamTick, 850);
+      connectBridgeWebSocket();
+      startPollingLiveStream();
     }
 
-    function streamTick() {
-      if (streamPaused) return;
-
-      const types = ['throttle', 'throttle', 'heartbeat', 'lighting'];
-      const pick = types[Math.floor(Math.random() * types.length)];
-      let newPacket = null;
-
-      if (pick === 'throttle') {
-        const delta = (Math.random() - 0.48) * 8;
-        streamThrottleVal = Math.max(0, Math.min(100, Math.round(streamThrottleVal + delta)));
-        const hex = streamThrottleVal.toString(16).padStart(2, '0').toUpperCase();
-        newPacket = {
-          time: getNowTimeString(),
-          iface: '/dev/esp32_ahmed',
-          id: '0x011',
-          name: 'PEDAL_THROTTLE',
-          dlc: 1,
-          raw: hex,
-          decoded: `Throttle: ${streamThrottleVal}% [Travel Clamped Nominal]`
-        };
-      } else if (pick === 'heartbeat') {
-        streamWatchdogToken = (streamWatchdogToken + 1) % 256;
-        const hexToken = streamWatchdogToken.toString(16).padStart(2, '0').toUpperCase();
-        newPacket = {
-          time: getNowTimeString(),
-          iface: '/dev/esp32_ahmed',
-          id: '0x001',
-          name: 'SYS_HEARTBEAT',
-          dlc: 2,
-          raw: `00 ${hexToken}`,
-          decoded: `Node 1 OK • Watchdog Token: 0x${hexToken}`
-        };
-      } else {
-        const states = [
-          { raw: '00', dec: 'Headlights: ON • Hazards: OFF • Brake: OFF' },
-          { raw: '08', dec: 'Brake Lights: ACTIVE • Tail: ON' },
-          { raw: '04', dec: 'Hazard Flashers: ACTIVE (2 Hz)' },
-          { raw: '01', dec: 'Left Turn Signal: ACTIVE' }
-        ];
-        const st = states[Math.floor(Math.random() * states.length)];
-        newPacket = {
-          time: getNowTimeString(),
-          iface: '/dev/esp32_ahmed',
-          id: '0x021',
-          name: 'LIGHT_COMMAND',
-          dlc: 1,
-          raw: st.raw,
-          decoded: st.dec
-        };
+    function promptBridgeUrl() {
+      const current = bridgeUrl;
+      const next = prompt('Enter Raspberry Pi CAN Debugger WebSocket URL (e.g. ws://stolerpi.local:8765/ws or ws://192.168.1.100:8765/ws):', current);
+      if (next && next.trim() && next !== current) {
+        setBridgeUrl(next.trim());
       }
+    }
 
-      streamPackets.unshift(newPacket);
-      if (streamPackets.length > 250) streamPackets.pop();
+    function setBridgeUrl(url) {
+      if (!url) return;
+      bridgeUrl = url.trim();
+      localStorage.setItem('calsol_bridge_url', bridgeUrl);
+      if (streamSocket) {
+        try { streamSocket.close(); } catch (e) {}
+      } else {
+        connectBridgeWebSocket();
+      }
+    }
 
+    function updateBridgeStatusUI(connected, statusMsg) {
+      bridgeConnected = connected;
+      const badgeHtml = connected
+        ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> ONLINE (REAL TIME)'
+        : '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> LISTENING (POLLING / LOG)';
+
+      if (dom.streamStatusText) dom.streamStatusText.innerHTML = badgeHtml;
+      if (dom.bridgeStatusLabel) dom.bridgeStatusLabel.innerText = statusMsg || (connected ? 'WebSocket Active' : 'Polling live_stream.json');
+    }
+
+    function connectBridgeWebSocket() {
+      if (!window.WebSocket) {
+        updateBridgeStatusUI(false, 'WebSocket Unsupported');
+        return;
+      }
+      try {
+        if (streamSocket) {
+          try { streamSocket.close(); } catch (e) {}
+          streamSocket = null;
+        }
+        updateBridgeStatusUI(false, `Connecting to ${bridgeUrl}...`);
+        streamSocket = new WebSocket(bridgeUrl);
+
+        streamSocket.onopen = () => {
+          updateBridgeStatusUI(true, `Connected: ${bridgeUrl}`);
+        };
+
+        streamSocket.onmessage = (event) => {
+          if (streamPaused) return;
+          try {
+            const data = JSON.parse(event.data);
+            if (data.event === 'frame' || data.id) {
+              ingestRealFrame(data);
+            }
+          } catch (e) {}
+        };
+
+        streamSocket.onclose = () => {
+          updateBridgeStatusUI(false, 'Disconnected (Retrying / Polling log)');
+          streamSocket = null;
+          if (streamReconnectTimer) clearTimeout(streamReconnectTimer);
+          streamReconnectTimer = setTimeout(() => {
+            if (!streamSocket) connectBridgeWebSocket();
+          }, 5000);
+        };
+
+        streamSocket.onerror = () => {
+          if (streamSocket) {
+            try { streamSocket.close(); } catch (e) {}
+          }
+        };
+      } catch (e) {
+        updateBridgeStatusUI(false, 'Connection Error');
+      }
+    }
+
+    async function startPollingLiveStream() {
+      if (streamPollTimer) clearInterval(streamPollTimer);
+      streamPollTimer = setInterval(async () => {
+        if (bridgeConnected || streamPaused) return;
+        try {
+          const res = await fetch('data/live_stream.json?t=' + Date.now());
+          if (res.ok) {
+            const payload = await res.json();
+            if (payload && Array.isArray(payload.frames)) {
+              let changed = false;
+              payload.frames.forEach(f => {
+                const exists = streamPackets.some(p => p.time === f.time && p.id === f.id && p.raw === f.raw);
+                if (!exists) {
+                  streamPackets.unshift(formatRealPacket(f));
+                  changed = true;
+                }
+              });
+              if (streamPackets.length > 300) streamPackets.length = 300;
+              if (changed) renderStreamTables();
+            }
+          }
+        } catch (e) {}
+      }, 1500);
+    }
+
+    function formatRealPacket(f) {
+      return {
+        time: f.time || getNowTimeString(),
+        iface: f.iface || '/dev/esp32_ahmed',
+        id: f.id || (f.id_hex ? f.id_hex : `0x${Number(f.id_int || 0).toString(16).padStart(3, '0').toUpperCase()}`),
+        name: f.name || `FRAME_${f.id}`,
+        dlc: f.dlc !== undefined ? f.dlc : (f.raw ? f.raw.split(' ').length : 0),
+        raw: f.raw || (f.data ? f.data.toUpperCase().match(/.{1,2}/g)?.join(' ') : ''),
+        decoded: f.decoded || (f.raw ? `Raw Payload: ${f.raw}` : 'Empty')
+      };
+    }
+
+    function ingestRealFrame(f) {
+      const packet = formatRealPacket(f);
+      streamPackets.unshift(packet);
+      if (streamPackets.length > 300) streamPackets.pop();
       renderStreamTables();
     }
 
@@ -1040,7 +1092,9 @@
 
       const statusHtml = streamPaused
         ? '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> PAUSED'
-        : '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> ACTIVE 24/7';
+        : (bridgeConnected
+            ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> ONLINE (REAL TIME)'
+            : '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> LISTENING (POLLING / LOG)');
 
       if (dom.streamStatusText) dom.streamStatusText.innerHTML = statusHtml;
     }
@@ -1068,7 +1122,7 @@
       if (dom.consoleTotalCount) dom.consoleTotalCount.innerText = totalMsg;
 
       const html = filtered.length === 0
-        ? '<tr><td colspan="7" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">Listening on /dev/esp32_ahmed (500 kbps)... Awaiting matching frames.</td></tr>'
+        ? '<tr><td colspan="7" class="py-6 text-center text-neutral-500 uppercase tracking-wider font-mono">Listening on /dev/esp32_ahmed (500 kbps)... Bus is silent / Awaiting physical CAN frames.</td></tr>'
         : filtered.map((p, idx) => {
             const col = CAN_COLORS_MAP[p.id] || CAN_COLORS_MAP.default;
             const isNewest = (idx === 0);
@@ -1081,7 +1135,7 @@
                 <td class="py-1.5 px-3 font-bold" style="color: ${col}">${p.id}</td>
                 <td class="py-1.5 px-3 text-white uppercase">${p.name}</td>
                 <td class="py-1.5 px-3 text-neutral-400">${p.dlc} B</td>
-                <td class="py-1.5 px-3 text-neutral-200 font-mono">${p.raw}</td>
+                <td class="py-1.5 px-3 text-neutral-200 font-mono">${p.raw || '-'}</td>
                 <td class="py-1.5 px-3 text-pastel-green font-medium">${p.decoded}</td>
               </tr>
             `;
@@ -1198,14 +1252,8 @@
         });
       }
 
-      // Seed 24/7 continuous stream buffer with baseline frames
-      let seedPackets = [];
-      historyState.runs.forEach(r => {
-        if (r.can_packets && r.can_packets.length > 0) {
-          seedPackets = seedPackets.concat(r.can_packets);
-        }
-      });
-      initContinuousStream(seedPackets);
+      // Real-time continuous 24/7 CAN sniffer stream (/dev/esp32_ahmed)
+      initContinuousStream();
 
       // Check URL parameters
       const urlParams = new URLSearchParams(window.location.search);
