@@ -1,4 +1,6 @@
 /* ========================= CAN.h =========================
+    CalSol Gen 11 - Universal CAN 2.0B / TWAI Hardware Driver
+    Target: ESP32-S3 with TI TCAN332 Transceiver (500 kbps, 20 TQ)
     JonathanSHJ, Jan 23 2026
 
     *Please Read*
