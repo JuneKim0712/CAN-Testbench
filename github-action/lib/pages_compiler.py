@@ -251,9 +251,33 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
         }
         new_runs.append(sub_run)
 
-    # Prepend and limit history
-    existing_runs = [r for r in history.get("runs", []) if not str(r.get("id")).startswith(str(run_id))]
-    history["runs"] = new_runs + existing_runs[:48]
+    # Prepend and limit history with automated stale in_progress sanitization
+    now_utc = datetime.now(timezone.utc)
+    sanitized_existing = []
+    for r in history.get("runs", []):
+        if str(r.get("id")).startswith(str(run_id)):
+            continue
+        if r.get("status") == "in_progress":
+            ts_str = r.get("timestamp")
+            try:
+                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")) if ts_str else None
+                age_sec = (now_utc - ts).total_seconds() if ts else 999999
+            except Exception:
+                age_sec = 999999
+            if age_sec > 1800:
+                r["status"] = "failed"
+                r["failure_type"] = "lock_timeout"
+                r["failure_details"] = {
+                    "title": "Hardware Execution Lock Timeout",
+                    "exit_code": "124 (Workflow Timeout)",
+                    "location": r.get("subsystem", "ECU"),
+                    "diff": "Runner job exceeded maximum execution window. Process aborted.",
+                    "repro": f"./github-action/cal-test.sh {r.get('subsystem', 'pedals_fw')}/test /dev/esp32_johnathan",
+                    "summary": "Execution timed out while waiting for hardware mutex or serial assertions."
+                }
+                r["duration"] = "Timed Out (>30m)"
+        sanitized_existing.append(r)
+    history["runs"] = new_runs + sanitized_existing[:48]
     history["generated_at"] = datetime.now(timezone.utc).isoformat()
 
     with open(history_file, "w", encoding="utf-8") as f:
