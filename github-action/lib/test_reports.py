@@ -24,6 +24,7 @@ class ReportTests(unittest.TestCase):
             (artifacts / 'custom_fw_can_trace.jsonl').write_text(json.dumps(frame))
             runs = compile_run_record(temp, '1', artifacts_dir=artifacts)
             self.assertEqual('passed', runs[0]['status'])
+            self.assertEqual('custom_fw', runs[0]['tests'][0]['subsystem'])
             self.assertEqual(1, len(runs[0]['can_packets']))
             self.assertEqual('fixture', runs[0]['can_packets'][0]['session_id'])
             report['passed'] = False

@@ -31,7 +31,7 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None, artifacts_dir=No
             static = item
     new_runs = []
     for name, report in reports.items():
-        tests = report.get('tests', [])
+        tests = [{**test, 'subsystem': name} for test in report.get('tests', [])]
         completed = report.get('passed') is True and bool(tests)
         complete_status = completed and static.get('status') == 'passed'
         packets, identities = [], set()

@@ -776,15 +776,15 @@
         <div class="bg-black border border-neutral-800 p-2.5 space-y-1">
           <div class="text-[10px] uppercase text-neutral-500">Terminal Flash Command:</div>
           <div class="text-white text-[11px] font-mono select-all break-all leading-relaxed" id="flashCmd">
-            python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 pedals_fw.bin
+            ./github-action/cal-test.sh pedals_fw/test
           </div>
         </div>
 
         <div class="space-y-1.5 pt-1">
-          <div class="text-[10px] uppercase text-neutral-500">Verified CI Build Artifacts:</div>
+          <div class="text-[10px] uppercase text-neutral-500">CI Build Artifacts - Check Selected Run Status:</div>
           <div class="space-y-1">
             <div class="p-2 border border-neutral-800 bg-black flex items-center justify-between text-[11px]">
-              <span class="text-white font-mono uppercase">pedals_fw.bin</span>
+              <span class="text-white font-mono uppercase">Application binary</span>
               <span class="text-neutral-500 uppercase">Flash Image</span>
             </div>
             <div class="p-2 border border-neutral-800 bg-black flex items-center justify-between text-[11px]">
@@ -809,7 +809,7 @@
             [CI RUN HISTORY] Complete Execution Archive
           </h2>
           <p class="text-[11px] text-neutral-500 uppercase mt-0.5 font-mono">
-            All 13 historical hardware verification runs
+            Historical hardware verification runs
           </p>
         </div>
 
@@ -1431,7 +1431,7 @@
           if (r.failure_type === 'build_failure') tag = '[FAIL: BUILD]';
           else if (r.failure_type === 'lock_timeout') tag = '[FAIL: TIMEOUT]';
           else if (r.failure_type === 'static_analysis_failure') tag = '[FAIL: STATIC CHECK]';
-          else tag = '[FAIL: ASSERTION]';
+          else tag = r.failure_type === 'assertion_failure' ? '[FAIL: ASSERTION]' : '[FAIL: VERIFICATION]';
         }
         const sub = r.subsystem || (r.subsystems ? r.subsystems[0] : 'ECU');
         const subLabel = sub === 'pedals_fw' ? 'pedals_fw (Brake)' : (sub === 'lights_fw' ? 'lights_fw (Light)' : sub);
@@ -1464,8 +1464,8 @@
       }
 
       if (dom.runDuration) dom.runDuration.innerText = currentRun.duration || '0.0s';
-      if (dom.runLockTime) dom.runLockTime.innerText = `${currentRun.lock_duration_sec || 0}s`;
-      if (dom.statLockScope) dom.statLockScope.innerText = `${currentRun.lock_duration_sec || 0}s`;
+      if (dom.runLockTime) dom.runLockTime.innerText = currentRun.lock_duration_sec == null ? 'Not recorded' : `${currentRun.lock_duration_sec}s`;
+      if (dom.statLockScope) dom.statLockScope.innerText = currentRun.lock_duration_sec == null ? 'Not recorded' : `${currentRun.lock_duration_sec}s`;
 
       const badge = dom.runStatusBadge;
       const triageBox = dom.failureTriageBox;
@@ -1512,7 +1512,7 @@
           if (fType === 'build_failure') badge.innerText = '[STATUS: COMPILATION FAILED]';
           else if (fType === 'lock_timeout') badge.innerText = '[STATUS: BENCH TIMEOUT]';
           else if (fType === 'static_analysis_failure') badge.innerText = '[STATUS: STATIC CHECK FAILED]';
-          else badge.innerText = '[STATUS: ASSERTION FAILED]';
+          else badge.innerText = fType === 'assertion_failure' ? '[STATUS: ASSERTION FAILED]' : '[STATUS: VERIFICATION FAILED]';
           badge.className = 'border border-pastel-redBorder/40 bg-pastel-redBg/30 text-pastel-red px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center';
         }
 
@@ -1556,7 +1556,7 @@
       if (dom.cardDutFw) dom.cardDutFw.innerText = sub;
 
       if (dom.flashCmd) {
-        dom.flashCmd.innerText = `python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 ${sub}.bin`;
+        dom.flashCmd.innerText = `./github-action/cal-test.sh ${sub}/test`;
       }
 
       if (dom.testRatioLabel) dom.testRatioLabel.innerText = `${passCount} / ${totalCount} PASSED`;
@@ -1624,7 +1624,7 @@
         return `
           <tr class="${rowClass} transition">
             <td class="py-2 px-3">${statusBadge}</td>
-            <td class="py-2 px-3 text-neutral-400 uppercase font-semibold">${t.subsystem}</td>
+            <td class="py-2 px-3 text-neutral-400 uppercase font-semibold">${t.subsystem || currentRun.subsystem || 'Unknown'}</td>
             <td class="py-2 px-3 text-white font-bold">${t.name}</td>
             <td class="py-2 px-3 text-neutral-500">${t.file}:${t.line}</td>
             <td class="py-2 px-3 ${t.status === 'FAIL' ? 'text-pastel-red font-bold' : (t.status === 'RUNNING' ? 'text-pastel-cyan font-bold' : 'text-neutral-400')}">${t.details}</td>
@@ -1674,7 +1674,7 @@
       if (!legend) return;
       const distinct = getDistinctIds();
       if (distinct.length === 0) {
-        legend.innerHTML = '<span class="text-neutral-500 font-mono text-[10px]">[IN-MEMORY TEST • NO BUS BROADCASTS]</span>';
+        legend.innerHTML = '<span class="text-neutral-500 font-mono text-[10px]">[NO PHYSICAL CAPTURE - TRANSMISSION NOT ESTABLISHED]</span>';
         return;
       }
       legend.innerHTML = distinct.map(id => {
@@ -1925,7 +1925,7 @@
         if (dom.hudMessage) dom.hudMessage.innerText = 'NO BUS TRAFFIC';
         if (dom.hudDelta) dom.hudDelta.innerText = '—';
         if (dom.hudPayload) dom.hudPayload.innerText = '—';
-        if (dom.hudDecoded) dom.hudDecoded.innerText = 'In-memory unit assertions only';
+        if (dom.hudDecoded) dom.hudDecoded.innerText = 'No physical reception evidence';
         return;
       }
 

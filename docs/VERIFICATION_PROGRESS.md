@@ -19,7 +19,8 @@
   report job succeeded and uploaded telemetry artifacts. This is a genuine
   hardware acceptance failure, not a green CI run.
 - Bridge and private viewer are deployed independently of the CI checkout under
-  `/opt/calsol/releases/f6ea66637722c8f8d2c8a43b2a4028b565b1d05f`.
+  a versioned directory under `/opt/calsol/releases/`. The service's
+  WorkingDirectory identifies the active revision.
   Persistent telemetry is under /var/lib/calsol and rotated logs /var/log/calsol.
 - The loopback viewer was browser-verified through SSH. Tailscale Serve requires
   account access unavailable in this session, so PRIVATE_VIEWER.md provides
@@ -61,7 +62,7 @@ receives the other's traffic. They require bench-side correction/confirmation.
 
 ## Final CI evidence
 
-Code revision: f6ea66637722c8f8d2c8a43b2a4028b565b1d05f.
+CI-tested core revision: f6ea66637722c8f8d2c8a43b2a4028b565b1d05f.
 Final run: https://github.com/JuneKim0712/CAN-Testbench/actions/runs/42360396169
 
 - Software regression/static-analysis job: passed (23 tests).
@@ -75,6 +76,11 @@ Final run: https://github.com/JuneKim0712/CAN-Testbench/actions/runs/42360396169
 - Versioned services are active; ports 5555, 8080 and 8765 bind to 127.0.0.1 only.
 - The private viewer state retains both verified CI runs. No main-branch merge
   or GitHub Pages production deployment was performed with failed hardware gates.
+- Browser verification prompted a follow-up presentation correction: physical
+  evidence failures are labeled verification failures, each test has a subsystem,
+  empty captures do not imply no broadcasts, and the UI uses the metadata-based
+  runner command instead of a fixed application flash offset. Report regression
+  assertions and JavaScript syntax checks cover those corrections.
 
 November 7, 2026. This is an intermediate checkpoint, not release approval.
 
