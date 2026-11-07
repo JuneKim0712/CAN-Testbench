@@ -301,54 +301,7 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
     if captured_frames:
         print(f"[+] Captured {len(captured_frames)} physical CAN frames on bus during test run.")
 
-    # Write GitHub Step Summary if running in GitHub Actions
-    gh_summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
-    if gh_summary_file:
-        try:
-            with open(gh_summary_file, "a", encoding="utf-8") as f:
-                status_title = "PASSED" if passed else "FAILED"
-                sub_title = f": {subsystem}" if subsystem else ""
-                f.write(f"\n### Subsystem Test Results{sub_title} ({status_title})\n\n")
-
-                failed_items = [r for r in results if r[0] == "FAIL"]
-                if failed_items:
-                    f.write("#### ❌ Failed Assertions\n\n")
-                    f.write("| Test Function | Details |\n")
-                    f.write("| :--- | :--- |\n")
-                    for _, name, details in failed_items:
-                        f.write(f"| `{name}` | `{details}` |\n")
-                    f.write("\n")
-
-                open_attr = " open" if not passed else ""
-                f.write(f"<details{open_attr}>\n")
-                f.write(f"<summary><b>All Unit Test Assertions ({len(results)} total)</b></summary>\n\n")
-                f.write("| Status | Test Function | Details |\n")
-                f.write("| :---: | :--- | :--- |\n")
-                for status, test_name, raw in results:
-                    f.write(f"| `{status}` | `{test_name}` | `{raw}` |\n")
-                if summary:
-                    f.write(f"\n**Summary:** {summary}\n")
-                else:
-                    f.write(f"\n**Summary:** Timed out ({timeout}s) with no response from board.\n")
-                f.write("\n</details>\n")
-
-                if captured_frames:
-                    f.write(f"\n<details open>\n<summary><b>CAN Bus Telemetry ({len(captured_frames)} frames captured)</b></summary>\n\n")
-                    f.write("| Time (rel) | CAN ID | Message Name | DLC | Payload | Decoded Signal Interpretation |\n")
-                    f.write("| :---: | :---: | :--- | :---: | :---: | :--- |\n")
-                    for fr in captured_frames[:25]:  # show up to 25 frames cleanly
-                        f.write(f"| `{fr['rel_time']}` | `{fr['id']}` | `{fr['name']}` | {fr['dlc']} | `0x{fr['data']}` | {fr['decoded']} |\n")
-                    if len(captured_frames) > 25:
-                        f.write(f"\n*... and {len(captured_frames) - 25} more frames recorded to can_trace.jsonl.*\n")
-                    f.write("\n</details>\n")
-                else:
-                    target_dbg = can_port if can_port else "/dev/esp32_ahmed"
-                    f.write(f"\n<details>\n<summary><b>CAN Bus Telemetry (0 frames captured on {target_dbg})</b></summary>\n\n")
-                    f.write(f"> *Dedicated CAN Debugger ({target_dbg} @ 500 kbps) actively monitored the physical bus during this test run. Zero differential frames were asserted on the bus.*\n")
-                    f.write("\n</details>\n")
-        except Exception as e:
-            print(f"[-] Note: Could not write to GITHUB_STEP_SUMMARY: {e}", file=sys.stderr)
-
+    # Step summary is handled centrally by pr_reporter to keep summary dedicated to unit tests
     # Save structured JSON
     if output_json:
         try:

@@ -80,22 +80,16 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
     short_sha = commit_sha[:7] if commit_sha else "local-HEAD"
     run_url = f"https://github.com/{repo}/actions/runs/{run_id}" if repo and run_id else ""
 
-    # Determine static analysis status
+    # Determine overall status
     static_job = next((j for j in jobs if "static-analysis" in j.get("name", "").lower() or "lint" in j.get("name", "").lower()), None)
     static_ok = (static_job.get("conclusion") == "success") if static_job else True
     
     hw_jobs = [j for j in jobs if j.get("name", "").startswith("Test ")]
-    report_map = {tr.get("subsystem", ""): tr for tr in test_reports}
-
-    # Verify that all hardware jobs succeeded
-    hw_all_passed = True
-    for j in hw_jobs:
-        if j.get("conclusion") == "failure":
-            hw_all_passed = False
+    hw_all_passed = not any(j.get("conclusion") == "failure" for j in hw_jobs)
 
     total_tests_run = 0
     total_tests_passed = 0
-    all_can_traffic = []
+    all_tests_flat = []
 
     for tr in test_reports:
         if not tr.get("passed", False):
@@ -103,133 +97,66 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
         total_tests_run += tr.get("total_assertions", 0)
         total_tests_passed += tr.get("passed_count", 0)
         sub_name = tr.get("subsystem", "ECU")
-        for fr in tr.get("can_traffic", []):
-            fr_copy = dict(fr)
-            fr_copy["subsystem"] = sub_name
-            all_can_traffic.append(fr_copy)
+        for t in tr.get("tests", []):
+            t_copy = dict(t)
+            t_copy["subsystem"] = sub_name
+            all_tests_flat.append(t_copy)
 
     has_crashes = any(cr.get("has_crashed") for cr in crash_reports)
-    overall_success = static_ok and hw_all_passed and not has_crashes
+    overall_success = static_ok and hw_all_passed and not has_crashes and (total_tests_run > 0)
 
-    md = []
-    md.append(IDENTIFIER_TAG)
-
-    # 1. Executive Status Header & Live Web Telemetry Portal Link
-    status_str = "PASSED" if overall_success else "FAILED"
-    status_badge = "✅ Passed" if overall_success else "❌ Failed"
+    # Web Portal Links
     owner = repo.split('/')[0] if repo and '/' in repo else "JuneKim0712"
     repo_name = repo.split('/')[1] if repo and '/' in repo else "CAN-Testbench"
     web_portal_url = f"https://{owner}.github.io/{repo_name}/?run={run_id}" if run_id else f"https://{owner}.github.io/{repo_name}/"
     commit_url = f"https://github.com/{repo}/commit/{commit_sha}" if repo and commit_sha else ""
 
-    md.append(f"## CalSol Hardware-in-the-Loop Testbench: {status_str}\n")
-    md.append(f"> 🌐 **Interactive Telemetry Portal:** [{web_portal_url}]({web_portal_url})\n")
-    md.append(f"> **Status:** {status_badge} | **GitHub Action Run:** [`#{run_id}`]({run_url}) | **Commit:** [`{short_sha}`]({commit_url}) | **Target:** `stolerpi (ARM64 HIL)`\n")
+    md = []
+    md.append(IDENTIFIER_TAG)
 
-    # 2. Bench Hardware Node Map & Summary
-    md.append("### Subsystem Execution Summary\n")
-    md.append("| Subsystem | Target Node & Port | Unit Test Results | CAN Traffic | Status |")
-    md.append("| :--- | :---: | :---: | :---: | :---: |")
+    # 1. Executive Unit Tests Header
+    status_str = "PASSED" if overall_success else "FAILED"
+    status_badge = "✅ Passed" if overall_success else "❌ Failed"
+    md.append(f"## CalSol Hardware Unit Tests: {status_str} ({total_tests_passed} / {total_tests_run} Passed)\n")
+    md.append(f"> 🌐 **Interactive Telemetry & Waveform Portal:** [{web_portal_url}]({web_portal_url})\n")
+    md.append(f"> **Status:** {status_badge} | **Action Run:** [`#{run_id}`]({run_url}) | **Commit:** [`{short_sha}`]({commit_url}) | **Target:** `stolerpi (ARM64 HIL)`\n")
 
-    if hw_jobs:
-        for j in hw_jobs:
-            raw_name = j.get("name", "").replace("Test ", "").strip()
-            sub_name = raw_name.split()[0] if " " in raw_name else raw_name
-            conclusion = j.get("conclusion", "in_progress")
-            tr = report_map.get(sub_name)
-
-            if tr:
-                results_text = f"**{tr.get('passed_count', 0)}** passed / {tr.get('failed_count', 0)} failed"
-                port_text = tr.get("port", "/dev/esp32_johnathan")
-                can_count = len(tr.get("can_traffic", []))
-                can_text = f"{can_count} frames" if can_count > 0 else "0 frames (bus quiet)"
-                badge = "✅ Passed" if tr.get("passed") else "❌ Failed"
-            else:
-                results_text = "Completed" if conclusion == "success" else "Check build/flash logs"
-                port_text = "/dev/esp32_johnathan"
-                can_text = "—"
-                badge = "✅ Passed" if conclusion == "success" else ("❌ Failed" if conclusion == "failure" else "In Progress")
-
-            md.append(f"| `{sub_name}` | `{port_text}` | {results_text} | {can_text} | {badge} |")
-    elif test_reports:
-        for tr in test_reports:
-            sub = tr.get("subsystem", "ECU")
-            status = "✅ Passed" if tr.get("passed") else "❌ Failed"
-            results_text = f"**{tr.get('passed_count', 0)}** passed / {tr.get('failed_count', 0)} failed"
-            can_count = len(tr.get("can_traffic", []))
-            can_text = f"{can_count} frames" if can_count > 0 else "0 frames (bus quiet)"
-            md.append(f"| `{sub}` | `{tr.get('port', '/dev/esp32_johnathan')}` | {results_text} | {can_text} | {status} |")
-    else:
-        md.append("| *No Subsystems Tested* | — | — | — | Skipped |")
-    md.append("")
-
-    # Static Analysis Gate Status
-    if static_job:
-        status_sym = "Passed" if static_ok else "Failed"
-        md.append(f"- **Static Analysis (cppcheck):** {status_sym} (0 critical memory/syntax defects)\n")
-
-    # 3. Live Physical CAN Bus Traffic Inspection
-    md.append("### CAN Bus Telemetry & Traffic\n")
-    if all_can_traffic:
-        md.append(f"> **Bus Monitor:** Active on `/dev/esp32_ahmed` (500 kbps) | **Total Captured Frames:** {len(all_can_traffic)}\n")
-        md.append("<details open>\n<summary><b>Decoded Bus Packets</b></summary>\n")
+    # 2. Dedicated Unit Test Assertions Breakdown Table
+    md.append("### Unit Test Assertions Breakdown\n")
+    if all_tests_flat:
+        md.append("| Status | Subsystem | Test Function | Location | Diagnostic Summary |")
+        md.append("| :---: | :---: | :--- | :--- | :--- |")
+        for t in all_tests_flat:
+            st = t.get("status", "PASS")
+            icon = "PASS" if st == "PASS" else "FAIL"
+            loc = f"{t.get('file', '')}:{t.get('line', '')}" if t.get('file') else "—"
+            details = t.get("details", "")
+            md.append(f"| `{icon}` | `{t.get('subsystem', '')}` | `{t.get('name', '')}` | `{loc}` | `{details}` |")
         md.append("")
-        md.append("| Time (rel) | Subsystem | CAN ID | Message Name | DLC | Payload | Decoded Signal Interpretation |")
-        md.append("| :---: | :---: | :---: | :--- | :---: | :---: | :--- |")
-        for fr in all_can_traffic[:30]:
-            sub = fr.get("subsystem", "ECU")
-            md.append(f"| `{fr.get('rel_time')}` | `{sub}` | `{fr.get('id')}` | **{fr.get('name')}** | `{fr.get('dlc')}` | `0x{fr.get('data')}` | {fr.get('decoded')} |")
-        if len(all_can_traffic) > 30:
-            md.append(f"\n*... and {len(all_can_traffic) - 30} additional frames recorded in `can_trace.jsonl` artifact.*")
-        md.append("\n</details>\n")
     else:
-        md.append("> **Bus Monitor:** Active on `/dev/esp32_ahmed` (500 kbps) | **Captured Frames:** 0\n")
-        md.append("> \n> *The dedicated CAN Debugger monitored the physical differential bus during the test suite execution. No differential frames were detected during this window (the bus remained idle or tests executed internal logic).*\n")
+        md.append("*No unit test assertions recorded.*\n\n")
 
-    # 4. Detailed Unit Test Assertions
-    if test_reports:
-        md.append("### Unit Test Assertions\n")
-        for tr in test_reports:
-            sub = tr.get("subsystem", "ECU")
-            tests = tr.get("tests", [])
-            sub_passed = tr.get("passed", False)
-            sub_status = "Passed" if sub_passed else "Failed"
-            open_attr = " open" if not sub_passed else ""
-            md.append(f"<details{open_attr}>\n<summary><b>Subsystem: <code>{sub}</code> ({sub_status} — {tr.get('passed_count', 0)}/{tr.get('total_assertions', 0)} passed)</b></summary>\n")
-            md.append("")
-            if tests:
-                md.append("| Status | Test Function | Result Details |")
-                md.append("| :---: | :--- | :--- |")
-                for t in tests:
-                    icon = "PASS" if t.get("status") == "PASS" else "FAIL"
-                    md.append(f"| `{icon}` | `{t.get('name', '')}` | `{t.get('details', '')}` |")
-            md.append("\n</details>\n")
-
-    # 5. Post-Mortem Failure Diagnostics
-    failed_tests = [
-        (tr.get("subsystem", "ECU"), t)
-        for tr in test_reports
-        for t in tr.get("tests", [])
-        if t.get("status") == "FAIL"
-    ]
+    # 3. Post-Mortem Diagnostics (Rendered only on test failures or crashes)
+    failed_tests = [t for t in all_tests_flat if t.get("status") == "FAIL"]
     crashed_reports = [cr for cr in crash_reports if cr.get("has_crashed")]
-    failed_build_jobs = [
-        j.get("name", "") for j in hw_jobs 
-        if j.get("conclusion") == "failure" and not any(sub in j.get("name", "") for sub in report_map)
-    ]
+    failed_build_jobs = [j.get("name", "") for j in hw_jobs if j.get("conclusion") == "failure"]
 
     if failed_tests or crashed_reports or failed_build_jobs or not overall_success:
-        md.append("### Failure Diagnostics\n")
+        md.append("### Failed Unit Test Diagnostics\n")
+        if failed_tests:
+            md.append("| Subsystem | Failed Test Function | Location | Failure Details |")
+            md.append("| :--- | :--- | :--- | :--- |")
+            for t in failed_tests:
+                loc = f"{t.get('file', '')}:{t.get('line', '')}" if t.get('file') else "—"
+                md.append(f"| `{t.get('subsystem', '')}` | `{t.get('name')}` | `{loc}` | `{t.get('details')}` |")
+            md.append("")
+            first_sub = failed_tests[0].get('subsystem', 'pedals_fw')
+            md.append(f"> **Local Bench Reproduction Command:**\n> ```bash\n> ./github-action/cal-test.sh {first_sub}/test /dev/esp32_johnathan\n> ```\n")
+
         if failed_build_jobs:
             md.append("#### Build & Silicon Flashing Errors\n")
             for jn in failed_build_jobs:
-                md.append(f"> **`{jn}`** failed prior to test completion (compilation or flashing failure). Check workflow step logs for error trace.\n")
-        if failed_tests:
-            md.append("#### Failed Unit Test Assertions\n")
-            md.append("| Subsystem | Failed Test Function | Failure Details |")
-            md.append("| :--- | :--- | :--- |")
-            for sub, t in failed_tests:
-                md.append(f"| `{sub}` | `{t.get('name')}` | `{t.get('details')}` |")
+                md.append(f"> **`{jn}`** failed prior to test completion (compilation or flashing failure). Check step logs.\n")
             md.append("")
 
         if crashed_reports:
@@ -246,12 +173,7 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
                         md.append(f"| `#{f.get('frame')}` | `{f.get('address')}` | `{f.get('function')}` | `{f.get('location')}` |")
                     md.append("")
 
-    # 6. Deployment Binaries
-    md.append("### Deployment Binaries\n")
-    md.append("Compiled firmware binaries (`.bin`, `.elf`, `bootloader.bin`) and bus traces (`can_trace.jsonl`) are archived in the **Run Artifacts**:\n")
-    md.append("```bash\n# Flashing trackside via esptool\npython3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 <subsystem>.bin\n```\n")
-
-    md.append("---\n*CalSol Hardware Testbench CI*")
+    md.append("---\n*CalSol Hardware Testbench*")
     return "\n".join(md)
 
 def post_or_update_pr_comment(repo, pr_number, token, body):
