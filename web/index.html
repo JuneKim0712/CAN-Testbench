@@ -7,6 +7,7 @@
   <link rel="shortcut icon" href="favicon.ico">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0a0a'/%3E%3Cpath d='M8 16h16M16 8v16' stroke='%2386efac' stroke-width='3' stroke-linecap='square'/%3E%3C/svg%3E">
+  <script src="bridge-config.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -72,11 +73,7 @@
         <div>
           <div class="flex items-center gap-2">
             <span class="text-sm font-bold tracking-tight text-white uppercase">GEN 11 CAN TESTBENCH</span>
-            <span class="border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-1.5 py-0.2 text-sm tracking-wide uppercase font-semibold">
-              HIL TESTBENCH
-            </span>
           </div>
-          <p class="text-sm text-neutral-500 uppercase tracking-wider">Silicon-in-the-Loop • stolerpi (ARM64) • 500 kbps CAN 2.0B</p>
         </div>
       </div>
 
@@ -118,17 +115,7 @@
           <span class="text-neutral-500">↗</span>
         </a>
 
-        <!-- Mutex Status Pill -->
-        <div class="border border-neutral-800 bg-neutral-900 px-2 py-1 flex items-center gap-1.5">
-          <span class="text-neutral-500 uppercase">Mutex:</span>
-          <span id="navMutexStatus" class="text-white font-semibold uppercase">See Runner</span>
-        </div>
 
-        <!-- Bus Listener Pill -->
-        <div class="border border-neutral-800 bg-neutral-900 px-2 py-1 flex items-center gap-1.5 hidden sm:flex">
-          <span class="text-neutral-500 uppercase">Listener:</span>
-          <span class="text-white font-semibold">/dev/esp32_ahmed</span>
-        </div>
       </div>
 
     </div>
@@ -289,12 +276,12 @@
       <h2>Connect to the CAN debugger</h2>
       <p>The Raspberry Pi streams messages received by the debugger ESP32. A bridge connection alone does not confirm the CAN bus works.</p>
       <form onsubmit="event.preventDefault(); setBridgeUrl(document.getElementById('bridgeEndpoint').value)">
-        <label for="bridgeEndpoint">Bridge WebSocket endpoint</label>
+        <label for="bridgeEndpoint">Bridge endpoint (WebSocket or HTTP)</label>
         <div class="flex flex-wrap gap-2 mt-2"><input id="bridgeEndpoint" type="url" placeholder="wss://your-private-host/ws" class="bg-black border border-neutral-700 p-2 flex-1 min-w-0" required>
         <button type="submit">Connect</button><button type="button" onclick="disconnectBridge()">Disconnect</button></div>
       </form>
       <p id="bridgeStatusLabel" role="status" aria-live="polite">Not connected</p>
-      <p>GitHub Pages requires a secure wss:// endpoint. With the SSH tunnel running, use the <a class="text-pastel-cyan underline" href="http://127.0.0.1:18880/?bridge=ws%3A%2F%2F127.0.0.1%3A18765%2Fws#telemetry" target="_blank" rel="noopener">private live viewer</a>.</p>
+      <p>GitHub Pages requires a secure wss:// or https:// endpoint. HTTP polling takes over if WebSocket fails. With the SSH tunnel running, use the <a class="text-pastel-cyan underline" href="http://127.0.0.1:18880/?bridge=ws%3A%2F%2F127.0.0.1%3A18765%2Fws#telemetry" target="_blank" rel="noopener">private live viewer</a>.</p>
       <p id="deviceHealthDetail" class="text-neutral-400">Last checked: never. Last physical CAN reception: unknown.</p>
     </section>
     <!-- SNIFFER CONSOLE HEADER -->
@@ -830,12 +817,21 @@
     const isHttps = window.location.protocol === 'https:';
     const isLocalHost = ['localhost', '127.0.0.1', 'stolerpi', 'stolerpi.local'].includes(window.location.hostname);
     // On HTTPS (e.g. GitHub Pages), never auto-attempt unencrypted ws:// (Mixed Content block). Default to live_stream.json polling.
-    let bridgeUrl = new URLSearchParams(window.location.search).get('bridge') || localStorage.getItem('calsol_bridge_url') || (isLocalHost && !isHttps ? `ws://${window.location.hostname}:8765/ws` : '');
-    if (isHttps && bridgeUrl && bridgeUrl.startsWith('ws://')) {
+    let bridgeUrl = new URLSearchParams(window.location.search).get('bridge') || localStorage.getItem('calsol_bridge_url') || window.CALSOL_DEFAULT_BRIDGE || (isLocalHost && !isHttps ? `ws://${window.location.hostname}:${window.location.port === '18880' ? '18765' : '8765'}/ws` : '');
+    if (isHttps && bridgeUrl && /^(ws|http):\/\//.test(bridgeUrl)) {
       bridgeUrl = '';
       try { localStorage.removeItem('calsol_bridge_url'); } catch (e) {}
     }
     let bridgeConnected = false;
+    let httpLiveAt = 0;
+    let streamPollBusy = false;
+    function bridgeHttpUrl(endpoint, path) {
+      const url = new URL(endpoint);
+      url.protocol = ['wss:', 'https:'].includes(url.protocol) ? 'https:' : 'http:';
+      url.pathname = path; url.search = ''; url.hash = '';
+      return url;
+    }
+
 
     let deviceHealth = null;
     let healthCheckedAt = 0;
@@ -855,9 +851,7 @@
       const endpoint = bridgeUrl;
       const request = ++healthRequest;
       try {
-        const url = new URL(endpoint);
-        url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
-        url.pathname = '/health'; url.search = ''; url.hash = '';
+        const url = bridgeHttpUrl(endpoint, '/health');
         const response = await fetch(url, {cache: 'no-store', signal: AbortSignal.timeout(2500)});
         if (!response.ok) throw new Error('Health unavailable');
         const health = await response.json();
@@ -985,8 +979,8 @@
     function setBridgeUrl(url) {
       try {
         const endpoint = new URL(url.trim());
-        if (!['ws:', 'wss:'].includes(endpoint.protocol)) throw new Error('Use ws:// or wss://');
-        if (isHttps && endpoint.protocol !== 'wss:') throw new Error('GitHub Pages requires wss://. Use the private viewer for an SSH tunnel.');
+        if (!['ws:', 'wss:', 'http:', 'https:'].includes(endpoint.protocol)) throw new Error('Use ws://, wss://, http:// or https://');
+        if (isHttps && !['wss:', 'https:'].includes(endpoint.protocol)) throw new Error('GitHub Pages requires wss:// or https://. Use the private viewer for an SSH tunnel.');
         disconnectBridge();
         bridgeUrl = endpoint.href;
         localStorage.setItem('calsol_bridge_url', bridgeUrl);
@@ -996,7 +990,7 @@
 
     function disconnectBridge() {
       bridgeUrl = '';
-      deviceHealth = null; healthCheckedAt = 0; healthRequest++;
+      deviceHealth = null; healthCheckedAt = 0; healthRequest++; httpLiveAt = 0;
       localStorage.removeItem('calsol_bridge_url');
       clearTimeout(streamReconnectTimer);
       const old = streamSocket;
@@ -1008,7 +1002,7 @@
     function updateBridgeStatusUI(connected, statusMsg) {
       bridgeConnected = connected;
       renderDeviceHealth();
-      const badgeHtml = connected
+      const badgeHtml = (connected || (bridgeUrl && Date.now() - httpLiveAt < 5000))
         ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> LIVE BRIDGE CONNECTION'
         : '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> HISTORICAL SNAPSHOT';
 
@@ -1022,9 +1016,13 @@
         updateBridgeStatusUI(false, 'Deployed snapshot; not a live connection');
         return;
       }
-      if (isHttps && bridgeUrl.startsWith('ws://')) {
+      if (isHttps && /^(ws|http):\/\//.test(bridgeUrl)) {
         console.warn('Insecure WebSocket blocked on HTTPS origin. Use wss:// or live_stream.json polling.');
         updateBridgeStatusUI(false, 'HTTPS origin requires wss:// (using live_stream.json)');
+        return;
+      }
+      if (/^https?:/.test(bridgeUrl)) {
+        updateBridgeStatusUI(false, 'Connecting through HTTP polling…');
         return;
       }
       if (!window.WebSocket) {
@@ -1074,12 +1072,22 @@
     async function startPollingLiveStream() {
       if (streamPollTimer) clearInterval(streamPollTimer);
       streamPollTimer = setInterval(async () => {
-        if (bridgeConnected || streamPaused) return;
+        if (bridgeConnected || streamPaused || streamPollBusy) return;
+        streamPollBusy = true;
+        const endpoint = bridgeUrl;
         try {
-          const res = await fetch('data/live_stream.json?t=' + Date.now());
+          const res = await fetch(endpoint ? bridgeHttpUrl(endpoint, '/api/frames') : 'data/live_stream.json?t=' + Date.now(), {cache: 'no-store', signal: AbortSignal.timeout(2500)});
+          if (endpoint !== bridgeUrl || bridgeConnected) return;
+          if (!res.ok) throw new Error('HTTP ' + res.status);
           if (res.ok) {
             const payload = await res.json();
             if (payload && Array.isArray(payload.frames)) {
+              if (endpoint) {
+                const updatedAt = Date.parse(payload.updated_at);
+                if (!Number.isFinite(updatedAt) || Math.abs(Date.now() - updatedAt) > 15000) throw new Error('Bridge snapshot is stale or clocks differ');
+                httpLiveAt = Date.now();
+                updateBridgeStatusUI(false, 'Live HTTP polling • WebSocket alternative');
+              }
               const seen = new Set(streamPackets.map(p => p.eventKey));
               const incoming = [];
               for (const f of payload.frames) {
@@ -1097,7 +1105,12 @@
               if (incoming.length) scheduleStreamRender();
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          if (endpoint === bridgeUrl && endpoint && !bridgeConnected) {
+            httpLiveAt = 0;
+            updateBridgeStatusUI(false, 'Bridge unreachable: check endpoint, HTTPS, SSH tunnel and network access.');
+          }
+        } finally { streamPollBusy = false; }
       }, 1500);
     }
 
