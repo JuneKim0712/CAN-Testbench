@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -38,10 +39,15 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: telemetry-web-bundle
-          path: web/
+          path: telemetry-artifact/
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
+
+      - name: Update report data without replacing the current frontend
+        if: github.event_name == 'workflow_run'
+        run: |
+          test -d telemetry-artifact/data
+          cp -a telemetry-artifact/data/. web/data/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
