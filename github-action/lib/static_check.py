@@ -16,27 +16,27 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-def find_c_files(repo_root):
+def find_c_targets(repo_root):
     c_files = []
+    target_dirs = set()
+    ignored = {".git", "build", "managed_components", ".logs", "Slack_Bot", "web", "docs", "pr_artifacts", ".system_generated"}
     for root, dirs, files in os.walk(repo_root):
-        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ["build", "managed_components", ".logs", "Slack_Bot"]]
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ignored]
+        has_c = False
         for f in files:
             if f.endswith((".c", ".h")):
                 c_files.append(os.path.join(root, f))
-    return c_files
+                has_c = True
+        if has_c:
+            target_dirs.add(root)
+    return c_files, sorted(target_dirs)
 
-def run_cppcheck(repo_root):
+def run_cppcheck(target_dirs):
     if not shutil.which("cppcheck"):
         return None, "cppcheck not found in PATH"
 
-    target_dirs = []
-    for item in os.listdir(repo_root):
-        full = os.path.join(repo_root, item)
-        if os.path.isdir(full) and not item.startswith(".") and item not in ["build", "managed_components", ".logs", "Slack_Bot"]:
-            target_dirs.append(full)
-
     if not target_dirs:
-        target_dirs = [repo_root]
+        return [], None
 
     cmd = [
         "cppcheck",
@@ -64,11 +64,11 @@ def main():
     print(f" Target Root: {repo_root}")
     print("==================================================")
 
-    c_files = find_c_files(repo_root)
-    print(f"[*] Found {len(c_files)} C/C++ source & header files.")
+    c_files, target_dirs = find_c_targets(repo_root)
+    print(f"[*] Found {len(c_files)} C/C++ source & header files across {len(target_dirs)} target directories.")
 
     # Cppcheck
-    cppcheck_lines, cpp_err = run_cppcheck(repo_root)
+    cppcheck_lines, cpp_err = run_cppcheck(target_dirs)
     critical_errors = []
     notices = []
 

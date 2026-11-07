@@ -38,6 +38,7 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
     total_tests_count = 0
     subsystems_tested = []
     all_tests = []
+    seen_tests = set()
     max_duration = 0.0
 
     # Search for all test result files (*test_results*.json) across repo and pr_artifacts
@@ -64,9 +65,10 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
                     max_duration = duration
 
                 for t in data.get("tests", []):
-                    # Check for duplicates
                     t_name = t.get("name", "unknown")
-                    if not any(x["name"] == t_name and x["subsystem"] == sub_name for x in all_tests):
+                    key = (sub_name, t_name)
+                    if key not in seen_tests:
+                        seen_tests.add(key)
                         all_tests.append({
                             "subsystem": sub_name,
                             "name": t_name,

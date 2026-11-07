@@ -15,7 +15,14 @@ import json
 import socket
 import struct
 import threading
+import collections
 import argparse
+
+# Pre-compiled regular expressions for high-speed UART parsing
+RE_CAN_FRAME = re.compile(r"\[CAN_FRAME\]")
+RE_CAN_ID = re.compile(r"ID:(0x[0-9a-fA-F]+|\d+)")
+RE_CAN_DLC = re.compile(r"DLC:(\d+)")
+RE_CAN_DATA = re.compile(r"DATA:([0-9a-fA-F]*)")
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -87,6 +94,8 @@ class LiveCANMonitor(threading.Thread):
         self.unix_sock = unix_sock
         self.running = True
         self.frames = []
+        self._lock = threading.Lock()
+        self._recent_keys = collections.deque(maxlen=16)
         self.start_time = time.time()
         self.source = None
 
@@ -164,18 +173,25 @@ class LiveCANMonitor(threading.Thread):
     def record_external_frame(self, can_id: int, dlc: int, data: bytes):
         now = time.time()
         hex_str = data.hex().upper()
-        for prev in reversed(self.frames[-10:]):
-            if prev["id_int"] == can_id and prev["data"] == hex_str and (now - prev["timestamp"]) < 0.1:
-                return
-        self._record_frame(can_id, dlc, data)
+        with self._lock:
+            for cid, hstr, ts in self._recent_keys:
+                if cid == can_id and hstr == hex_str and (now - ts) < 0.1:
+                    return
+            self._recent_keys.append((can_id, hex_str, now))
+            self._record_frame_locked(can_id, dlc, data, now)
 
     def _record_frame(self, can_id: int, dlc: int, data: bytes):
-        t_rel = time.time() - self.start_time
+        now = time.time()
+        with self._lock:
+            self._record_frame_locked(can_id, dlc, data, now)
+
+    def _record_frame_locked(self, can_id: int, dlc: int, data: bytes, now: float):
+        t_rel = now - self.start_time
         msg_name, signal_desc = format_raw_payload(can_id, data)
         hex_str = data.hex().upper()
         frame_obj = {
             "rel_time": f"+{t_rel:.3f}s",
-            "timestamp": round(time.time(), 4),
+            "timestamp": round(now, 4),
             "id": f"0x{can_id:03X}",
             "id_int": can_id,
             "name": msg_name,
@@ -223,9 +239,9 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
                 print(f"  [RAW] {line}")
 
             if "[CAN_FRAME]" in line:
-                m_id = re.search(r"ID:(0x[0-9a-fA-F]+|\d+)", line)
-                m_dlc = re.search(r"DLC:(\d+)", line)
-                m_data = re.search(r"DATA:([0-9a-fA-F]*)", line)
+                m_id = RE_CAN_ID.search(line)
+                m_dlc = RE_CAN_DLC.search(line)
+                m_data = RE_CAN_DATA.search(line)
                 if m_id and m_dlc:
                     try:
                         cid_str = m_id.group(1)

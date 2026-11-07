@@ -49,24 +49,23 @@ def get_git_diff_files(repo_root):
 
 def find_all_subsystems(repo_root):
     """
-    Scans the repository to locate all testable subsystems.
+    Scans the repository to locate all testable subsystems with pruned tree traversal.
     A subsystem is ONLY discovered if it explicitly contains a testbench.json file.
     Folders without testbench.json (even if they contain CMakeLists.txt) are excluded.
     """
     subsystems = {}
+    ignored_dirs = {".git", "build", "managed_components", ".logs", "pr_artifacts", ".system_generated"}
 
-    for tb in glob.glob(os.path.join(repo_root, "**/testbench.json"), recursive=True):
-        rel = os.path.relpath(tb, repo_root).replace("\\", "/")
-        parts = rel.split("/")
-        # Ignore files inside hidden or build directories
-        if any(part.startswith(".") or part in ["build", "managed_components"] for part in parts):
-            continue
-        if len(parts) == 1:
-            # Root level testbench.json
-            subsystems["root"] = tb
-        else:
-            folder = parts[0]
-            subsystems[folder] = tb
+    for root, dirs, files in os.walk(repo_root):
+        dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
+        if "testbench.json" in files:
+            tb = os.path.join(root, "testbench.json")
+            rel = os.path.relpath(tb, repo_root).replace("\\", "/")
+            parts = rel.split("/")
+            if len(parts) == 1:
+                subsystems["root"] = tb
+            else:
+                subsystems[parts[0]] = tb
 
     return subsystems
 
