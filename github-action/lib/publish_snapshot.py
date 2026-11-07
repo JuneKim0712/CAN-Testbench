@@ -5,6 +5,7 @@ import base64
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
+from pathlib import Path
 
 
 def read_url(url):
@@ -55,8 +56,17 @@ def publish(payload):
         if error.code != 404:
             raise
     api(path, body)
-    print("Published public bench snapshot; physical frames:", len(payload["frames"]))
+    print("Published snapshot; physical frames:", sum(f.get("source") == "physical_bus" for f in payload["frames"]), "emulated:", sum(f.get("source") == "emulated" for f in payload["frames"]))
 
 
 if __name__ == "__main__":
-    publish(snapshot())
+    payload = snapshot()
+    try:
+        emulated = json.loads(Path("/var/lib/calsol-emulation/heartbeat.json").read_text())
+        if abs(datetime.now(timezone.utc).timestamp() - datetime.fromisoformat(emulated["updated_at"]).timestamp()) < 20:
+            payload["frames"].extend(f for f in emulated.get("frames", [])[-100:]
+                                     if f.get("source") == "emulated" and f.get("event") == "emulated_frame")
+            payload["emulated_interval_seconds"] = 5
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    publish(payload)

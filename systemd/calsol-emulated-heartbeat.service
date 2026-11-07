@@ -1,0 +1,20 @@
+[Unit]
+Description=CalSol software-only CAN heartbeat (5 seconds)
+After=local-fs.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/calsol/tools/emulated_heartbeat.py
+User=jkim
+Environment=HEARTBEAT_OUTPUT=/var/lib/calsol-emulation/heartbeat.json
+ReadWritePaths=/var/lib/calsol-emulation
+UMask=0022
+Restart=always
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+
+[Install]
+WantedBy=multi-user.target
