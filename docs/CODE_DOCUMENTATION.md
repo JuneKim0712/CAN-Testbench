@@ -4,6 +4,11 @@ Continuous hardware integration, automated on-target silicon testing, software-d
 
 This document serves as the comprehensive technical reference for the codebase in [`CalSol/CAN_TestBench`](https://github.com/CalSol/CAN_TestBench). It provides an in-depth, code-level explanation of every module, driver, daemon, test suite, and CI automation script in the repository.
 
+> **Quick Links:**
+> - 🌐 **Interactive Web Telemetry Dashboard:** [https://junekim0712.github.io/CAN-Testbench/](https://junekim0712.github.io/CAN-Testbench/)
+> - 🚀 **Front-Page Setup, Test & Debugging Manual:** [`../README.md`](../README.md)
+> - 🛠️ **Stage-by-Stage Walkthrough:** [`CAN_TESTBENCH_STAGE_GUIDE.md`](CAN_TESTBENCH_STAGE_GUIDE.md)
+
 ---
 
 ## Table of Contents
