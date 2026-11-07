@@ -284,11 +284,7 @@
       <p>GitHub Pages requires a secure wss:// or https:// endpoint. HTTP polling takes over if WebSocket fails. With the SSH tunnel running, use the <a class="text-pastel-cyan underline" href="http://127.0.0.1:18880/?bridge=ws%3A%2F%2F127.0.0.1%3A18765%2Fws#telemetry" target="_blank" rel="noopener">private live viewer</a>.</p>
       <p id="deviceHealthDetail" class="text-neutral-400">Last checked: never. Last physical CAN reception: unknown.</p>
     </details>
-    <section class="border border-neutral-800 bg-neutral-950 p-4" aria-live="polite">
-      <h2>Public CAN telemetry</h2>
-      <p id="publicFeedStatus">Loading the latest bench snapshot automatically…</p>
-      <p>Simulated heartbeats are labeled SIMULATED and do not verify physical CAN reception. Read-only snapshots update approximately every five minutes. GitHub scheduling and caching can delay updates.</p>
-    </section>
+    <span id="publicFeedStatus" class="hidden" aria-hidden="true"></span>
     <!-- SNIFFER CONSOLE HEADER -->
     <section class="border border-neutral-800 bg-neutral-950 p-4 space-y-3">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
@@ -301,9 +297,6 @@
               <span id="streamStatusText">Not connected</span>
             </span>
           </div>
-          <p class="text-sm text-neutral-500 uppercase mt-0.5 font-mono">
-            Continuous packet snooping via TI TCAN332 transceiver over /dev/esp32_ahmed • 500 kbps Differential CAN 2.0B
-          </p>
         </div>
 
         <div class="flex items-center gap-2">
@@ -1021,7 +1014,13 @@
         ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> LIVE BRIDGE CONNECTION'
         : '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> HISTORICAL SNAPSHOT';
 
-      if (dom.streamStatusText) dom.streamStatusText.innerHTML = badgeHtml;
+      if (dom.streamStatusText) {
+        dom.streamStatusText.innerHTML = badgeHtml;
+        if (!bridgeUrl && publicSnapshot) {
+          const age = Math.max(0, Math.floor((Date.now() - Date.parse(publicSnapshot.updated_at)) / 60000));
+          dom.streamStatusText.textContent = `Snapshot • ${age} min old${age >= 15 ? ' • stale' : ''}`;
+        }
+      }
       if (dom.bridgeStatusLabel) dom.bridgeStatusLabel.innerText = statusMsg || (connected ? 'WebSocket Active' : 'Polling live_stream.json');
     }
 
