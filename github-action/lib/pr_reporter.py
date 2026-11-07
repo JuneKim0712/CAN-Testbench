@@ -114,11 +114,17 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
     md = []
     md.append(IDENTIFIER_TAG)
 
-    # 1. Executive Status Header
+    # 1. Executive Status Header & Live Web Telemetry Portal Link
     status_str = "PASSED" if overall_success else "FAILED"
     status_badge = "✅ Passed" if overall_success else "❌ Failed"
+    owner = repo.split('/')[0] if repo and '/' in repo else "JuneKim0712"
+    repo_name = repo.split('/')[1] if repo and '/' in repo else "CAN-Testbench"
+    web_portal_url = f"https://{owner}.github.io/{repo_name}/?run={run_id}" if run_id else f"https://{owner}.github.io/{repo_name}/"
+    commit_url = f"https://github.com/{repo}/commit/{commit_sha}" if repo and commit_sha else ""
+
     md.append(f"## CalSol Hardware-in-the-Loop Testbench: {status_str}\n")
-    md.append(f"> **Status:** {status_badge} | **Commit:** [`{short_sha}`]({run_url}) | **Environment:** `stolerpi (ARM64 HIL)`\n")
+    md.append(f"> 🌐 **Interactive Telemetry Portal:** [{web_portal_url}]({web_portal_url})\n")
+    md.append(f"> **Status:** {status_badge} | **GitHub Action Run:** [`#{run_id}`]({run_url}) | **Commit:** [`{short_sha}`]({commit_url}) | **Target:** `stolerpi (ARM64 HIL)`\n")
 
     # 2. Bench Hardware Node Map & Summary
     md.append("### Subsystem Execution Summary\n")
