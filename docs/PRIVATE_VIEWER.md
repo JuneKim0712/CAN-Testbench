@@ -21,3 +21,18 @@ The viewer has no write access.
 
 Tailscale Serve can be configured later, but its one-time tailnet enablement
 requires an account administrator; local sudo cannot grant it.
+
+## WebSocket alternative
+
+The telemetry tab accepts ws://, wss://, http:// or https:// bridge endpoints.
+If WebSocket fails, it polls the same bridge /api/frames endpoint every 1.5 seconds.
+HTTP endpoints select polling directly. Health is checked independently at /health.
+GitHub Pages requires HTTPS/WSS and a bridge reachable by the browser with CORS
+support; changing transport cannot bypass network access or browser protections.
+The existing daemon supplies these read-only endpoints and CORS headers.
+
+For a shared default, set window.CALSOL_DEFAULT_BRIDGE in web/bridge-config.js
+to the authorized HTTPS bridge URL. Per-browser saved settings and ?bridge= take
+precedence. No secure public default is provisioned by this setting.
+The SSH viewer on local port 18880 defaults to bridge port 18765.
+Archived data/live_stream.json remains explicitly historical.
