@@ -232,9 +232,11 @@ if [ -n "$DAEMON_PID" ]; then
     rm -f "/tmp/calsol_can.sock" 2>/dev/null || true
 fi
 
-# Stage CAN trace into artifacts
-if [ -f "$CAN_TRACE_FILE" ] && [ -d "${TARGET}/build/artifacts" ]; then
-    cp -f "$CAN_TRACE_FILE" "${TARGET}/build/artifacts/" 2>/dev/null || true
+# Stage test results, serial logs, and CAN trace into artifacts
+if [ -d "${TARGET}/build/artifacts" ]; then
+    [ -f "$RESULTS_JSON" ] && cp -f "$RESULTS_JSON" "${TARGET}/build/artifacts/" 2>/dev/null || true
+    [ -f "$SERIAL_LOG" ] && cp -f "$SERIAL_LOG" "${TARGET}/build/artifacts/" 2>/dev/null || true
+    [ -f "$CAN_TRACE_FILE" ] && cp -f "$CAN_TRACE_FILE" "${TARGET}/build/artifacts/" 2>/dev/null || true
 fi
 
 # 8. Post-mortem Crash Decoding on Failure
