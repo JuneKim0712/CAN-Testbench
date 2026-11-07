@@ -19,6 +19,9 @@ import hashlib
 import threading
 import argparse
 import collections
+import uuid
+import queue
+import logging.handlers
 from datetime import datetime, timezone
 
 # ─── COBS Codec & Wire Protocol ───────────────────────────────────────────────
@@ -58,7 +61,11 @@ def cobs_decode(data: bytes) -> bytes:
 
 
 def pack_frame(can_id: int, payload: bytes) -> bytes:
-    dlc = min(len(payload), 8)
+    if not isinstance(can_id, int) or isinstance(can_id, bool) or not 0 <= can_id <= 0x7FF:
+        raise ValueError("Legacy bridge supports standard IDs 0..0x7FF only")
+    if len(payload) > 8:
+        raise ValueError("Classic CAN payload exceeds 8 bytes")
+    dlc = len(payload)
     raw = bytearray([can_id & 0xFF, ((dlc & 0x0F) << 4) | ((can_id >> 8) & 0x0F)])
     raw.extend(payload[:dlc] + b'\x00' * (dlc - len(payload[:dlc])))
     raw.append((256 - (sum(raw) % 256)) % 256)
@@ -72,6 +79,8 @@ def unpack_frame(raw: bytes) -> tuple[int, int, bytes] | None:
     if dlc > 8 or len(raw) != 3 + dlc:
         return None
     can_id = ((raw[1] & 0x0F) << 8) | raw[0]
+    if can_id > 0x7FF:
+        return None
     return can_id, dlc, bytes(raw[2 : 2 + dlc])
 
 
@@ -139,6 +148,13 @@ class CANBridgeDaemon:
         self.serial = None
         self.log_file = None
         self._lock = threading.Lock()
+        self.capture_session = uuid.uuid4().hex
+        self.events = queue.Queue(maxsize=4096)
+        self.metrics = collections.Counter()
+        self.workers = []
+        self.last_rx_at = None
+        self._instance_lock = None
+        self._owns_socket = False
 
         # Multiplexed client lists
         self.raw_clients: list[socket.socket] = []
@@ -149,11 +165,24 @@ class CANBridgeDaemon:
 
         # Rolling real-frame buffer
         self.max_frames = max_frames
+        if not 1 <= max_frames <= 100000:
+            raise ValueError("max_frames must be between 1 and 100000")
         self.recent_frames = collections.deque(maxlen=max_frames)
         self.total_rx_count = 0
         self.last_json_flush = 0.0
 
     def start(self):
+        if os.name == 'posix' and self.unix_socket_path:
+            import fcntl
+            socket_dir = os.path.dirname(os.path.abspath(self.unix_socket_path))
+            os.makedirs(socket_dir, exist_ok=True)
+            self._instance_lock = open(self.unix_socket_path + '.lock', 'a')
+            try:
+                fcntl.flock(self._instance_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                self._instance_lock.close()
+                self._instance_lock = None
+                raise RuntimeError('Another bridge instance owns this socket')
         self.running = True
 
         # Rolling trace log
@@ -161,7 +190,12 @@ class CANBridgeDaemon:
             log_dir = os.path.dirname(os.path.abspath(self.log_path))
             if log_dir:
                 os.makedirs(log_dir, exist_ok=True)
-            self.log_file = open(self.log_path, "a", buffering=1, encoding="utf-8")
+            self.log_file = logging.handlers.RotatingFileHandler(
+                self.log_path, maxBytes=10 * 1024 * 1024, backupCount=3, encoding="utf-8")
+
+        worker = threading.Thread(target=self._delivery_worker, daemon=True)
+        self.workers.append(worker)
+        worker.start()
 
         # Start Serial RX background thread with auto-reconnect
         if not self.virtual:
@@ -179,10 +213,11 @@ class CANBridgeDaemon:
                     pass
             us = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             us.bind(self.unix_socket_path)
+            self._owns_socket = True
             us.listen(10)
             us.setblocking(False)
             try:
-                os.chmod(self.unix_socket_path, 0o666)
+                os.chmod(self.unix_socket_path, 0o660)
             except Exception:
                 pass
             self.listening_servers.append(us)
@@ -192,7 +227,7 @@ class CANBridgeDaemon:
         if self.tcp_port > 0:
             ts = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             ts.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            ts.bind(("0.0.0.0", self.tcp_port))
+            ts.bind((os.environ.get("CALSOL_BIND", "127.0.0.1"), self.tcp_port))
             ts.listen(10)
             ts.setblocking(False)
             self.listening_servers.append(ts)
@@ -202,7 +237,7 @@ class CANBridgeDaemon:
         if self.ws_port > 0:
             ws = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             ws.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            ws.bind(("0.0.0.0", self.ws_port))
+            ws.bind((os.environ.get("CALSOL_BIND", "127.0.0.1"), self.ws_port))
             ws.listen(25)
             ws.setblocking(False)
             self.listening_servers.append(ws)
@@ -234,16 +269,22 @@ class CANBridgeDaemon:
                 pass
         self.listening_servers.clear()
 
-        if self.unix_socket_path and os.path.exists(self.unix_socket_path):
+        if self._owns_socket and self.unix_socket_path and os.path.exists(self.unix_socket_path):
             try:
                 os.remove(self.unix_socket_path)
             except Exception:
                 pass
+            self._owns_socket = False
+        for worker in self.workers:
+            worker.join(timeout=1)
         if self.log_file:
             try:
                 self.log_file.close()
             except Exception:
                 pass
+        if self._instance_lock:
+            self._instance_lock.close()
+            self._instance_lock = None
         print("[*] CAN Bridge Daemon stopped.")
 
     def _serial_worker(self):
@@ -259,6 +300,7 @@ class CANBridgeDaemon:
 
                 print(f"[*] Connecting to CAN Debugger on {self.port} ({self.baud} baud)...")
                 self.serial = serial.Serial(self.port, baudrate=self.baud, timeout=0.2)
+                self.serial.write_timeout = 0.2
                 try:
                     self.serial.setDTR(True)
                     self.serial.setRTS(False)
@@ -272,6 +314,10 @@ class CANBridgeDaemon:
                     if not chunk:
                         continue
                     buf.extend(chunk)
+                    if len(buf) > 4096:
+                        self.metrics['serial_overflows'] += 1
+                        buf.clear()
+                        continue
                     while b'\x00' in buf:
                         raw_cobs, _, buf = buf.partition(b'\x00')
                         if not raw_cobs:
@@ -281,8 +327,11 @@ class CANBridgeDaemon:
                         if unpacked:
                             can_id, dlc, payload = unpacked
                             self._handle_rx_frame(can_id, dlc, payload)
+                        else:
+                            self.metrics['invalid_packets'] += 1
 
             except Exception as e:
+                self.metrics['serial_disconnects'] += 1
                 print(f"[-] Serial error on {self.port}: {e}. Reconnecting in 2s...")
                 if self.serial:
                     try:
@@ -315,17 +364,36 @@ class CANBridgeDaemon:
             "decoded": signal_desc
         }
 
-        self.total_rx_count += 1
         with self._lock:
+            self.total_rx_count += 1
+            self.last_rx_at = now
+            frame_obj.update(schema_version=1, session_id=self.capture_session,
+                             sequence=self.total_rx_count, extended=False, rtr=False)
             self.recent_frames.appendleft(frame_obj)
 
         self.broadcast(frame_obj)
-        self._flush_json_debounced()
+
+    def health(self):
+        return {"serial_connected": bool(self.serial and self.serial.is_open),
+                "mode": "software_test" if self.virtual else "hardware",
+                "session_id": self.capture_session, "total_rx": self.total_rx_count,
+                "last_rx_at": self.last_rx_at, "metrics": dict(self.metrics),
+                "pending_events": self.events.qsize()}
+
+    def _delivery_worker(self):
+        while self.running or not self.events.empty():
+            try:
+                self._deliver(self.events.get(timeout=0.1))
+            except queue.Empty:
+                pass
+            except Exception:
+                self.metrics['delivery_errors'] += 1
+            self._flush_json_debounced()
 
     def _flush_json_debounced(self):
         if not self.json_out:
             return
-        now = time.time()
+        now = time.monotonic()
         if now - self.last_json_flush < 0.25:
             return
         self.last_json_flush = now
@@ -343,26 +411,34 @@ class CANBridgeDaemon:
                 "total_captured": self.total_rx_count,
                 "frames": frames_snapshot
             }
+            data.update(self.health())
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             os.replace(tmp_path, self.json_out)
         except Exception:
-            pass
+            self.metrics['snapshot_errors'] += 1
 
     @staticmethod
     def _safe_send(sock: socket.socket, data: bytes) -> bool:
         try:
-            sock.settimeout(0.05)
-            sock.sendall(data)
-            return True
+            sock.setblocking(False)
+            # Disconnect slow consumers, including partial writes, rather than
+            # stalling the serial reader or silently delivering truncated JSON.
+            return sock.send(data) == len(data)
         except Exception:
             return False
 
     def broadcast(self, event: dict):
+        try:
+            self.events.put_nowait(event)
+        except queue.Full:
+            self.metrics['delivery_drops'] += 1
+
+    def _deliver(self, event: dict):
         text_line = json.dumps(event) + "\n"
         if self.log_file:
             try:
-                self.log_file.write(text_line)
+                self.log_file.emit(logging.makeLogRecord({"msg": text_line.rstrip()}))
             except Exception:
                 pass
 
@@ -381,6 +457,7 @@ class CANBridgeDaemon:
         dead_sse = [s for s in sse_targets if not self._safe_send(s, sse_bytes)]
 
         if dead_raw or dead_ws or dead_sse:
+            self.metrics['slow_client_disconnects'] += len(dead_raw) + len(dead_ws) + len(dead_sse)
             with self._lock:
                 for c in dead_raw:
                     if c in self.raw_clients: self.raw_clients.remove(c)
@@ -396,10 +473,14 @@ class CANBridgeDaemon:
                     except Exception: pass
 
     def inject_frame(self, can_id: int, payload: bytes) -> bool:
+        pack_frame(can_id, payload)  # Validate even when no serial link is available.
+        if not self.virtual and (self.serial is None or not self.serial.is_open):
+            return False
         if not self.virtual and self.serial:
             try:
-                self.serial.write(pack_frame(can_id, payload))
-                self.serial.flush()
+                encoded = pack_frame(can_id, payload)
+                if self.serial.write(encoded) != len(encoded):
+                    return False
             except Exception as e:
                 print(f"[-] Serial write error: {e}")
                 return False
@@ -408,8 +489,9 @@ class CANBridgeDaemon:
         now = time.time()
         now_dt = datetime.now(timezone.utc)
         frame_obj = {
-            "event": "frame",
+            "event": "injection_request",
             "direction": "tx",
+            "source": "virtual" if self.virtual else "host_request",
             "time": now_dt.strftime("%H:%M:%S.%f")[:-3],
             "timestamp": round(now, 4),
             "iface": self.port,
@@ -420,10 +502,7 @@ class CANBridgeDaemon:
             "raw": " ".join(f"{b:02X}" for b in payload),
             "decoded": signal_desc
         }
-        with self._lock:
-            self.recent_frames.appendleft(frame_obj)
         self.broadcast(frame_obj)
-        self._flush_json_debounced()
         return True
 
     def run(self):
@@ -440,6 +519,11 @@ class CANBridgeDaemon:
                 for s in readable:
                     if s in self.listening_servers:
                         conn, _ = s.accept()
+                        if sum(map(len, (self.raw_clients, self.ws_clients,
+                                         self.sse_clients, self.http_pending))) >= 64:
+                            conn.close()
+                            self.metrics['rejected_clients'] += 1
+                            continue
                         conn.setblocking(False)
                         # Check server type: if port matches ws_port, it is web server
                         is_web = False
@@ -478,6 +562,9 @@ class CANBridgeDaemon:
                 self._disconnect_raw(client, buffers)
                 return
             buffers[client] = buffers.get(client, "") + data.decode("utf-8", errors="replace")
+            if len(buffers[client]) > 4096:
+                self._disconnect_raw(client, buffers)
+                return
             while "\n" in buffers[client]:
                 line, buffers[client] = buffers[client].split("\n", 1)
                 line = line.strip()
@@ -495,7 +582,7 @@ class CANBridgeDaemon:
                         ok = self.inject_frame(cid, payload)
                         client.sendall((json.dumps({"status": "ok" if ok else "error"}) + "\n").encode("utf-8"))
                     elif cmd == "ping":
-                        client.sendall(b'{"status": "pong"}\n')
+                        client.sendall((json.dumps({"status": "pong", **self.health()}) + "\n").encode())
                 except Exception as ex:
                     client.sendall((json.dumps({"status": "error", "message": str(ex)}) + "\n").encode("utf-8"))
         except Exception:
@@ -524,6 +611,9 @@ class CANBridgeDaemon:
                 return
             buf = self.http_pending.get(client, bytearray())
             buf.extend(chunk)
+            if len(buf) > 8192:
+                self._close_http(client)
+                return
 
             if b"\r\n\r\n" in buf or b"\n\n" in buf:
                 req_text = buf.decode("utf-8", errors="replace")
@@ -610,7 +700,7 @@ class CANBridgeDaemon:
                     return
 
                 # 5. Default Health / Status Info
-                status_payload = json.dumps({
+                status_payload = json.dumps({**self.health(),
                     "status": "online",
                     "interface": self.port,
                     "baud": self.baud,

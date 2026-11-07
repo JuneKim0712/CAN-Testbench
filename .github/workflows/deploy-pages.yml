@@ -41,7 +41,6 @@ jobs:
           path: web/
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

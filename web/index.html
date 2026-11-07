@@ -61,7 +61,7 @@
           <div class="flex items-center gap-2">
             <span class="text-xs font-bold tracking-tight text-white uppercase">GEN 11 CAN TESTBENCH</span>
             <span class="border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-1.5 py-0.2 text-[9px] tracking-wide uppercase font-semibold">
-              HIL ACTIVE
+              HIL TESTBENCH
             </span>
           </div>
           <p class="text-[10px] text-neutral-500 uppercase tracking-wider">Silicon-in-the-Loop • stolerpi (ARM64) • 500 kbps CAN 2.0B</p>
@@ -109,7 +109,7 @@
         <!-- Mutex Status Pill -->
         <div class="border border-neutral-800 bg-neutral-900 px-2 py-1 flex items-center gap-1.5">
           <span class="text-neutral-500 uppercase">Mutex:</span>
-          <span id="navMutexStatus" class="text-white font-semibold uppercase">Unlocked (Ready)</span>
+          <span id="navMutexStatus" class="text-white font-semibold uppercase">See Runner</span>
         </div>
 
         <!-- Bus Listener Pill -->
@@ -140,7 +140,7 @@
         </div>
         <div class="flex items-center gap-2">
           <span class="w-2 h-2 bg-pastel-green inline-block"></span>
-          <span class="text-[10px] font-mono text-pastel-green uppercase font-semibold">All 3 Nodes Online</span>
+          <span class="text-[10px] font-mono text-pastel-green uppercase font-semibold">Configured hardware - status requires verification</span>
         </div>
       </div>
 
@@ -154,16 +154,16 @@
             </span>
             <span class="text-pastel-green text-[10px] font-mono font-semibold flex items-center gap-1.5">
               <span class="w-1.5 h-1.5 bg-pastel-green inline-block"></span>
-              ONLINE (24/7)
+              CHECK BRIDGE STATUS
             </span>
           </div>
           <div>
-            <div class="text-xs font-bold text-white uppercase font-mono">Raspberry Pi 4 (stolerpi)</div>
+            <div class="text-xs font-bold text-white uppercase font-mono">Raspberry Pi 5 (stolerpi)</div>
             <div class="text-[10px] text-neutral-500 font-mono uppercase mt-0.5">ARM64 Lab Host &amp; CI Runner</div>
           </div>
           <div class="space-y-1 text-[10px] font-mono text-neutral-400 pt-1 border-t border-neutral-900">
-            <div>• Mutex Lock: <span class="text-white font-semibold" id="cardPiMutex">/var/lock/calsol_hil.lock (Ready)</span></div>
-            <div>• Toolchain: <span class="text-neutral-200">ESP-IDF v5.3.1 • Python 3.11</span></div>
+            <div>• Mutex Lock: <span class="text-white font-semibold" id="cardPiMutex">/tmp/calsol_locks (status unverified)</span></div>
+            <div>• Toolchain: <span class="text-neutral-200">See current build artifacts</span></div>
             <div>• Role: <span class="text-neutral-200">Job Orchestration &amp; Serial Bridge</span></div>
           </div>
         </div>
@@ -176,7 +176,7 @@
             </span>
             <span class="text-pastel-cyan text-[10px] font-mono font-semibold flex items-center gap-1.5">
               <span class="w-1.5 h-1.5 bg-pastel-cyan inline-block"></span>
-              FLASHED / NOMINAL
+              CHECK LATEST TEST RESULT
             </span>
           </div>
           <div>
@@ -185,7 +185,7 @@
           </div>
           <div class="space-y-1 text-[10px] font-mono text-neutral-400 pt-1 border-t border-neutral-900">
             <div>• Serial Port: <span class="text-pastel-cyan font-bold">/dev/esp32_johnathan</span></div>
-            <div>• Active Firmware: <span class="text-white font-semibold" id="cardDutFw">pedals_fw / lights_fw</span></div>
+            <div>• Archived Test Target: <span class="text-white font-semibold" id="cardDutFw">pedals_fw / lights_fw</span></div>
             <div>• Transceiver: <span class="text-neutral-200">TI TCAN332 (GPIO 17 TX / GPIO 18 RX)</span></div>
           </div>
         </div>
@@ -198,7 +198,7 @@
             </span>
             <span class="text-pastel-yellow text-[10px] font-mono font-semibold flex items-center gap-1.5">
               <span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span>
-              SNIFFING 24/7
+              CAPTURE CONFIGURED
             </span>
           </div>
           <div>
@@ -349,7 +349,7 @@
       </div>
 
       <div class="flex items-center justify-between text-[10px] font-mono text-neutral-500 pt-1">
-        <span>Hardware Mutex Scope: <span class="text-neutral-300">flock -x /var/lock/calsol_hil.lock</span></span>
+        <span>Hardware Mutex Scope: <span class="text-neutral-300">device and bus locks under /tmp/calsol_locks</span></span>
         <button onclick="setActiveTab('runs')" class="text-white hover:underline uppercase font-bold">
           Open Test Runs Deep Dive (Waveform &amp; Assertions) →
         </button>
@@ -410,7 +410,7 @@
         <div class="border border-neutral-800 bg-black p-3 space-y-1">
           <div class="text-[10px] uppercase text-neutral-500">Bus Rate &amp; Termination</div>
           <div class="text-sm font-bold text-pastel-green">500 kbps (120Ω Split)</div>
-          <div class="text-[10px] text-neutral-400">60Ω Total Loop Resistance</div>
+          <div class="text-[10px] text-neutral-400">Termination requires physical verification</div>
         </div>
 
         <div class="border border-neutral-800 bg-black p-3 space-y-1">
@@ -896,7 +896,7 @@
     const isHttps = window.location.protocol === 'https:';
     const isLocalHost = ['localhost', '127.0.0.1', 'stolerpi', 'stolerpi.local'].includes(window.location.hostname);
     // On HTTPS (e.g. GitHub Pages), never auto-attempt unencrypted ws:// (Mixed Content block). Default to live_stream.json polling.
-    let bridgeUrl = localStorage.getItem('calsol_bridge_url') || (isLocalHost && !isHttps ? `ws://${window.location.hostname}:8765/ws` : '');
+    let bridgeUrl = new URLSearchParams(window.location.search).get('bridge') || localStorage.getItem('calsol_bridge_url') || (isLocalHost && !isHttps ? `ws://${window.location.hostname}:8765/ws` : '');
     if (isHttps && bridgeUrl && bridgeUrl.startsWith('ws://')) {
       bridgeUrl = '';
       try { localStorage.removeItem('calsol_bridge_url'); } catch (e) {}
@@ -1001,7 +1001,7 @@
               return p.id.toLowerCase() === streamFilterId.toLowerCase();
             }).length;
             if (streamDisplayLimit < filteredCount) {
-              streamDisplayLimit += STREAM_PAGE_SIZE;
+              streamDisplayLimit = Math.min(200, streamDisplayLimit + STREAM_PAGE_SIZE);
               renderStreamTables();
             }
           }
@@ -1031,8 +1031,8 @@
     function updateBridgeStatusUI(connected, statusMsg) {
       bridgeConnected = connected;
       const badgeHtml = connected
-        ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> ONLINE (REAL TIME)'
-        : '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> LISTENING (POLLING / LOG)';
+        ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> LIVE BRIDGE CONNECTION'
+        : '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> HISTORICAL SNAPSHOT';
 
       if (dom.streamStatusText) dom.streamStatusText.innerHTML = badgeHtml;
       if (dom.bridgeStatusLabel) dom.bridgeStatusLabel.innerText = statusMsg || (connected ? 'WebSocket Active' : 'Polling live_stream.json');
@@ -1040,7 +1040,7 @@
 
     function connectBridgeWebSocket() {
       if (!bridgeUrl) {
-        updateBridgeStatusUI(false, 'Telemetry Active (live_stream.json)');
+        updateBridgeStatusUI(false, 'Deployed snapshot; not a live connection');
         return;
       }
       if (isHttps && bridgeUrl.startsWith('ws://')) {
@@ -1102,16 +1102,21 @@
           if (res.ok) {
             const payload = await res.json();
             if (payload && Array.isArray(payload.frames)) {
-              let changed = false;
-              payload.frames.forEach(f => {
-                const exists = streamPackets.some(p => p.time === f.time && p.id === f.id && p.raw === f.raw);
-                if (!exists) {
-                  streamPackets.unshift(formatRealPacket(f));
-                  changed = true;
+              const seen = new Set(streamPackets.map(p => p.eventKey));
+              const incoming = [];
+              for (const f of payload.frames) {
+                if (f.source !== 'physical_bus' || f.direction !== 'rx') continue;
+                const packet = formatRealPacket(f);
+                if (!seen.has(packet.eventKey)) {
+                  incoming.push(packet);
+                  seen.add(packet.eventKey);
                 }
-              });
-              if (streamPackets.length > MAX_STREAM_HISTORY) streamPackets.length = MAX_STREAM_HISTORY;
-              if (changed) renderStreamTables();
+              }
+              streamPackets = incoming.concat(streamPackets).slice(0, MAX_STREAM_HISTORY);
+              const updated = Date.parse(payload.updated_at);
+              const age = Number.isFinite(updated) ? Math.max(0, Math.floor((Date.now() - updated) / 1000)) : null;
+              updateBridgeStatusUI(false, age === null ? 'Snapshot timestamp unavailable' : `Historical snapshot • updated ${age}s ago`);
+              if (incoming.length) scheduleStreamRender();
             }
           }
         } catch (e) {}
@@ -1123,6 +1128,8 @@
       const pName = f.name || `FRAME_${pId}`;
       registerDiscoveredCanId(pId, pName);
       return {
+        eventKey: f.session_id && f.sequence !== undefined
+          ? `${f.session_id}:${f.sequence}` : `${f.timestamp}:${f.id}:${f.raw}`,
         time: f.time || getNowTimeString(),
         iface: f.iface || '/dev/esp32_ahmed',
         id: pId,
@@ -1134,10 +1141,21 @@
     }
 
     function ingestRealFrame(f) {
+      if (f.event !== 'frame' || f.direction !== 'rx' || f.source !== 'physical_bus') return;
       const packet = formatRealPacket(f);
       streamPackets.unshift(packet);
       if (streamPackets.length > MAX_STREAM_HISTORY) streamPackets.pop();
-      renderStreamTables();
+      scheduleStreamRender();
+    }
+
+    let streamRenderPending = false;
+    function scheduleStreamRender() {
+      if (streamRenderPending) return;
+      streamRenderPending = true;
+      requestAnimationFrame(() => {
+        streamRenderPending = false;
+        renderStreamTables();
+      });
     }
 
     function toggleStreamPause() {
@@ -1149,8 +1167,8 @@
       const statusHtml = streamPaused
         ? '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> PAUSED'
         : (bridgeConnected
-            ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> ONLINE (REAL TIME)'
-            : '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> LISTENING (POLLING / LOG)');
+            ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> LIVE BRIDGE CONNECTION'
+            : '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> HISTORICAL SNAPSHOT');
 
       if (dom.streamStatusText) dom.streamStatusText.innerHTML = statusHtml;
     }
@@ -1181,7 +1199,7 @@
 
       let html = '';
       if (filtered.length === 0) {
-        html = '<tr><td colspan="7" class="py-6 text-center text-neutral-500 uppercase tracking-wider font-mono">Listening on /dev/esp32_ahmed (500 kbps)... Bus is silent / Awaiting physical CAN frames.</td></tr>';
+        html = '<tr><td colspan="7" class="py-6 text-center text-neutral-500 uppercase tracking-wider font-mono">Listening on /dev/esp32_ahmed (500 kbps)... No physical frames received; bus connectivity unverified.</td></tr>';
       } else {
         const visible = filtered.slice(0, streamDisplayLimit);
         html = visible.map((p, idx) => {
@@ -1462,8 +1480,8 @@
         }
         if (triageBox) triageBox.classList.add('hidden');
         if (inProgressBox) inProgressBox.classList.add('hidden');
-        if (navMutex) navMutex.innerHTML = '<span class="text-white font-semibold uppercase">Unlocked (Ready)</span>';
-        if (cardPiMutex) cardPiMutex.innerText = '/var/lock/calsol_hil.lock (Ready)';
+        if (navMutex) navMutex.innerHTML = '<span class="text-white font-semibold uppercase">See Runner</span>';
+        if (cardPiMutex) cardPiMutex.innerText = '/tmp/calsol_locks (status unverified)';
       } else if (currentRun.status === 'in_progress') {
         if (badge) {
           badge.innerText = '[STATUS: IN PROGRESS]';
@@ -1471,8 +1489,8 @@
         }
         if (triageBox) triageBox.classList.add('hidden');
         if (inProgressBox) inProgressBox.classList.remove('hidden');
-        if (navMutex) navMutex.innerHTML = '<span class="text-pastel-yellow font-bold uppercase">Locked (Active Run)</span>';
-        if (cardPiMutex) cardPiMutex.innerText = '/var/lock/calsol_hil.lock (LOCKED)';
+        if (navMutex) navMutex.innerHTML = '<span class="text-pastel-yellow font-bold uppercase">See Runner</span>';
+        if (cardPiMutex) cardPiMutex.innerText = '/tmp/calsol_locks (status unverified)';
 
         const ip = currentRun.in_progress_details || {};
         if (dom.inProgressPhase) dom.inProgressPhase.innerText = ip.current_phase || 'Silicon Flashing & Unity Suite Execution';
@@ -1483,8 +1501,8 @@
       } else {
         if (inProgressBox) inProgressBox.classList.add('hidden');
         if (triageBox) triageBox.classList.remove('hidden');
-        if (navMutex) navMutex.innerHTML = '<span class="text-white font-semibold uppercase">Unlocked (Ready)</span>';
-        if (cardPiMutex) cardPiMutex.innerText = '/var/lock/calsol_hil.lock (Ready)';
+        if (navMutex) navMutex.innerHTML = '<span class="text-white font-semibold uppercase">See Runner</span>';
+        if (cardPiMutex) cardPiMutex.innerText = '/tmp/calsol_locks (status unverified)';
 
         const fType = currentRun.failure_type || 'assertion_failure';
         const fd = currentRun.failure_details || {};

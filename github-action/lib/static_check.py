@@ -9,6 +9,7 @@ import os
 import sys
 import subprocess
 import shutil
+import json
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -51,6 +52,8 @@ def run_cppcheck(target_dirs):
 
     try:
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if res.returncode != 0:
+            return None, f"cppcheck invocation failed ({res.returncode}): {res.stderr}"
         combined_output = (res.stdout + "\n" + res.stderr).strip()
         lines = [line.strip() for line in combined_output.splitlines() if line.strip()]
         return lines, None
@@ -58,7 +61,7 @@ def run_cppcheck(target_dirs):
         return None, str(e)
 
 def main():
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    repo_root = os.path.abspath(os.environ.get('CALSOL_REPO_ROOT', os.getcwd()))
     print("==================================================")
     print(" CalSol Pre-Hardware Static Analysis Gate")
     print(f" Target Root: {repo_root}")
@@ -73,7 +76,9 @@ def main():
     notices = []
 
     if cpp_err:
-        print(f"[-] Note: {cpp_err}. Skipping cppcheck.")
+        save_report(repo_root, 'unavailable', 0, cpp_err)
+        print(f"[-] Quality gate unavailable: {cpp_err}.")
+        sys.exit(1)
     elif cppcheck_lines is not None:
         for line in cppcheck_lines:
             if ": (error)" in line:
@@ -88,11 +93,19 @@ def main():
     # GitHub Actions Step Summary disabled to keep summary dedicated to unit tests
 
     if critical_errors:
+        save_report(repo_root, 'failed', len(critical_errors), critical_errors)
         print("\n[-] Quality Gate FAILED: Critical defects detected. Aborting physical hardware runner.")
         sys.exit(1)
 
+    save_report(repo_root, 'passed', 0, notices)
     print("\n[+] Quality Gate PASSED: All pre-hardware checks successful.")
     sys.exit(0)
+
+def save_report(root, status, defects, details):
+    with open(os.path.join(root, 'static_check.json'), 'w', encoding='utf-8') as output:
+        json.dump(dict(status=status, defects=defects, details=details,
+                       run_id=os.environ.get('GITHUB_RUN_ID')), output, indent=2)
+
 
 if __name__ == "__main__":
     main()

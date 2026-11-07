@@ -7,22 +7,7 @@
 
 static const char *TAG = "LIGHTS_TEST";
 
-// Subsystem Logic Under Test: Voltage Conversion from LTC4151
-static float calculate_sensor_voltage(uint16_t raw_adc)
-{
-    return raw_adc * 0.025f;
-}
-
-// Subsystem Logic Under Test: State Machine
-typedef enum {
-    STATE_IDLE = 0,
-    STATE_ACTIVE
-} system_state_t;
-
-static system_state_t transition_state(system_state_t current)
-{
-    return (current == STATE_IDLE) ? STATE_ACTIVE : STATE_IDLE;
-}
+#include "lights_logic.h"
 
 // Unity Tests
 static void test_voltage_conversion(void)
@@ -56,6 +41,19 @@ static void test_can_message_format(void)
     TEST_ASSERT_EQUAL_UINT8(125, msg.data[0]);
 }
 
+static void test_exact_packet_builder(void)
+{
+    CAN_message_t message;
+    TEST_ASSERT_EQUAL(ESP_OK, CAN_build_packet(0x7FF, NULL, 0, &message));
+    TEST_ASSERT_EQUAL_UINT8(0, message.dlc);
+    uint8_t data[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+    TEST_ASSERT_EQUAL(ESP_OK, CAN_build_packet(0, data, 8, &message));
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(data, message.data, 8);
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, CAN_build_packet(0x800, data, 8, &message));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, CAN_build_packet(0, NULL, 1, &message));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, CAN_build_packet(0, data, 9, &message));
+}
+
 static void test_can_heartbeat_transmission(void)
 {
     CAN_deinit();
@@ -73,7 +71,7 @@ static void test_can_heartbeat_transmission(void)
     }
 
     vTaskDelay(pdMS_TO_TICKS(100));
-    CAN_deinit();
+    TEST_ASSERT_EQUAL(ESP_OK, CAN_deinit());
 }
 
 void app_main(void)
@@ -88,6 +86,7 @@ void app_main(void)
     RUN_TEST(test_voltage_conversion);
     RUN_TEST(test_state_toggle);
     RUN_TEST(test_can_message_format);
+    RUN_TEST(test_exact_packet_builder);
     RUN_TEST(test_can_heartbeat_transmission);
     UNITY_END();
 

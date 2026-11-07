@@ -12,6 +12,8 @@ import json
 import glob
 import subprocess
 import argparse
+from pathlib import Path
+import re
 
 def get_git_diff_files(repo_root):
     """
@@ -39,7 +41,15 @@ def get_git_diff_files(repo_root):
             return files
 
         # Check commit range
-        cmd = ["git", "diff", "--name-only", "HEAD~1", "HEAD"]
+        before, after = "HEAD~1", "HEAD"
+        event_path = os.environ.get("GITHUB_EVENT_PATH")
+        if event_name == "push" and event_path:
+            with open(event_path, encoding="utf-8") as event_file:
+                event = json.load(event_file)
+            before, after = event.get("before"), event.get("after")
+            if not before or not after or set(before) == {"0"}:
+                return None
+        cmd = ["git", "diff", "--name-only", before, after]
         res = subprocess.run(cmd, cwd=repo_root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
         files = [line.strip().replace("\\", "/") for line in res.stdout.splitlines() if line.strip()]
         return files
@@ -81,7 +91,7 @@ def load_subsystem_config(repo_root, folder, config_path, port_override=None):
             with open(resolved_cfg_file, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
         except Exception as e:
-            print(f"[-] Warning: Error parsing {resolved_cfg_file}: {e}")
+            raise ValueError(f"Invalid manifest {resolved_cfg_file}: {e}") from e
 
     # Determine default target directory
     if folder == "root":
@@ -96,6 +106,24 @@ def load_subsystem_config(repo_root, folder, config_path, port_override=None):
     baud = cfg.get("baud", 921600)
     timeout = cfg.get("timeout", 12)
     desc = cfg.get("description", "")
+    root = Path(repo_root).resolve()
+    resolved_target = (root / target).resolve()
+    if not resolved_target.is_relative_to(root) or not (resolved_target / 'CMakeLists.txt').is_file():
+        raise ValueError('Test target must be an ESP-IDF project within the repository')
+    if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', name):
+        raise ValueError('Subsystem name must contain only letters, numbers, dash and underscore')
+    if type(baud) is not int or not 9600 <= baud <= 3000000:
+        raise ValueError('Invalid flashing baud')
+    if type(timeout) not in (int, float) or not 0 < timeout <= 600:
+        raise ValueError('Timeout must be 0..600 seconds')
+    if not isinstance(port, str) or any(c in port for c in '\r\n'):
+        raise ValueError('Invalid serial port')
+    for expectation in cfg.get('expected_can', []):
+        if type(expectation.get('id')) is not int or not 0 <= expectation['id'] <= 0x7FF:
+            raise ValueError('Expected CAN ID must be a standard identifier')
+        for payload in expectation['data']:
+            if len(bytes.fromhex(payload)) > 8:
+                raise ValueError('Expected CAN payload exceeds eight bytes')
 
     return {
         "name": name,
