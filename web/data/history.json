@@ -2,6 +2,193 @@
   "generated_at": "2026-11-07T00:37:51.046302+00:00",
   "runs": [
     {
+      "id": "42325039593",
+      "commit": "f712294",
+      "branch": "main",
+      "timestamp": "2026-11-07T01:41:34.728557+00:00",
+      "author": "JuneKim0712",
+      "message": "Automated Hardware Verification",
+      "status": "passed",
+      "failure_type": null,
+      "failure_details": null,
+      "duration": "14.5s",
+      "subsystems": [
+        "pedals_fw",
+        "lights_fw"
+      ],
+      "tests_pass": 10,
+      "tests_total": 10,
+      "lock_duration_sec": 14.1,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_throttle_calculation_and_deadzone",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:199:test_throttle_calculation_and_deadzone:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_brake_plausibility_safety_interlock",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:200:test_brake_plausibility_safety_interlock:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_packet_builder_clamping_and_zeroing",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:201:test_can_packet_builder_clamping_and_zeroing:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_lifecycle",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:202:test_can_driver_lifecycle:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_uninitialized_safety",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:203:test_can_driver_uninitialized_safety:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_receive_timeout",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:204:test_can_receive_timeout:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_pedal_can_transmission",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:205:test_pedal_can_transmission:PASS"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_voltage_conversion",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:69:test_voltage_conversion:PASS"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_state_toggle",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:70:test_state_toggle:PASS"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_can_message_format",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:71:test_can_message_format:PASS"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "0A",
+          "decoded": "0x0A (Dec: 10)"
+        },
+        {
+          "t": 0.04,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "14",
+          "decoded": "0x14 (Dec: 20)"
+        },
+        {
+          "t": 0.09,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "1E",
+          "decoded": "0x1E (Dec: 30)"
+        },
+        {
+          "t": 0.14,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "28",
+          "decoded": "0x28 (Dec: 40)"
+        },
+        {
+          "t": 0.19,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "32",
+          "decoded": "0x32 (Dec: 50)"
+        },
+        {
+          "t": 0.24,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "3C",
+          "decoded": "0x3C (Dec: 60)"
+        },
+        {
+          "t": 0.29,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "46",
+          "decoded": "0x46 (Dec: 70)"
+        },
+        {
+          "t": 0.34,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "50",
+          "decoded": "0x50 (Dec: 80)"
+        },
+        {
+          "t": 0.39,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "5A",
+          "decoded": "0x5A (Dec: 90)"
+        },
+        {
+          "t": 0.44,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "64",
+          "decoded": "0x64 (Dec: 100)"
+        }
+      ]
+    },
+    {
       "id": "42325000000",
       "commit": "28df9a1",
       "branch": "main",
