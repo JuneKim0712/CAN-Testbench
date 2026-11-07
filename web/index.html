@@ -188,15 +188,15 @@
       </div>
     </section>
 
-    <!-- CAN BUS OSCILLOSCOPE & SIGNAL REPLAY -->
+    <!-- CAN BUS TELEMETRY PACKET ARRIVAL & TIMING -->
     <section class="border border-neutral-800 bg-neutral-950 p-4 space-y-3">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
         <div>
           <h2 class="text-xs font-bold text-white uppercase tracking-wider">
-            [TELEMETRY] Multi-Channel CAN Bus Oscilloscope & Signal Analyzer
+            [TELEMETRY] Physical CAN Bus Activity & Packet Arrival Timeline
           </h2>
           <p class="text-[11px] text-neutral-500 uppercase mt-0.5 tracking-wide">
-            Calibrated signal traces reconstructed from physical TCAN332 transceiver packets on /dev/esp32_ahmed
+            Real-time physical frame arrival sequence, inter-packet timing, and decoded payloads captured from hardware transceiver
           </p>
         </div>
 
@@ -226,46 +226,35 @@
           <span class="font-bold text-white font-mono" id="hudTime">t = +0.00s</span>
         </div>
         <div class="border-l border-neutral-800 pl-2">
-          <span class="text-[10px] uppercase text-pastel-yellow block">Throttle Demand [0x011]</span>
-          <span class="font-bold text-pastel-yellow font-mono" id="hudThrottle">0% (0 ADC)</span>
+          <span class="text-[10px] uppercase text-neutral-400 block">Active Message</span>
+          <span class="font-bold text-pastel-yellow font-mono truncate block" id="hudMessage">BUS STANDBY</span>
         </div>
         <div class="border-l border-neutral-800 pl-2">
-          <span class="text-[10px] uppercase text-pastel-cyan block">Bus Voltage [0x001]</span>
-          <span class="font-bold text-pastel-cyan font-mono" id="hudVoltage">12.0V Nominal</span>
+          <span class="text-[10px] uppercase text-neutral-400 block">Inter-Packet Delta (Δt)</span>
+          <span class="font-bold text-white font-mono" id="hudDelta">-</span>
         </div>
         <div class="border-l border-neutral-800 pl-2">
-          <span class="text-[10px] uppercase text-neutral-400 block">Safety Interlock</span>
-          <span class="font-bold text-pastel-green font-mono uppercase" id="hudInterlock">NORMAL (OK)</span>
+          <span class="text-[10px] uppercase text-neutral-400 block">Payload (Hex)</span>
+          <span class="font-bold text-neutral-300 font-mono" id="hudPayload">-</span>
         </div>
         <div class="border-l border-neutral-800 pl-2 col-span-2 sm:col-span-1">
-          <span class="text-[10px] uppercase text-neutral-500 block">Active CAN Frame</span>
-          <span class="font-bold text-neutral-300 font-mono" id="hudFrame">0x000 (IDLE)</span>
+          <span class="text-[10px] uppercase text-neutral-500 block">Decoded Information</span>
+          <span class="font-bold text-pastel-green font-mono truncate block" id="hudDecoded">No frames at playhead</span>
         </div>
       </div>
 
-      <!-- DUAL-CHANNEL CALIBRATED WAVEFORM CANVAS -->
+      <!-- PACKET TIMING DIAGRAM -->
       <div class="space-y-1.5">
-        <div class="flex items-center justify-between text-[10px] uppercase text-neutral-400">
-          <div class="flex items-center gap-4">
-            <span class="flex items-center gap-1.5">
-              <span class="w-2 h-2 bg-pastel-yellow inline-block"></span>
-              <span>Channel A: Throttle Demand (0 - 100%)</span>
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span class="w-2 h-2 bg-pastel-cyan inline-block"></span>
-              <span>Channel B: Sensor Bus Voltage (0 - 15V)</span>
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span class="w-2 h-0.5 border-t border-dashed border-pastel-red inline-block"></span>
-              <span>25% Cutoff Threshold</span>
-            </span>
+        <div class="flex flex-wrap items-center justify-between text-[10px] uppercase text-neutral-400 gap-2">
+          <div class="flex flex-wrap items-center gap-2" id="timelineLegend">
+            <!-- Dynamically populated ID pills -->
           </div>
           <div class="font-mono text-neutral-500">
-            Click / Scrub Canvas to Inspect
+            Click / Scrub Timeline to Inspect Exact Packet
           </div>
         </div>
 
-        <div class="relative bg-black border border-neutral-800 h-64 overflow-hidden cursor-crosshair" id="canvasContainer" onclick="handleCanvasClick(event)" onmousemove="handleCanvasHover(event)" onmouseleave="handleCanvasLeave()">
+        <div class="relative bg-black border border-neutral-800 h-48 overflow-hidden cursor-crosshair" id="canvasContainer" onclick="handleCanvasClick(event)" onmousemove="handleCanvasHover(event)" onmouseleave="handleCanvasLeave()">
           <canvas id="waveformCanvas" class="w-full h-full block"></canvas>
           <div id="playhead" class="absolute top-0 bottom-0 w-[1px] bg-white pointer-events-none" style="left: 0%;"></div>
           <div id="hoverCursor" class="hidden absolute top-0 bottom-0 w-[1px] border-l border-dashed border-neutral-400 pointer-events-none"></div>
@@ -281,26 +270,24 @@
         <div class="flex items-center justify-between">
           <span class="text-[11px] font-bold text-white uppercase tracking-wider">Decoded Bus Transactions</span>
           <div class="flex items-center gap-2">
-            <span class="text-[10px] uppercase text-neutral-500">Filter ID:</span>
+            <span class="text-[10px] uppercase text-neutral-500">Filter By ID:</span>
             <select id="idFilter" onchange="renderPacketsTable()" class="bg-black border border-neutral-800 px-2 py-1 text-white text-[11px] focus:outline-none focus:border-neutral-600">
-              <option value="all">ALL IDS</option>
-              <option value="0x011">0x011 (THROTTLE_COMMAND)</option>
-              <option value="0x001">0x001 (PEDALS_STATUS)</option>
-              <option value="0x021">0x021 (LIGHTS_POWER)</option>
+              <!-- Dynamically populated from actual run CAN IDs -->
             </select>
           </div>
         </div>
 
-        <div class="border border-neutral-800 overflow-x-auto max-h-48">
+        <div class="border border-neutral-800 overflow-x-auto max-h-52">
           <table class="w-full text-left font-mono text-[11px]">
             <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 uppercase text-[10px] tracking-wider sticky top-0">
               <tr>
-                <th class="py-1.5 px-3">Rel Time</th>
+                <th class="py-1.5 px-3">Arrival Time</th>
+                <th class="py-1.5 px-3">Delta (Δt)</th>
                 <th class="py-1.5 px-3">CAN ID</th>
                 <th class="py-1.5 px-3">Message Identifier</th>
                 <th class="py-1.5 px-3">DLC</th>
                 <th class="py-1.5 px-3">Payload (Hex)</th>
-                <th class="py-1.5 px-3">Decoded Physical Engineering Value</th>
+                <th class="py-1.5 px-3">Decoded Information</th>
               </tr>
             </thead>
             <tbody id="packetTableBody" class="divide-y divide-neutral-900 bg-black text-neutral-200">
@@ -541,6 +528,10 @@
       bar.style.width = `${pct}%`;
       bar.className = currentRun.status === 'passed' ? 'h-full bg-pastel-green' : 'h-full bg-pastel-red';
 
+      // Populate ID filter and timeline legend dynamically
+      populateIdFilter();
+      updateTimelineLegend();
+
       // Subsystem Badges
       const subContainer = document.getElementById('subsystemList');
       subContainer.innerHTML = currentRun.subsystems.map(s => 
@@ -593,34 +584,111 @@
       }).join('');
     }
 
+    const CAN_COLORS = [
+      '#fde047', // Pastel Yellow
+      '#7dd3fc', // Pastel Cyan
+      '#86efac', // Pastel Green
+      '#fca5a5', // Pastel Red
+      '#c084fc', // Pastel Purple
+      '#fdba74', // Pastel Orange
+      '#f9a8d4'  // Pastel Pink
+    ];
+
+    function getColorForId(canId, distinctIds) {
+      const idx = distinctIds.indexOf(canId);
+      return idx >= 0 ? CAN_COLORS[idx % CAN_COLORS.length] : '#ffffff';
+    }
+
+    function getDistinctIds() {
+      if (!currentRun || !currentRun.can_packets) return [];
+      const set = new Set();
+      currentRun.can_packets.forEach(p => set.add(p.id));
+      return Array.from(set);
+    }
+
+    function populateIdFilter() {
+      const select = document.getElementById('idFilter');
+      const distinct = getDistinctIds();
+      if (distinct.length === 0) {
+        select.innerHTML = '<option value="all">NO TRAFFIC (0 FRAMES)</option>';
+        return;
+      }
+      let html = `<option value="all">ALL IDS (${currentRun.can_packets.length} FRAMES)</option>`;
+      distinct.forEach(id => {
+        const count = currentRun.can_packets.filter(p => p.id === id).length;
+        const name = currentRun.can_packets.find(p => p.id === id)?.name || id;
+        html += `<option value="${id}">${id} • ${name} (${count} frames)</option>`;
+      });
+      select.innerHTML = html;
+    }
+
+    function updateTimelineLegend() {
+      const legend = document.getElementById('timelineLegend');
+      const distinct = getDistinctIds();
+      if (distinct.length === 0) {
+        legend.innerHTML = '<span class="text-neutral-500 font-mono text-[10px]">[IN-MEMORY TEST • NO BUS BROADCASTS]</span>';
+        return;
+      }
+      legend.innerHTML = distinct.map(id => {
+        const col = getColorForId(id, distinct);
+        const name = currentRun.can_packets.find(p => p.id === id)?.name || id;
+        const count = currentRun.can_packets.filter(p => p.id === id).length;
+        return `
+          <span class="flex items-center gap-1.5 border border-neutral-800 bg-neutral-900 px-2 py-0.5 font-mono text-[10px]">
+            <span class="w-2 h-2 inline-block" style="background-color: ${col}"></span>
+            <span class="text-white font-bold">${id}</span>
+            <span class="text-neutral-400">${name} (${count})</span>
+          </span>
+        `;
+      }).join('');
+    }
+
     function renderPacketsTable() {
       const filter = document.getElementById('idFilter').value;
       const tbody = document.getElementById('packetTableBody');
+      const packets = currentRun ? (currentRun.can_packets || []) : [];
 
-      const visible = currentRun.can_packets.filter(p => {
+      if (packets.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No physical bus frames captured for this run.</td></tr>`;
+        return;
+      }
+
+      const visible = packets.filter(p => {
         const matchId = (filter === 'all' || p.id.toLowerCase() === filter.toLowerCase());
         const matchTime = p.t <= playbackTime;
         return matchId && matchTime;
       });
 
       if (visible.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-neutral-600 uppercase tracking-wider">No bus frames logged prior to t = ${playbackTime.toFixed(2)}s</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-neutral-600 uppercase tracking-wider font-mono">No bus frames logged prior to t = ${playbackTime.toFixed(2)}s</td></tr>`;
         return;
       }
 
-      tbody.innerHTML = visible.slice().reverse().map(p => `
-        <tr class="hover:bg-neutral-900 transition">
-          <td class="py-1.5 px-3 text-neutral-500">+${p.t.toFixed(2)}s</td>
-          <td class="py-1.5 px-3 text-pastel-yellow font-bold">${p.id}</td>
-          <td class="py-1.5 px-3 text-white uppercase">${p.name}</td>
-          <td class="py-1.5 px-3 text-neutral-500">${p.dlc}</td>
-          <td class="py-1.5 px-3 text-neutral-300 font-mono">${p.raw}</td>
-          <td class="py-1.5 px-3 text-pastel-green font-medium">${p.decoded}</td>
-        </tr>
-      `).join('');
+      const distinct = getDistinctIds();
+      const activePacket = packets.filter(p => p.t <= playbackTime).slice(-1)[0];
+
+      tbody.innerHTML = visible.slice().reverse().map(p => {
+        const origIdx = packets.indexOf(p);
+        const prevP = origIdx > 0 ? packets[origIdx - 1] : null;
+        const deltaMs = prevP ? '+' + ((p.t - prevP.t) * 1000).toFixed(1) + ' ms' : 'Initial';
+        const color = getColorForId(p.id, distinct);
+        const isLatest = (p === activePacket);
+
+        return `
+          <tr class="${isLatest ? 'bg-neutral-900 border-l-2 border-white' : 'hover:bg-neutral-900'} transition font-mono text-[11px]">
+            <td class="py-1.5 px-3 text-neutral-400 font-bold">+${p.t.toFixed(2)}s</td>
+            <td class="py-1.5 px-3 text-neutral-500">${deltaMs}</td>
+            <td class="py-1.5 px-3 font-bold" style="color: ${color}">${p.id}</td>
+            <td class="py-1.5 px-3 text-white uppercase">${p.name}</td>
+            <td class="py-1.5 px-3 text-neutral-500">${p.dlc}</td>
+            <td class="py-1.5 px-3 text-neutral-300 font-mono">${p.raw}</td>
+            <td class="py-1.5 px-3 text-pastel-green font-medium">${p.decoded}</td>
+          </tr>
+        `;
+      }).join('');
     }
 
-    // ─── DUAL-CHANNEL OSCILLOSCOPE DRAWING ───────────────────────────────────────
+    // ─── DYNAMIC CAN BUS ACTIVITY & TIMING ANALYZER ─────────────────────────
     function drawWaveform() {
       const canvas = document.getElementById('waveformCanvas');
       const ctx = canvas.getContext('2d');
@@ -632,32 +700,37 @@
 
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
-
       ctx.clearRect(0, 0, w, h);
 
-      const marginL = 50;
+      const marginL = 75;
       const marginR = 15;
       const plotW = w - marginL - marginR;
-      
-      // Top Channel: Throttle (0% to 100%)
-      const ch1Top = 20;
-      const ch1H = 95;
-      const ch1Bottom = ch1Top + ch1H;
 
-      // Bottom Channel: Voltage (0V to 15V)
-      const ch2Top = 135;
-      const ch2H = 75;
-      const ch2Bottom = ch2Top + ch2H;
+      const packets = currentRun ? (currentRun.can_packets || []) : [];
+      const distinct = getDistinctIds();
 
-      // Event Raster Lane
-      const rasterTop = 225;
-      const rasterH = 15;
+      // If no packets: Render clear informational notice
+      if (packets.length === 0) {
+        ctx.strokeStyle = '#1e1e1e';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(marginL, 20, plotW, h - 45);
 
-      // ── Grid & Axes ────────────────────────────────────────────────────────
+        ctx.fillStyle = '#737373';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('[PURE LOGIC UNIT TEST • NO PHYSICAL CAN FRAMES BROADCAST]', marginL + plotW / 2, h / 2 - 8);
+        ctx.font = '9px monospace';
+        ctx.fillStyle = '#525252';
+        ctx.fillText('All test assertions executed in-memory on physical silicon without external bus activity.', marginL + plotW / 2, h / 2 + 12);
+        ctx.textAlign = 'left';
+        updateHUD();
+        return;
+      }
+
+      // ── Vertical Time Grid & Axes ──────────────────────────────────────────
       ctx.strokeStyle = '#1e1e1e';
       ctx.lineWidth = 1;
 
-      // Vertical Time Lines (adaptive interval)
       let timeStep = 1.0;
       if (maxPlaybackTime <= 0.8) timeStep = 0.1;
       else if (maxPlaybackTime <= 1.5) timeStep = 0.2;
@@ -668,197 +741,132 @@
         const x = marginL + (sec / maxPlaybackTime) * plotW;
         ctx.beginPath();
         ctx.moveTo(x, 10);
-        ctx.lineTo(x, h - 5);
+        ctx.lineTo(x, h - 20);
         ctx.stroke();
 
         ctx.fillStyle = '#666666';
         ctx.font = '9px monospace';
         const label = timeStep < 1.0 ? `+${sec.toFixed(2)}s` : `+${sec.toFixed(0)}s`;
-        ctx.fillText(label, x - 14, h - 2);
+        ctx.fillText(label, x - 14, h - 6);
       }
 
-      // Horizontal Lines & Labels for Channel 1 (Throttle: 0%, 25%, 50%, 75%, 100%)
-      [0, 25, 50, 75, 100].forEach(val => {
-        const y = ch1Bottom - (val / 100) * ch1H;
-        ctx.beginPath();
-        ctx.moveTo(marginL, y);
-        ctx.lineTo(marginL + plotW, y);
-        ctx.strokeStyle = (val === 25) ? '#ef4444' : '#1c1c1c';
-        ctx.setLineDash(val === 25 ? [4, 4] : []);
-        ctx.stroke();
-        ctx.setLineDash([]);
+      // ── Distinct CAN ID Channels / Lanes ──────────────────────────────────
+      const numLanes = distinct.length;
+      const availableH = h - 55;
+      const laneH = Math.min(36, availableH / Math.max(1, numLanes));
 
-        ctx.fillStyle = (val === 25) ? '#fca5a5' : '#737373';
-        ctx.font = '9px monospace';
-        ctx.fillText(`${val}%`, 14, y + 3);
+      distinct.forEach((id, laneIdx) => {
+        const laneY = 22 + laneIdx * laneH + laneH / 2;
+        const color = getColorForId(id, distinct);
+        const sample = packets.find(p => p.id === id);
+        const name = sample ? sample.name : id;
+
+        // Lane Baseline
+        ctx.strokeStyle = '#262626';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(marginL, laneY);
+        ctx.lineTo(marginL + plotW, laneY);
+        ctx.stroke();
+
+        // Lane Label on Left Margin
+        ctx.fillStyle = color;
+        ctx.font = 'bold 9px monospace';
+        ctx.fillText(id, 8, laneY - 2);
+        ctx.fillStyle = '#737373';
+        ctx.font = '8px monospace';
+        const shortName = name.length > 9 ? name.substring(0, 8) + '…' : name;
+        ctx.fillText(shortName, 8, laneY + 9);
+
+        // Packet Arrival Pulses
+        const lanePackets = packets.filter(p => p.id === id);
+        lanePackets.forEach(p => {
+          const x = marginL + (p.t / maxPlaybackTime) * plotW;
+          const isArrived = p.t <= playbackTime;
+
+          // Pulse vertical line
+          ctx.strokeStyle = isArrived ? color : '#333333';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x, laneY + 6);
+          ctx.lineTo(x, laneY - 10);
+          ctx.stroke();
+
+          // Packet top square
+          ctx.fillStyle = isArrived ? color : '#404040';
+          ctx.fillRect(x - 2.5, laneY - 12.5, 5, 5);
+
+          // If arrived and latest in this lane, draw tiny payload tag
+          if (isArrived && p === lanePackets.filter(x => x.t <= playbackTime).slice(-1)[0]) {
+            ctx.fillStyle = color;
+            ctx.font = '8px monospace';
+            const tag = p.raw.length > 5 ? p.raw.substring(0, 5) : p.raw;
+            ctx.fillText(tag, x - 6, laneY - 15);
+          }
+        });
       });
 
-      // Label 25% Cutoff Threshold
-      ctx.fillStyle = '#fca5a5';
-      ctx.font = '9px monospace';
-      ctx.fillText('[25% CUTOFF THRESHOLD]', marginL + plotW - 130, ch1Bottom - (25 / 100) * ch1H - 4);
-
-      // Horizontal Lines & Labels for Channel 2 (Voltage: 0V, 5V, 10V, 12V, 15V)
-      [0, 5, 10, 12, 15].forEach(val => {
-        const y = ch2Bottom - (val / 15) * ch2H;
-        ctx.beginPath();
-        ctx.moveTo(marginL, y);
-        ctx.lineTo(marginL + plotW, y);
-        ctx.strokeStyle = (val === 12) ? '#38bdf8' : '#1c1c1c';
-        ctx.setLineDash(val === 12 ? [4, 4] : []);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.fillStyle = (val === 12) ? '#7dd3fc' : '#737373';
-        ctx.font = '9px monospace';
-        ctx.fillText(`${val}V`, 14, y + 3);
-      });
-
-      ctx.fillStyle = '#7dd3fc';
-      ctx.font = '9px monospace';
-      ctx.fillText('[12.0V NOMINAL AUX]', marginL + plotW - 115, ch2Bottom - (12 / 15) * ch2H - 4);
-
-      // Channel Separator Line
-      ctx.strokeStyle = '#262626';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(marginL, 122);
-      ctx.lineTo(marginL + plotW, 122);
-      ctx.stroke();
-
-      // ── Plot Channel 1: Stepped Throttle Demand (Pastel Yellow) ─────────────
-      const throttlePackets = currentRun.can_packets.filter(p => p.id === '0x011');
-      if (throttlePackets.length > 0) {
-        ctx.strokeStyle = '#fde047';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-
-        let prevX = marginL;
-        let prevY = ch1Bottom;
-
-        throttlePackets.forEach((p, idx) => {
-          const x = marginL + (p.t / maxPlaybackTime) * plotW;
-          const val = parseInt(p.raw, 16);
-          const y = ch1Bottom - (val / 100) * ch1H;
-
-          // Step-and-hold (horizontal then vertical)
-          ctx.lineTo(x, prevY);
-          ctx.lineTo(x, y);
-
-          prevX = x;
-          prevY = y;
-        });
-        // Extend to end of plot
-        ctx.lineTo(marginL + plotW, prevY);
-        ctx.stroke();
-
-        // Right-Angle Packet Dots
-        throttlePackets.forEach(p => {
-          const x = marginL + (p.t / maxPlaybackTime) * plotW;
-          const val = parseInt(p.raw, 16);
-          const y = ch1Bottom - (val / 100) * ch1H;
-          ctx.fillStyle = p.t <= playbackTime ? '#fde047' : '#525252';
-          ctx.fillRect(x - 2.5, y - 2.5, 5, 5); // Crisp square point
-        });
-      }
-
-      // ── Plot Channel 2: Sensor Bus Voltage (Pastel Cyan) ───────────────────
-      const statusPackets = currentRun.can_packets.filter(p => p.id === '0x001');
-      if (statusPackets.length > 0) {
-        ctx.strokeStyle = '#7dd3fc';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-
-        let vPrevX = marginL;
-        let vPrevY = ch2Bottom - (12.3 / 15) * ch2H;
-        ctx.moveTo(vPrevX, vPrevY);
-
-        statusPackets.forEach(p => {
-          const x = marginL + (p.t / maxPlaybackTime) * plotW;
-          const rawVolt = p.raw.split(' ')[1] ? parseInt(p.raw.split(' ')[1], 16) / 10.0 : 12.0;
-          const y = ch2Bottom - (rawVolt / 15) * ch2H;
-          ctx.lineTo(x, y);
-          vPrevX = x;
-          vPrevY = y;
-        });
-        ctx.lineTo(marginL + plotW, vPrevY);
-        ctx.stroke();
-
-        statusPackets.forEach(p => {
-          const x = marginL + (p.t / maxPlaybackTime) * plotW;
-          const rawVolt = p.raw.split(' ')[1] ? parseInt(p.raw.split(' ')[1], 16) / 10.0 : 12.0;
-          const y = ch2Bottom - (rawVolt / 15) * ch2H;
-          ctx.fillStyle = p.t <= playbackTime ? '#7dd3fc' : '#404040';
-          ctx.fillRect(x - 2.5, y - 2.5, 5, 5);
-        });
-      }
-
-      // ── Event Raster Lane (Bottom) ─────────────────────────────────────────
-      ctx.fillStyle = '#121212';
+      // ── Aggregate Bus Activity Lane (Bottom Raster) ────────────────────────
+      const rasterTop = h - 42;
+      const rasterH = 14;
+      ctx.fillStyle = '#0f0f0f';
       ctx.fillRect(marginL, rasterTop, plotW, rasterH);
       ctx.strokeStyle = '#262626';
+      ctx.lineWidth = 1;
       ctx.strokeRect(marginL, rasterTop, plotW, rasterH);
 
       ctx.fillStyle = '#666666';
       ctx.font = '8px monospace';
-      ctx.fillText('BUS TICKS', 4, rasterTop + 10);
+      ctx.fillText('ALL FRAMES', 8, rasterTop + 10);
 
-      currentRun.can_packets.forEach(p => {
+      packets.forEach(p => {
         const x = marginL + (p.t / maxPlaybackTime) * plotW;
-        ctx.fillStyle = (p.id === '0x011') ? '#fde047' : ((p.id === '0x001') ? '#86efac' : '#c084fc');
+        const color = getColorForId(p.id, distinct);
+        const isArrived = p.t <= playbackTime;
+        ctx.fillStyle = isArrived ? color : '#333333';
         ctx.fillRect(x - 1, rasterTop + 2, 2, rasterH - 4);
       });
 
-      // ── Update Digital Heads-Up Display (HUD) ──────────────────────────────
+      // Update HUD
       updateHUD();
     }
 
     function updateHUD() {
       document.getElementById('hudTime').innerText = `t = +${playbackTime.toFixed(2)}s`;
 
-      // Find active throttle at playbackTime
-      const activeThrottle = currentRun.can_packets
-        .filter(p => p.id === '0x011' && p.t <= playbackTime)
-        .slice(-1)[0];
+      const packets = currentRun ? (currentRun.can_packets || []) : [];
+      if (packets.length === 0) {
+        document.getElementById('hudMessage').innerText = 'NO BUS TRAFFIC';
+        document.getElementById('hudDelta').innerText = '—';
+        document.getElementById('hudPayload').innerText = '—';
+        document.getElementById('hudDecoded').innerText = 'In-memory unit assertions only';
+        return;
+      }
 
-      if (activeThrottle) {
-        const val = parseInt(activeThrottle.raw, 16);
-        const adc = Math.round((val / 100) * 3000 + 500);
-        document.getElementById('hudThrottle').innerText = `${val}% (${adc} ADC)`;
+      // Find all packets arrived at or prior to playbackTime
+      const arrived = packets.filter(p => p.t <= playbackTime);
+      const active = arrived.slice(-1)[0];
+
+      if (active) {
+        document.getElementById('hudMessage').innerText = `${active.id} • ${active.name}`;
         
-        // Interlock status
-        if (val > 25) {
-          document.getElementById('hudInterlock').innerText = 'HIGH THROTTLE (>25%)';
-          document.getElementById('hudInterlock').className = 'font-bold text-pastel-yellow font-mono uppercase';
+        // Calculate delta t from immediately prior packet in full list
+        const activeIdx = packets.indexOf(active);
+        if (activeIdx > 0) {
+          const prev = packets[activeIdx - 1];
+          const dtMs = ((active.t - prev.t) * 1000).toFixed(1);
+          document.getElementById('hudDelta').innerText = `+${dtMs} ms`;
         } else {
-          document.getElementById('hudInterlock').innerText = 'NORMAL (OK)';
-          document.getElementById('hudInterlock').className = 'font-bold text-pastel-green font-mono uppercase';
+          document.getElementById('hudDelta').innerText = 'Initial Frame';
         }
-      } else {
-        document.getElementById('hudThrottle').innerText = '0% (0 ADC)';
-        document.getElementById('hudInterlock').innerText = 'STANDBY (0%)';
-        document.getElementById('hudInterlock').className = 'font-bold text-neutral-400 font-mono uppercase';
-      }
 
-      // Find active voltage
-      const activeVolt = currentRun.can_packets
-        .filter(p => p.id === '0x001' && p.t <= playbackTime)
-        .slice(-1)[0];
-      if (activeVolt) {
-        const v = activeVolt.raw.split(' ')[1] ? (parseInt(activeVolt.raw.split(' ')[1], 16) / 10.0).toFixed(1) : '12.3';
-        document.getElementById('hudVoltage').innerText = `${v}V (LTC4151)`;
+        document.getElementById('hudPayload').innerText = `${active.raw} (${active.dlc}B)`;
+        document.getElementById('hudDecoded').innerText = active.decoded || 'Raw Frame';
       } else {
-        document.getElementById('hudVoltage').innerText = '12.0V Nominal';
-      }
-
-      // Last CAN frame
-      const lastFrame = currentRun.can_packets
-        .filter(p => p.t <= playbackTime)
-        .slice(-1)[0];
-      if (lastFrame) {
-        document.getElementById('hudFrame').innerText = `${lastFrame.id} (${lastFrame.name})`;
-      } else {
-        document.getElementById('hudFrame').innerText = '0x000 (BUS IDLE)';
+        document.getElementById('hudMessage').innerText = 'BUS STANDBY';
+        document.getElementById('hudDelta').innerText = '—';
+        document.getElementById('hudPayload').innerText = '—';
+        document.getElementById('hudDecoded').innerText = 'Awaiting first packet';
       }
     }
 
@@ -907,7 +915,7 @@
       document.getElementById('timeScrubber').value = pct;
 
       const canvas = document.getElementById('waveformCanvas');
-      const marginL = 50;
+      const marginL = 75;
       const marginR = 15;
       const plotW = canvas.clientWidth - marginL - marginR;
       const xPixel = marginL + (playbackTime / maxPlaybackTime) * plotW;
@@ -921,7 +929,7 @@
     function handleCanvasClick(e) {
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
-      const marginL = 50;
+      const marginL = 75;
       const marginR = 15;
       const plotW = rect.width - marginL - marginR;
 
@@ -936,7 +944,7 @@
       const container = document.getElementById('canvasContainer');
       const rect = container.getBoundingClientRect();
       const hoverX = e.clientX - rect.left;
-      const marginL = 50;
+      const marginL = 75;
       const marginR = 15;
       const plotW = rect.width - marginL - marginR;
 
@@ -950,8 +958,25 @@
 
         const fraction = (hoverX - marginL) / plotW;
         const hoverT = fraction * maxPlaybackTime;
-        tooltip.style.left = `${Math.min(rect.width - 90, hoverX + 8)}px`;
-        tooltip.innerText = `t = +${hoverT.toFixed(2)}s`;
+
+        // Find nearest packet to hover position
+        const packets = currentRun ? (currentRun.can_packets || []) : [];
+        let nearest = null;
+        let minDiff = 999;
+        packets.forEach(p => {
+          const diff = Math.abs(p.t - hoverT);
+          if (diff < minDiff && diff < 0.25) {
+            minDiff = diff;
+            nearest = p;
+          }
+        });
+
+        tooltip.style.left = `${Math.min(rect.width - 160, hoverX + 8)}px`;
+        if (nearest) {
+          tooltip.innerText = `t = +${nearest.t.toFixed(2)}s | ${nearest.id} ${nearest.name} | ${nearest.raw}`;
+        } else {
+          tooltip.innerText = `t = +${hoverT.toFixed(2)}s`;
+        }
       } else {
         handleCanvasLeave();
       }
