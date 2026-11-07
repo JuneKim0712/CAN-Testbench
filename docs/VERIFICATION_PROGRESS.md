@@ -1,5 +1,37 @@
 # Implementation and bench verification progress
 
+## Latest implementation checkpoint
+
+- Software implementation is on `codex/reliable-can-testbench` in the user fork.
+- Both production firmwares now build for ESP32-S3; both subsystem test projects
+  and a fresh copied developer template also built on the Pi.
+- Twenty software regressions pass on Linux, including actual Unix-socket
+  command validation, slow-client disconnects, overload accounting, snapshots,
+  stale-report rejection, manifest validation, and contradictory Unity results.
+- The capture-first coordinator was tested on the DUT. Releasing DTR before
+  native-USB hard reset is required to leave the bootloader; this is implemented.
+- Canonical device alias locking, cancellation, lock release, and failure-artifact
+  persistence were verified. No synthetic assertions were added to those artifacts.
+- The copied template's three logic tests passed on silicon. Its optional
+  physical injection test failed as expected with the unresolved CAN path.
+- GitHub Actions run 42359195024 passed cloud static analysis and discovery;
+  both hardware jobs failed because required physical frames were absent. The
+  report job succeeded and uploaded telemetry artifacts. This is a genuine
+  hardware acceptance failure, not a green CI run.
+- Bridge and private viewer are deployed independently of the CI checkout under
+  `/opt/calsol/releases/2594822c77c9eb1182aa2722aa15dc1db39d8ca3`.
+  Persistent telemetry is under /var/lib/calsol and rotated logs /var/log/calsol.
+- The loopback viewer was browser-verified through SSH. Tailscale Serve requires
+  account access unavailable in this session, so PRIVATE_VIEWER.md provides
+  encrypted SSH forwarding without publishing a network listener.
+- Physical TX/RX and physical-load acceptance remain failed/blocked. USB inventory
+  found no alternate CAN interface or lab instrument that could confirm or change
+  transceiver power remotely. Older notes below describe intermediate states.
+
+The whole plan is not verified until independent physical reception and the
+remaining physical fault/load gates pass. Software fixture results cannot close
+those gates.
+
 November 7, 2026. This is an intermediate checkpoint, not release approval.
 
 ## Observed bench

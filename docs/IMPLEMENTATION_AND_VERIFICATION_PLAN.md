@@ -2,7 +2,9 @@
 
 Date: November 7, 2026
 
-Status: proposed implementation; hardware verification pending.
+Status: software implemented and under end-to-end verification. Physical CAN
+acceptance is failing and must not be represented as complete. See
+VERIFICATION_PROGRESS.md for measured results and remaining gates.
 
 ## Objective
 
