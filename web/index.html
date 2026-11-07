@@ -89,16 +89,26 @@
 
     <!-- RUN CONTROLLER BAR -->
     <section class="border border-neutral-800 bg-neutral-950 p-3 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-      <div class="flex flex-wrap items-center gap-3">
-        <div>
-          <label class="block text-[10px] uppercase text-neutral-500 mb-1 tracking-wider">Select Test Run</label>
-          <select id="runSelect" onchange="switchRun(this.value)" class="bg-black border border-neutral-700 text-neutral-100 text-xs px-2.5 py-1.5 focus:outline-none focus:border-white">
-          </select>
+      <div class="flex flex-col gap-2">
+        <!-- Subsystem Quick Filter Pills -->
+        <div class="flex flex-wrap items-center gap-1">
+          <span class="text-[10px] uppercase text-neutral-500 tracking-wider mr-1">Target ECU:</span>
+          <button id="btnSubAll" onclick="setSubsystemFilter('all')" class="px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-[10px] border border-neutral-700">ALL RUNS</button>
+          <button id="btnSubPedals" onclick="setSubsystemFilter('pedals_fw')" class="px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700">PEDALS_FW (BRAKE)</button>
+          <button id="btnSubLights" onclick="setSubsystemFilter('lights_fw')" class="px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700">LIGHTS_FW (LIGHT)</button>
         </div>
 
-        <div>
-          <label class="block text-[10px] uppercase text-neutral-500 mb-1 tracking-wider">Active Subsystems</label>
-          <div class="flex items-center gap-1.5" id="subsystemList">
+        <div class="flex flex-wrap items-center gap-3">
+          <div>
+            <label class="block text-[10px] uppercase text-neutral-500 mb-1 tracking-wider">Select Test Run</label>
+            <select id="runSelect" onchange="switchRun(this.value)" class="bg-black border border-neutral-700 text-neutral-100 text-xs px-2.5 py-1.5 focus:outline-none focus:border-white">
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[10px] uppercase text-neutral-500 mb-1 tracking-wider">Active Subsystem</label>
+            <div class="flex items-center gap-1.5" id="subsystemList">
+            </div>
           </div>
         </div>
       </div>
@@ -444,19 +454,21 @@
         historyState = {
           runs: [
             {
-              id: "42325039593",
+              id: "42325039593-pedals",
+              parent_run_id: "42325039593",
+              subsystem: "pedals_fw",
+              subsystems: ["pedals_fw"],
               commit: "f712294",
               branch: "main",
               timestamp: "2026-11-07T01:35:00Z",
               author: "JuneKim0712",
-              message: "Automated Hardware Verification (All 10/10 Passed)",
+              message: "[pedals_fw] Automated Hardware Verification (7/7 Passed)",
               status: "passed",
               failure_type: null,
               duration: "14.5s",
               lock_duration_sec: 14.1,
-              subsystems: ["pedals_fw", "lights_fw"],
-              tests_pass: 10,
-              tests_total: 10,
+              tests_pass: 7,
+              tests_total: 7,
               tests: [
                 { subsystem: "pedals_fw", name: "test_throttle_calculation_and_deadzone", file: "./main/test_main.c", line: 196, status: "PASS", details: "Deadzone calculation nominal" },
                 { subsystem: "pedals_fw", name: "test_brake_plausibility_safety_interlock", file: "./main/test_main.c", line: 197, status: "PASS", details: "Plausibility interlock nominal" },
@@ -464,10 +476,7 @@
                 { subsystem: "pedals_fw", name: "test_can_packet_builder_clamping_and_zeroing", file: "./main/test_main.c", line: 199, status: "PASS", details: "Clamping nominal" },
                 { subsystem: "pedals_fw", name: "test_can_driver_uninitialized_safety", file: "./main/test_main.c", line: 200, status: "PASS", details: "Safety nominal" },
                 { subsystem: "pedals_fw", name: "test_can_receive_timeout", file: "./main/test_main.c", line: 201, status: "PASS", details: "Timeout nominal" },
-                { subsystem: "pedals_fw", name: "test_pedal_can_transmission", file: "./main/test_main.c", line: 202, status: "PASS", details: "Transmission nominal" },
-                { subsystem: "lights_fw", name: "test_voltage_conversion", file: "./lights_fw/test_main.c", line: 29, status: "PASS", details: "Voltage conversion nominal" },
-                { subsystem: "lights_fw", name: "test_state_toggle", file: "./lights_fw/test_main.c", line: 38, status: "PASS", details: "State toggle nominal" },
-                { subsystem: "lights_fw", name: "test_can_message_format", file: "./lights_fw/test_main.c", line: 48, status: "PASS", details: "Message format nominal" }
+                { subsystem: "pedals_fw", name: "test_pedal_can_transmission", file: "./main/test_main.c", line: 202, status: "PASS", details: "Transmission nominal" }
               ],
               can_packets: [
                 { t: 0.5, id: "0x001", name: "FRAME_0x001", dlc: 2, raw: "00 7B", decoded: "0x007B (Dec: [0, 123])" },
@@ -481,26 +490,89 @@
                 { t: 4.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "50", decoded: "0x50 (Dec: 80)" },
                 { t: 5.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "5A", decoded: "0x5A (Dec: 90)" }
               ]
+            },
+            {
+              id: "42325039593-lights",
+              parent_run_id: "42325039593",
+              subsystem: "lights_fw",
+              subsystems: ["lights_fw"],
+              commit: "f712294",
+              branch: "main",
+              timestamp: "2026-11-07T01:35:00Z",
+              author: "JuneKim0712",
+              message: "[lights_fw] Automated Hardware Verification (3/3 Passed)",
+              status: "passed",
+              failure_type: null,
+              duration: "9.2s",
+              lock_duration_sec: 8.2,
+              tests_pass: 3,
+              tests_total: 3,
+              tests: [
+                { subsystem: "lights_fw", name: "test_voltage_conversion", file: "./lights_fw/test_main.c", line: 29, status: "PASS", details: "Voltage conversion nominal" },
+                { subsystem: "lights_fw", name: "test_state_toggle", file: "./lights_fw/test_main.c", line: 38, status: "PASS", details: "State toggle nominal" },
+                { subsystem: "lights_fw", name: "test_can_message_format", file: "./lights_fw/test_main.c", line: 48, status: "PASS", details: "Message format nominal" }
+              ],
+              can_packets: [
+                { t: 0.5, id: "0x001", name: "FRAME_0x001", dlc: 2, raw: "00 7B", decoded: "0x007B (Dec: [0, 123])" },
+                { t: 1.0, id: "0x021", name: "FRAME_0x021", dlc: 1, raw: "7D", decoded: "0x7D (Dec: 125)" }
+              ]
             }
           ]
         };
       }
 
+      // Support direct linking via URL query parameter (?run=<run_id> or ?subsystem=<subsystem>)
+      const urlParams = new URLSearchParams(window.location.search);
+      const requestedSub = urlParams.get('subsystem');
+      if (requestedSub && ['pedals_fw', 'lights_fw'].includes(requestedSub)) {
+        currentSubsystemFilter = requestedSub;
+        updateSubsystemFilterButtons();
+      }
       populateRunSelector();
 
-      // Support direct linking via URL query parameter (?run=<run_id>)
-      const urlParams = new URLSearchParams(window.location.search);
       const requestedRun = urlParams.get('run');
       if (requestedRun && historyState.runs.some(r => r.id === requestedRun)) {
         switchRun(requestedRun);
       } else {
-        switchRun(historyState.runs[0].id);
+        const filtered = getFilteredRuns();
+        switchRun(filtered.length > 0 ? filtered[0].id : historyState.runs[0].id);
       }
+    }
+
+    let currentSubsystemFilter = 'all';
+
+    function updateSubsystemFilterButtons() {
+      const sub = currentSubsystemFilter;
+      document.getElementById('btnSubAll').className = sub === 'all'
+        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-[10px] border border-neutral-700'
+        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700';
+      document.getElementById('btnSubPedals').className = sub === 'pedals_fw'
+        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-[10px] border border-neutral-700'
+        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700';
+      document.getElementById('btnSubLights').className = sub === 'lights_fw'
+        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-[10px] border border-neutral-700'
+        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700';
+    }
+
+    function setSubsystemFilter(sub) {
+      currentSubsystemFilter = sub;
+      updateSubsystemFilterButtons();
+      populateRunSelector();
+      const filtered = getFilteredRuns();
+      if (filtered.length > 0) {
+        switchRun(filtered[0].id);
+      }
+    }
+
+    function getFilteredRuns() {
+      if (currentSubsystemFilter === 'all') return historyState.runs;
+      return historyState.runs.filter(r => (r.subsystem === currentSubsystemFilter || (r.subsystems && r.subsystems.includes(currentSubsystemFilter))));
     }
 
     function populateRunSelector() {
       const select = document.getElementById('runSelect');
-      select.innerHTML = historyState.runs.map(r => {
+      const runs = getFilteredRuns();
+      select.innerHTML = runs.map(r => {
         let tag = '[PASS]';
         if (r.status === 'in_progress') tag = '[IN PROGRESS]';
         else if (r.status === 'failed') {
@@ -509,7 +581,9 @@
           else if (r.failure_type === 'static_analysis_failure') tag = '[FAIL: STATIC CHECK]';
           else tag = '[FAIL: ASSERTION]';
         }
-        return `<option value="${r.id}">RUN #${r.id} • ${r.commit} (${r.subsystems.join(', ')}) ${tag}</option>`;
+        const sub = r.subsystem || (r.subsystems ? r.subsystems[0] : 'ECU');
+        const subLabel = sub === 'pedals_fw' ? 'pedals_fw (Brake)' : (sub === 'lights_fw' ? 'lights_fw (Light)' : sub);
+        return `<option value="${r.id}">RUN #${r.id} • ${subLabel} • ${r.commit} ${tag}</option>`;
       }).join('');
     }
 
@@ -528,10 +602,11 @@
       commitLink.innerText = currentRun.commit + ' ↗';
       commitLink.href = `https://github.com/JuneKim0712/CAN-Testbench/commit/${currentRun.commit}`;
 
-      // Update GitHub Action Run link
+      // Update GitHub Action Run link (points to parent workflow run)
       const actionLink = document.getElementById('runActionLink');
-      actionLink.innerText = `#${currentRun.id} ↗`;
-      actionLink.href = `https://github.com/JuneKim0712/CAN-Testbench/actions/runs/${currentRun.id}`;
+      const parentId = currentRun.parent_run_id || (currentRun.id.includes('-') ? currentRun.id.split('-')[0] : currentRun.id);
+      actionLink.innerText = `#${parentId} ↗`;
+      actionLink.href = `https://github.com/JuneKim0712/CAN-Testbench/actions/runs/${parentId}`;
 
       document.getElementById('runDuration').innerText = currentRun.duration;
       document.getElementById('runLockTime').innerText = `${currentRun.lock_duration_sec}s`;
@@ -618,10 +693,16 @@
       updateTimelineLegend();
 
       // Subsystem Badges
+      const sub = currentRun.subsystem || (currentRun.subsystems ? currentRun.subsystems[0] : 'ECU');
       const subContainer = document.getElementById('subsystemList');
-      subContainer.innerHTML = (currentRun.subsystems || []).map(s => 
-        `<span class="border border-neutral-700 bg-neutral-900 px-2 py-1 text-white font-mono uppercase text-[10px] font-semibold">${s}</span>`
-      ).join('');
+      const subBadgeLabel = sub === 'pedals_fw' ? 'PEDALS_FW (BRAKE / THROTTLE)' : (sub === 'lights_fw' ? 'LIGHTS_FW (LIGHTING SYSTEM)' : sub.toUpperCase());
+      subContainer.innerHTML = `<span class="border border-neutral-700 bg-neutral-900 px-2 py-1 text-white font-mono uppercase text-[10px] font-semibold">${subBadgeLabel}</span>`;
+
+      // Update Trackside Flash Command for this specific subsystem
+      const flashCmd = document.getElementById('flashCmd');
+      if (flashCmd) {
+        flashCmd.innerText = `python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 ${sub}.bin`;
+      }
 
       // Test Table
       document.getElementById('testRatioLabel').innerText = `${passCount} / ${totalCount} PASSED`;

@@ -2,7 +2,7 @@
   "generated_at": "2026-11-07T00:37:51.046302+00:00",
   "runs": [
     {
-      "id": "42325039593",
+      "id": "42325039593-pedals",
       "commit": "f712294",
       "branch": "main",
       "timestamp": "2026-11-07T01:41:34.728557+00:00",
@@ -13,11 +13,10 @@
       "failure_details": null,
       "duration": "14.5s",
       "subsystems": [
-        "pedals_fw",
-        "lights_fw"
+        "pedals_fw"
       ],
-      "tests_pass": 10,
-      "tests_total": 10,
+      "tests_pass": 7,
+      "tests_total": 7,
       "lock_duration_sec": 14.1,
       "static_analysis": {
         "status": "passed",
@@ -79,30 +78,6 @@
           "line": 196,
           "status": "PASS",
           "details": "../main/test_main.c:205:test_pedal_can_transmission:PASS"
-        },
-        {
-          "subsystem": "lights_fw",
-          "name": "test_voltage_conversion",
-          "file": "./main/test_main.c",
-          "line": 196,
-          "status": "PASS",
-          "details": "../main/test_main.c:69:test_voltage_conversion:PASS"
-        },
-        {
-          "subsystem": "lights_fw",
-          "name": "test_state_toggle",
-          "file": "./main/test_main.c",
-          "line": 196,
-          "status": "PASS",
-          "details": "../main/test_main.c:70:test_state_toggle:PASS"
-        },
-        {
-          "subsystem": "lights_fw",
-          "name": "test_can_message_format",
-          "file": "./main/test_main.c",
-          "line": 196,
-          "status": "PASS",
-          "details": "../main/test_main.c:71:test_can_message_format:PASS"
         }
       ],
       "can_packets": [
@@ -186,10 +161,80 @@
           "raw": "64",
           "decoded": "0x64 (Dec: 100)"
         }
-      ]
+      ],
+      "parent_run_id": "42325039593",
+      "subsystem": "pedals_fw"
     },
     {
-      "id": "42325000000",
+      "id": "42325039593-lights",
+      "commit": "f712294",
+      "branch": "main",
+      "timestamp": "2026-11-07T01:41:34.728557+00:00",
+      "author": "JuneKim0712",
+      "message": "Automated Hardware Verification",
+      "status": "passed",
+      "failure_type": null,
+      "failure_details": null,
+      "duration": "8.2s",
+      "subsystems": [
+        "lights_fw"
+      ],
+      "tests_pass": 3,
+      "tests_total": 3,
+      "lock_duration_sec": 7.8,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "lights_fw",
+          "name": "test_voltage_conversion",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:69:test_voltage_conversion:PASS"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_state_toggle",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:70:test_state_toggle:PASS"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_can_message_format",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:71:test_can_message_format:PASS"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "FRAME_0x001",
+          "dlc": 2,
+          "raw": "00 7B",
+          "decoded": "0x007B (Dec: [0, 123])"
+        },
+        {
+          "t": 1.0,
+          "id": "0x021",
+          "name": "FRAME_0x021",
+          "dlc": 1,
+          "raw": "7D",
+          "decoded": "0x7D (Dec: 125)"
+        }
+      ],
+      "parent_run_id": "42325039593",
+      "subsystem": "lights_fw"
+    },
+    {
+      "id": "42325000000-pedals",
       "commit": "28df9a1",
       "branch": "main",
       "timestamp": "2026-11-07T01:25:00Z",
@@ -299,10 +344,12 @@
           "raw": "14",
           "decoded": "0x14 (Dec: 20)"
         }
-      ]
+      ],
+      "parent_run_id": "42325000000",
+      "subsystem": "pedals_fw"
     },
     {
-      "id": "42318556434",
+      "id": "42318556434-pedals",
       "commit": "ba9b4be",
       "branch": "main",
       "timestamp": "2026-11-07T00:37:51.046292+00:00",
@@ -311,11 +358,10 @@
       "status": "passed",
       "duration": "14.5s",
       "subsystems": [
-        "pedals_fw",
-        "lights_fw"
+        "pedals_fw"
       ],
-      "tests_pass": 10,
-      "tests_total": 10,
+      "tests_pass": 7,
+      "tests_total": 7,
       "lock_duration_sec": 14.1,
       "static_analysis": {
         "status": "passed",
@@ -377,30 +423,6 @@
           "line": 196,
           "status": "PASS",
           "details": "../main/test_main.c:205:test_pedal_can_transmission:PASS"
-        },
-        {
-          "subsystem": "lights_fw",
-          "name": "test_voltage_conversion",
-          "file": "./main/test_main.c",
-          "line": 196,
-          "status": "PASS",
-          "details": "../main/test_main.c:69:test_voltage_conversion:PASS"
-        },
-        {
-          "subsystem": "lights_fw",
-          "name": "test_state_toggle",
-          "file": "./main/test_main.c",
-          "line": 196,
-          "status": "PASS",
-          "details": "../main/test_main.c:70:test_state_toggle:PASS"
-        },
-        {
-          "subsystem": "lights_fw",
-          "name": "test_can_message_format",
-          "file": "./main/test_main.c",
-          "line": 196,
-          "status": "PASS",
-          "details": "../main/test_main.c:71:test_can_message_format:PASS"
         }
       ],
       "can_packets": [
@@ -485,10 +507,79 @@
           "decoded": "0x64 (Dec: 100)"
         }
       ],
-      "failure_type": null
+      "failure_type": null,
+      "parent_run_id": "42318556434",
+      "subsystem": "pedals_fw"
     },
     {
-      "id": "42316924679",
+      "id": "42318556434-lights",
+      "commit": "ba9b4be",
+      "branch": "main",
+      "timestamp": "2026-11-07T00:37:51.046292+00:00",
+      "author": "JuneKim0712",
+      "message": "Automated Hardware Verification (All 10/10 Passed)",
+      "status": "passed",
+      "duration": "8.2s",
+      "subsystems": [
+        "lights_fw"
+      ],
+      "tests_pass": 3,
+      "tests_total": 3,
+      "lock_duration_sec": 7.8,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "lights_fw",
+          "name": "test_voltage_conversion",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:69:test_voltage_conversion:PASS"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_state_toggle",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:70:test_state_toggle:PASS"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_can_message_format",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:71:test_can_message_format:PASS"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "FRAME_0x001",
+          "dlc": 2,
+          "raw": "00 7B",
+          "decoded": "0x007B (Dec: [0, 123])"
+        },
+        {
+          "t": 1.0,
+          "id": "0x021",
+          "name": "FRAME_0x021",
+          "dlc": 1,
+          "raw": "7D",
+          "decoded": "0x7D (Dec: 125)"
+        }
+      ],
+      "failure_type": null,
+      "parent_run_id": "42318556434",
+      "subsystem": "lights_fw"
+    },
+    {
+      "id": "42316924679-pedals",
       "commit": "1b32e65",
       "branch": "main",
       "timestamp": "2026-11-06T16:15:00Z",
@@ -662,10 +753,12 @@
         "diff": "Expected 99 Was 50 (Throttle deadzone calculation deviated by 49 counts)",
         "repro": "./github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan",
         "summary": "Flashing and executing this isolated test will acquire the bench mutex and stream serial assertions directly to your terminal."
-      }
+      },
+      "parent_run_id": "42316924679",
+      "subsystem": "pedals_fw"
     },
     {
-      "id": "42315000001",
+      "id": "42315000001-pedals",
       "commit": "4f82bc1",
       "branch": "fix/can-driver",
       "timestamp": "2026-11-06T14:10:00Z",
@@ -693,10 +786,12 @@
         "defects": 0
       },
       "tests": [],
-      "can_packets": []
+      "can_packets": [],
+      "parent_run_id": "42315000001",
+      "subsystem": "pedals_fw"
     },
     {
-      "id": "42315000002",
+      "id": "42315000002-pedals",
       "commit": "a187e02",
       "branch": "chore/bench-sweep",
       "timestamp": "2026-11-06T13:45:00Z",
@@ -704,11 +799,10 @@
       "message": "ci(hw): attempt simultaneous execution across multiple PR runners",
       "status": "failed",
       "failure_type": "lock_timeout",
-      "duration": "120.0s (Timeout)",
-      "lock_duration_sec": 120.0,
+      "duration": "14.5s",
+      "lock_duration_sec": 14.1,
       "subsystems": [
-        "pedals_fw",
-        "lights_fw"
+        "pedals_fw"
       ],
       "tests_pass": 0,
       "tests_total": 0,
@@ -725,10 +819,87 @@
         "defects": 0
       },
       "tests": [],
-      "can_packets": []
+      "can_packets": [],
+      "parent_run_id": "42315000002",
+      "subsystem": "pedals_fw"
     },
     {
-      "id": "42315000003",
+      "id": "42315000002-lights",
+      "commit": "a187e02",
+      "branch": "chore/bench-sweep",
+      "timestamp": "2026-11-06T13:45:00Z",
+      "author": "JuneKim0712",
+      "message": "ci(hw): attempt simultaneous execution across multiple PR runners",
+      "status": "failed",
+      "failure_type": "lock_timeout",
+      "duration": "8.2s",
+      "lock_duration_sec": 7.8,
+      "subsystems": [
+        "lights_fw"
+      ],
+      "tests_pass": 3,
+      "tests_total": 3,
+      "failure_details": {
+        "title": "Hardware Testbench Mutex Lock Contention (120s Timeout)",
+        "exit_code": "124 (Lock Timeout)",
+        "location": "stolerpi (ARM64 HIL) -> /var/lock/calsol_hil.lock",
+        "diff": "Timeout (120s) waiting for hardware bench lock. Mutex currently held by active runner job #42319999. Serial port /dev/esp32_johnathan remained locked.",
+        "repro": "ssh calsol@stolerpi \"fuser -v /var/lock/calsol_hil.lock && ls -l /dev/esp32*\"",
+        "summary": "Another workflow or engineer is currently running tests on the physical testbench node. Check runner queue or clear stale lock files."
+      },
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "lights_fw",
+          "name": "test_voltage_conversion",
+          "file": "./lights_fw/test_main.c",
+          "line": 29,
+          "status": "PASS",
+          "details": "LTC4151 10.0V sensor calculation valid"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_state_toggle",
+          "file": "./lights_fw/test_main.c",
+          "line": 38,
+          "status": "PASS",
+          "details": "State transition IDLE <-> ACTIVE nominal"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_can_message_format",
+          "file": "./lights_fw/test_main.c",
+          "line": 48,
+          "status": "PASS",
+          "details": "0x021 frame payload formatted"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "FRAME_0x001",
+          "dlc": 2,
+          "raw": "00 7B",
+          "decoded": "0x007B (Dec: [0, 123])"
+        },
+        {
+          "t": 1.0,
+          "id": "0x021",
+          "name": "FRAME_0x021",
+          "dlc": 1,
+          "raw": "7D",
+          "decoded": "0x7D (Dec: 125)"
+        }
+      ],
+      "parent_run_id": "42315000002",
+      "subsystem": "lights_fw"
+    },
+    {
+      "id": "42315000003-lights",
       "commit": "8c12b4e",
       "branch": "fix/lights-buffer",
       "timestamp": "2026-11-06T12:30:00Z",
@@ -756,24 +927,25 @@
         "defects": 1
       },
       "tests": [],
-      "can_packets": []
+      "can_packets": [],
+      "parent_run_id": "42315000003",
+      "subsystem": "lights_fw"
     },
     {
-      "id": "42241968513",
+      "id": "42241968513-pedals",
       "commit": "9943335",
       "branch": "main",
       "timestamp": "2026-11-06T15:20:00Z",
       "author": "JuneKim0712",
       "message": "fix(discovery): include github-action/ in shared triggers to re-test all subsystems",
       "status": "passed",
-      "duration": "18.4s",
+      "duration": "14.5s",
       "subsystems": [
-        "pedals_fw",
-        "lights_fw"
+        "pedals_fw"
       ],
-      "tests_pass": 10,
-      "tests_total": 10,
-      "lock_duration_sec": 14.8,
+      "tests_pass": 7,
+      "tests_total": 7,
+      "lock_duration_sec": 14.1,
       "static_analysis": {
         "status": "passed",
         "defects": 0
@@ -834,30 +1006,6 @@
           "line": 202,
           "status": "PASS",
           "details": "10-step throttle sweep transmitted over physical TCAN332 transceiver"
-        },
-        {
-          "subsystem": "lights_fw",
-          "name": "test_voltage_conversion",
-          "file": "./lights_fw/test_main.c",
-          "line": 29,
-          "status": "PASS",
-          "details": "LTC4151 10.0V sensor calculation within 0.001V tolerance"
-        },
-        {
-          "subsystem": "lights_fw",
-          "name": "test_state_toggle",
-          "file": "./lights_fw/test_main.c",
-          "line": 38,
-          "status": "PASS",
-          "details": "State transition STATE_IDLE <-> STATE_ACTIVE nominal"
-        },
-        {
-          "subsystem": "lights_fw",
-          "name": "test_can_message_format",
-          "file": "./lights_fw/test_main.c",
-          "line": 48,
-          "status": "PASS",
-          "details": "Frame 0x021 formatted with 12.5V payload byte"
         }
       ],
       "can_packets": [
@@ -949,10 +1097,78 @@
           "raw": "64",
           "decoded": "0x64 (Dec: 100)"
         }
-      ]
+      ],
+      "parent_run_id": "42241968513",
+      "subsystem": "pedals_fw"
     },
     {
-      "id": "42239660324",
+      "id": "42241968513-lights",
+      "commit": "9943335",
+      "branch": "main",
+      "timestamp": "2026-11-06T15:20:00Z",
+      "author": "JuneKim0712",
+      "message": "fix(discovery): include github-action/ in shared triggers to re-test all subsystems",
+      "status": "passed",
+      "duration": "8.2s",
+      "subsystems": [
+        "lights_fw"
+      ],
+      "tests_pass": 3,
+      "tests_total": 3,
+      "lock_duration_sec": 7.8,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "lights_fw",
+          "name": "test_voltage_conversion",
+          "file": "./lights_fw/test_main.c",
+          "line": 29,
+          "status": "PASS",
+          "details": "LTC4151 10.0V sensor calculation within 0.001V tolerance"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_state_toggle",
+          "file": "./lights_fw/test_main.c",
+          "line": 38,
+          "status": "PASS",
+          "details": "State transition STATE_IDLE <-> STATE_ACTIVE nominal"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_can_message_format",
+          "file": "./lights_fw/test_main.c",
+          "line": 48,
+          "status": "PASS",
+          "details": "Frame 0x021 formatted with 12.5V payload byte"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "FRAME_0x001",
+          "dlc": 2,
+          "raw": "00 7B",
+          "decoded": "0x007B (Dec: [0, 123])"
+        },
+        {
+          "t": 1.0,
+          "id": "0x021",
+          "name": "FRAME_0x021",
+          "dlc": 1,
+          "raw": "7D",
+          "decoded": "0x7D (Dec: 125)"
+        }
+      ],
+      "parent_run_id": "42241968513",
+      "subsystem": "lights_fw"
+    },
+    {
+      "id": "42239660324-pedals",
       "commit": "37138d6",
       "branch": "main",
       "timestamp": "2026-11-06T14:45:00Z",
@@ -1045,7 +1261,9 @@
           "raw": "32",
           "decoded": "0x32 (Dec: 50)"
         }
-      ]
+      ],
+      "parent_run_id": "42239660324",
+      "subsystem": "pedals_fw"
     }
   ]
 }
