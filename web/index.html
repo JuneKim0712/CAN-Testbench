@@ -171,11 +171,11 @@
         <div class="border border-neutral-800 bg-black p-4 space-y-2.5">
           <div class="flex items-center justify-between border-b border-neutral-900 pb-2">
             <span class="border border-pastel-cyanBorder/40 bg-pastel-cyanBg/30 text-pastel-cyan px-1.5 py-0.5 text-sm font-bold font-mono uppercase">
-              TARGET SILICON
+              TARGET SILICON • BENCH USAGE
             </span>
             <span class="text-pastel-cyan text-sm font-mono font-semibold flex items-center gap-1.5">
               <span class="w-1.5 h-1.5 bg-pastel-cyan inline-block"></span>
-              <span id="deviceDutState">Unknown — no live DUT evidence</span>
+              <span id="deviceDutState">Unknown — bench usage not checked</span>
             </span>
           </div>
           <div>
@@ -850,9 +850,10 @@
       const set = (id, text) => { const el = document.getElementById(id); if (el) { el.textContent = text; el.className = 'text-neutral-200'; } };
       set('deviceBridgeState', fresh ? 'Bridge reachable' : healthCheckedAt ? 'Stale / unreachable' : 'Unknown');
       set('deviceDebuggerState', fresh ? deviceHealth.mode === 'software_test' ? 'Simulation — no physical debugger' : deviceHealth.serial_connected ? 'USB connected' : 'USB disconnected' : 'Unknown');
-      set('deviceDutState', 'Unknown — no live DUT evidence');
+      set('deviceDutState', 'Unknown — bench usage not checked');
       set('overviewHealthSummary', fresh ? 'Bridge health checked ' + new Date(healthCheckedAt).toLocaleTimeString() : 'Connect to the bridge for live status');
       if (!bridgeUrl) {
+        set('deviceDutState', publicFresh ? ({in_use: 'In use (reserved by runner)', idle: 'Idle (available to runner)'}[publicSnapshot.dut_usage] || 'Unknown') : 'Unknown — snapshot stale');
         set('deviceBridgeState', publicFresh ? publicSnapshot.bridge_available ? 'Reachable at snapshot time' : 'Offline at snapshot time' : 'Snapshot stale / unavailable');
         set('deviceDebuggerState', publicFresh ? publicSnapshot.mode === 'software_test' ? 'Simulation' : publicSnapshot.serial_connected ? 'USB connected at snapshot time' : 'USB disconnected at snapshot time' : 'Unknown');
         set('overviewHealthSummary', publicFresh ? 'Public snapshot: ' + new Date(publicSnapshot.updated_at).toLocaleString() : 'Public snapshot stale / unavailable');
