@@ -1,0 +1,8 @@
+{
+  "name": "lights_fw",
+  "target": "lights_fw/test",
+  "port": "/dev/esp32_johnathan",
+  "baud": 921600,
+  "timeout": 12,
+  "description": "Brakelights & Hazards ECU testbench configuration"
+}

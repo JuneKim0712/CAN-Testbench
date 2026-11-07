@@ -9,13 +9,6 @@
     TWAI controller interface) and ISO 11898-2 compaitable transciever. 
 */
 
-/* 
-    *Enviorment Debugging*
-    go to the "esp/esp-idf" directory and run ". ./export.sh"
-    then go to project directory and run "idf.py fullclean" then "idf.py build"
-    If that doesn't work make sure the CMakeLists.txt contains all needed directories/files.
-*/
-
 #pragma once
 
 #include <stdint.h>
@@ -60,7 +53,7 @@ typedef struct {
 
 /**
  * @brief initalizes the TWAI controller within S3 SoC
- * Deafults to 1M bit rate
+ * Defaults to 500k bit rate
  */
 esp_err_t CAN_init(void);
 
@@ -79,11 +72,19 @@ esp_err_t CAN_send(const CAN_message_t *frame, uint32_t timeout_ms);
  */
 esp_err_t CAN_receive(CAN_message_t *frame, uint32_t timeout_ms);
 
+/**
+ * @brief Returns the count of RX queue overflow drops
+ */
+uint32_t CAN_get_rx_overflow_count(void);
 
 /**
- * @brief Pass in id, data to build a packet with dlc deafult to 8
+ * @brief Returns the count of TX transmission errors
+ */
+uint32_t CAN_get_tx_error_count(void);
+
+/**
+ * @brief Pass in id, data to build a packet with dlc default to 8
  */
 CAN_message_t build_packet_no_ext(uint32_t id, const uint8_t *data, uint8_t dlc);
 
 twai_node_handle_t CAN_get_node_handle(void);
-

@@ -35,17 +35,18 @@ if [ -z "$DEVICE" ]; then
     exit 1
 fi
 
-# Lock directory
-LOCK_DIR="/var/lock"
-[ ! -w "$LOCK_DIR" ] && LOCK_DIR="${HOME}/.calsol/locks"
+# Unified hardware mutex lock (Derived from resolved canonical device path)
+REAL_DEV=$(readlink -f "$DEVICE" 2>/dev/null || realpath "$DEVICE" 2>/dev/null || echo "$DEVICE")
+PORT_TAG=$(echo "$REAL_DEV" | tr '/' '_')
+LOCK_DIR="/tmp/calsol_locks"
 mkdir -p "$LOCK_DIR"
-LOCK_FILE="${LOCK_DIR}/calsol_${BOARD}.lock"
+LOCK_FILE="${LOCK_DIR}/hw${PORT_TAG}.lock"
 
 # Mutex acquisition
 exec 200>"$LOCK_FILE"
 if ! flock -w 15 200; then
     LOCK_OWNER=$(fuser "$LOCK_FILE" 2>/dev/null || echo "another process")
-    echo "[-] ERROR: Board '${BOARD}' is locked by PID: ${LOCK_OWNER}!"
+    echo "[-] ERROR: Board '${BOARD}' (${DEVICE} -> ${REAL_DEV}) is locked by PID: ${LOCK_OWNER}!"
     exit 1
 fi
 
