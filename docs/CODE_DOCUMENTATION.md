@@ -1,4 +1,11 @@
-# CalSol Gen 11 Hardware Testbench: Code & Architecture Reference Manual\n\n| [Overview](../README.md) | [Tutorial](TUTORIAL.md) | **[Architecture]** | [Bench Manual](CAN_TESTBENCH_STAGE_GUIDE.md) | [Hardware Setup](SETUP_GUIDE.md) | [Debugging](DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |\n| :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n\n---\n\n## Table of Contents
+# CalSol Gen 11 Hardware Testbench: Code & Architecture Reference Manual
+
+| [Overview](../README.md) | [Tutorial](TUTORIAL.md) | [Contributing](../CONTRIBUTING.md) | **[Architecture]** | [Bench Manual](CAN_TESTBENCH_STAGE_GUIDE.md) | [Hardware Setup](SETUP_GUIDE.md) | [Debugging](DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+
+---
+
+## Table of Contents
 1. [System Architecture & Dataflow](#1-system-architecture--dataflow)
 2. [CAN Driver Component (`components/can_driver`)](#2-can-driver-component-componentscan_driver)
    - [2.1 Header Interface (`CAN.h`)](#21-header-interface-canh)

@@ -1,7 +1,7 @@
 # CalSol Hardware Testbench: Complete Host & Hardware Setup Guide
 
-| [Overview](../README.md) | [Tutorial](TUTORIAL.md) | [Architecture](CODE_DOCUMENTATION.md) | [Bench Manual](CAN_TESTBENCH_STAGE_GUIDE.md) | **[Hardware Setup]** | [Debugging](DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| [Overview](../README.md) | [Tutorial](TUTORIAL.md) | [Contributing](../CONTRIBUTING.md) | [Architecture](CODE_DOCUMENTATION.md) | [Bench Manual](CAN_TESTBENCH_STAGE_GUIDE.md) | **[Hardware Setup]** | [Debugging](DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 
 ---
 

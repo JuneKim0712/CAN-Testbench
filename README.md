@@ -6,8 +6,8 @@
 ![ESP-IDF: v5.1+](https://img.shields.io/badge/ESP--IDF-v5.1%2B-00599C.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-| **[Overview]** | [Tutorial](docs/TUTORIAL.md) | [Architecture](docs/CODE_DOCUMENTATION.md) | [Bench Manual](docs/CAN_TESTBENCH_STAGE_GUIDE.md) | [Hardware Setup](docs/SETUP_GUIDE.md) | [Debugging](docs/DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **[Overview]** | [Tutorial](docs/TUTORIAL.md) | [Contributing](CONTRIBUTING.md) | [Architecture](docs/CODE_DOCUMENTATION.md) | [Bench Manual](docs/CAN_TESTBENCH_STAGE_GUIDE.md) | [Hardware Setup](docs/SETUP_GUIDE.md) | [Debugging](docs/DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 
 Continuous hardware integration, automated on-target silicon testing, and CAN bus telemetry validation for the UC Berkeley Solar Vehicle Team (**CalSol**).
 

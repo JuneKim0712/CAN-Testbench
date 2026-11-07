@@ -1,5 +1,11 @@
 # Contributing to CalSol CAN TestBench
 
+| [Overview](README.md) | [Tutorial](docs/TUTORIAL.md) | **[Contributing]** | [Architecture](docs/CODE_DOCUMENTATION.md) | [Bench Manual](docs/CAN_TESTBENCH_STAGE_GUIDE.md) | [Hardware Setup](docs/SETUP_GUIDE.md) | [Debugging](docs/DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+
+---
+
+
 This document outlines development workflows, code standards, and verification requirements for contributing to the CalSol Hardware-in-the-Loop (HIL) Testbench platform and associated vehicle firmware.
 
 ---

@@ -1,7 +1,7 @@
 # CalSol Hardware Testbench: 5-Minute Quickstart Tutorial
 
-| [Overview](../README.md) | **[Tutorial]** | [Architecture](CODE_DOCUMENTATION.md) | [Bench Manual](CAN_TESTBENCH_STAGE_GUIDE.md) | [Hardware Setup](SETUP_GUIDE.md) | [Debugging](DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| [Overview](../README.md) | **[Tutorial]** | [Contributing](../CONTRIBUTING.md) | [Architecture](CODE_DOCUMENTATION.md) | [Bench Manual](CAN_TESTBENCH_STAGE_GUIDE.md) | [Hardware Setup](SETUP_GUIDE.md) | [Debugging](DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 
 ---
 

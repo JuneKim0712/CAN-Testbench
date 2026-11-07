@@ -1,4 +1,11 @@
-# CalSol Hardware CAN Testbench: Stage-by-Stage Operational & Engineering Manual\n\n| [Overview](../README.md) | [Tutorial](TUTORIAL.md) | [Architecture](CODE_DOCUMENTATION.md) | **[Bench Manual]** | [Hardware Setup](SETUP_GUIDE.md) | [Debugging](DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |\n| :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n\n---\n\n## Table of Contents
+# CalSol Hardware CAN Testbench: Stage-by-Stage Operational & Engineering Manual
+
+| [Overview](../README.md) | [Tutorial](TUTORIAL.md) | [Contributing](../CONTRIBUTING.md) | [Architecture](CODE_DOCUMENTATION.md) | **[Bench Manual]** | [Hardware Setup](SETUP_GUIDE.md) | [Debugging](DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+
+---
+
+## Table of Contents
 1. [System Overview & Philosophy](#1-system-overview--philosophy)
 2. [Stage 1: Physical Hardware & Bench Architecture](#stage-1-physical-hardware--bench-architecture)
 3. [Stage 2: Remote Flashing & Interactive Serial Monitoring](#stage-2-remote-flashing--interactive-serial-monitoring)
