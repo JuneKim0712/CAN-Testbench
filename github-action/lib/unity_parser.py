@@ -239,11 +239,14 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
                 print(f"    [IGNORE] {test_name}")
             elif "Tests" in line and "Failures" in line:
                 summary = line
-                m_summary = re.search(r"(\d+)\s+Tests\s+(\d+)\s+Failures", line)
+                m_summary = re.fullmatch(r"(\d+)\s+Tests\s+(\d+)\s+Failures\s+(\d+)\s+Ignored", line)
                 if m_summary:
                     total_cnt = int(m_summary.group(1))
                     fail_cnt = int(m_summary.group(2))
+                    ignored_cnt = int(m_summary.group(3))
                     if (fail_cnt == 0 and total_cnt > 0 and len(results) == total_cnt
+                            and total_cnt > ignored_cnt
+                            and ignored_cnt == sum(status == 'IGNORE' for status, _, _ in results)
                             and not any(status == "FAIL" for status, _, _ in results)):
                         passed = True
                 break

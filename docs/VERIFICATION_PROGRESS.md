@@ -5,7 +5,7 @@
 - Software implementation is on `codex/reliable-can-testbench` in the user fork.
 - Both production firmwares now build for ESP32-S3; both subsystem test projects
   and a fresh copied developer template also built on the Pi.
-- Twenty-one software regressions pass on Linux, including actual Unix-socket
+- Twenty-three software regressions pass on Linux, including actual Unix-socket
   command validation, slow-client disconnects, overload accounting, snapshots,
   stale-report rejection, manifest validation, and contradictory Unity results.
 - The capture-first coordinator was tested on the DUT. Releasing DTR before
@@ -46,6 +46,11 @@ those gates.
   socket. A stale staging module was detected during test setup and excluded;
   results above are from the deployed release module.
 - Counter synchronization: final ISR/task critical sections compiled on ESP32-S3.
+- Truncated Unity summaries and suites containing only ignored tests cannot pass.
+- Final debugger binary SHA-256:
+  `6aab1716b144ebaaa47a149b39e8b24e3089736ad639ef47ca84f6c150db0ff3`.
+  A startup delimiter prevents ROM boot text from contaminating the first COBS
+  packet. The image was built/flashed under the shared-bus lock.
 - CI now runs software regressions, including temporary Unix-socket transport
   tests, before allocating hardware. Workflow token scope permits read-only job
   inspection and failure logs use only the current run's directory.

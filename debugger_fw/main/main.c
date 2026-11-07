@@ -74,6 +74,10 @@ void app_main(void)
     usb_serial_jtag_driver_config_t usb = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb));
     ESP_ERROR_CHECK(CAN_init());
+    // Flush any ROM boot text from the host's COBS accumulator before the
+    // first real capture; otherwise that first packet can be discarded.
+    const uint8_t sync_delimiter = 0;
+    (void)usb_serial_jtag_write_bytes(&sync_delimiter, 1, pdMS_TO_TICKS(10));
     uint8_t command[16], incoming[64];
     size_t command_length = 0;
     bool discard = false;

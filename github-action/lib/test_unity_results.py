@@ -41,6 +41,14 @@ class UnityResultTests(unittest.TestCase):
         self.assertEqual(1, self.run_fixture([b'test.c:1:example:FAIL:bad\n',
                                             b'1 Tests 0 Failures 0 Ignored\n']))
 
+    def test_truncated_summary_cannot_pass(self):
+        self.assertEqual(1, self.run_fixture([b'test.c:1:example:PASS\n',
+                                            b'1 Tests 0 Failures\n']))
+
+    def test_all_ignored_cannot_pass(self):
+        self.assertEqual(1, self.run_fixture([b'test.c:1:example:IGNORE\n',
+                                            b'1 Tests 0 Failures 1 Ignored\n']))
+
 
 if __name__ == '__main__':
     unittest.main()
