@@ -34,6 +34,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v5
 
+      - name: Publish In-Progress Live Portal Link
+        run: |
+          echo "## CalSol Hardware-in-the-Loop Testbench: ⏳ IN PROGRESS" >> $GITHUB_STEP_SUMMARY
+          echo "> 🌐 **Interactive Telemetry Portal:** [https://${{ github.repository_owner }}.github.io/CAN-Testbench/?run=${{ github.run_id }}](https://${{ github.repository_owner }}.github.io/CAN-Testbench/?run=${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "> **Status:** ⏳ In Progress | **GitHub Action Run:** [#${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) | **Environment:** \`stolerpi (ARM64 HIL)\`" >> $GITHUB_STEP_SUMMARY
+
       - name: Install Analysis Tools
         run: |
           sudo apt-get update -qq

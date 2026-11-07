@@ -135,6 +135,41 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
 
     overall_status = "passed" if (total_tests_pass == total_tests_count and total_tests_count > 0 and static_status == "passed") else "failed"
 
+    failure_type = None
+    failure_details = None
+    if overall_status == "failed":
+        failed_test = next((t for t in all_tests if t.get("status") == "FAIL"), None)
+        if failed_test:
+            failure_type = "assertion_failure"
+            failure_details = {
+                "title": "Silicon Unit Test Assertion Failure Detected",
+                "exit_code": "1 (Hardware Verification Failed)",
+                "location": f"{failed_test.get('subsystem')} -> {failed_test.get('file')}:{failed_test.get('line')} ({failed_test.get('name')})",
+                "diff": failed_test.get("details", ""),
+                "repro": f"./github-action/cal-test.sh {failed_test.get('subsystem')}/test /dev/esp32_johnathan",
+                "summary": "Flashing and executing this isolated test will acquire the bench mutex and stream serial assertions directly to your terminal."
+            }
+        elif static_status == "failed":
+            failure_type = "static_analysis_failure"
+            failure_details = {
+                "title": "Cloud Quality Gate (cppcheck) Defect Detected",
+                "exit_code": "1 (Static Analysis Gate Failed)",
+                "location": "Subsystem source code",
+                "diff": f"Static analysis identified {static_defects} defect(s).",
+                "repro": "./github-action/static-check.sh",
+                "summary": "Cloud static analysis detected defects in source files. Check cppcheck output."
+            }
+        elif total_tests_count == 0:
+            failure_type = "build_failure"
+            failure_details = {
+                "title": "Firmware Compilation Failure",
+                "exit_code": "2 (Compilation Failed)",
+                "location": f"{subsystems_tested[0] if subsystems_tested else 'firmware'}",
+                "diff": "Build step exited with non-zero status prior to test dispatch.",
+                "repro": f"idf.py -C {subsystems_tested[0] if subsystems_tested else 'pedals_fw'}/test build",
+                "summary": "ESP-IDF build failed. Check compiler output in workflow logs."
+            }
+
     # Assemble new run record
     new_run = {
         "id": str(run_id),
@@ -144,6 +179,8 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
         "author": author,
         "message": commit_msg,
         "status": overall_status,
+        "failure_type": failure_type,
+        "failure_details": failure_details,
         "duration": f"{round(max_duration, 1)}s" if max_duration > 0 else "14.5s",
         "subsystems": subsystems_tested,
         "tests_pass": total_tests_pass,

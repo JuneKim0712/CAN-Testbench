@@ -63,10 +63,18 @@
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <a href="https://github.com/JuneKim0712/CAN-Testbench" target="_blank" rel="noopener noreferrer" class="border border-neutral-700 bg-neutral-900 hover:border-neutral-500 px-2.5 py-1 text-neutral-300 hover:text-white font-mono uppercase text-[10px] tracking-wide transition flex items-center gap-1.5" title="View Source Repository on GitHub">
+          <span>[REPO: JuneKim0712/CAN-Testbench]</span>
+          <span class="text-neutral-500">↗</span>
+        </a>
+        <a href="https://github.com/JuneKim0712/CAN-Testbench/actions" target="_blank" rel="noopener noreferrer" class="border border-neutral-700 bg-neutral-900 hover:border-neutral-500 px-2.5 py-1 text-pastel-cyan hover:text-white font-mono uppercase text-[10px] tracking-wide transition flex items-center gap-1.5" title="View GitHub Actions CI Workflows">
+          <span>[GITHUB ACTIONS]</span>
+          <span class="text-neutral-500">↗</span>
+        </a>
         <div class="border border-neutral-800 bg-neutral-900 px-3 py-1 flex items-center gap-2 text-[11px]">
           <span class="text-neutral-500 uppercase">Hardware Mutex:</span>
-          <span class="text-white font-semibold uppercase">Unlocked (Ready)</span>
+          <span id="headerMutexStatus" class="text-white font-semibold uppercase">Unlocked (Ready)</span>
         </div>
         <div class="border border-neutral-800 bg-neutral-900 px-3 py-1 flex items-center gap-2 text-[11px]">
           <span class="text-neutral-500 uppercase">Bus Listeners:</span>
@@ -98,7 +106,9 @@
       <div class="flex flex-wrap items-center gap-4 text-xs border-t lg:border-t-0 border-neutral-800 pt-2 lg:pt-0">
         <div>
           <span class="text-[10px] uppercase text-neutral-500 block tracking-wider">Commit</span>
-          <span class="font-bold text-white uppercase tracking-wider" id="runCommit">-</span>
+          <a id="runCommitLink" href="#" target="_blank" rel="noopener noreferrer" class="font-bold text-white hover:underline uppercase tracking-wider block font-mono" title="Inspect Commit on GitHub">
+            -
+          </a>
         </div>
         <div class="border-l border-neutral-800 pl-4">
           <span class="text-[10px] uppercase text-neutral-500 block tracking-wider">Duration</span>
@@ -109,6 +119,12 @@
           <span class="font-bold text-white uppercase" id="runLockTime">-</span>
         </div>
         <div class="border-l border-neutral-800 pl-4">
+          <span class="text-[10px] uppercase text-neutral-500 block tracking-wider">GitHub Action Run</span>
+          <a id="runActionLink" href="#" target="_blank" rel="noopener noreferrer" class="font-bold text-pastel-cyan hover:underline font-mono uppercase tracking-wider block" title="Open GitHub Action Workflow Run">
+            -
+          </a>
+        </div>
+        <div class="border-l border-neutral-800 pl-4">
           <span class="text-[10px] uppercase text-neutral-500 block tracking-wider">Verification Status</span>
           <span id="runStatusBadge" class="border px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center">
             -
@@ -117,37 +133,75 @@
       </div>
     </section>
 
+    <!-- IN-PROGRESS LIVE EXECUTION MONITOR BOX (Conditional) -->
+    <section id="inProgressBox" class="hidden border border-pastel-cyanBorder/60 bg-pastel-cyanBg/20 p-4 space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-pastel-cyanBorder/40 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="border border-pastel-cyanBorder bg-pastel-cyan text-black font-bold uppercase px-2 py-0.5 text-[10px] animate-pulse">
+            [EXECUTION IN PROGRESS]
+          </span>
+          <span class="font-bold text-pastel-cyan uppercase tracking-wide text-xs">
+            Hardware Verification Running on Target Silicon
+          </span>
+        </div>
+        <div class="text-[11px] text-neutral-300 font-mono">
+          Target Node: <span class="text-white font-bold" id="inProgressNode">stolerpi (ARM64 HIL)</span> • Mutex: <span class="text-pastel-yellow font-bold">LOCKED</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div class="space-y-1.5">
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Active Verification Phase:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-pastel-cyan font-mono" id="inProgressPhase">
+            Silicon Flashing & Unity Suite Execution
+          </div>
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Currently Executing Assertion:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-white font-mono" id="inProgressActiveTest">
+            test_can_packet_builder_clamping_and_zeroing
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Bench Hardware Status:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-pastel-yellow font-mono" id="inProgressPort">
+            Port: /dev/esp32_johnathan • Serial Baud: 115200 • CAN: 500 kbps
+          </div>
+          <p class="text-[10px] text-neutral-400 leading-normal" id="inProgressSummary">
+            Firmware compiled and flashed to ESP32-S3 silicon. Unity test runner is streaming serial assertions over /dev/esp32_johnathan.
+          </p>
+        </div>
+      </div>
+    </section>
+
     <!-- FAILURE ROOT CAUSE & DEBUGGING TRIAGE BOX (Conditional) -->
     <section id="failureTriageBox" class="hidden border border-pastel-redBorder/60 bg-pastel-redBg/20 p-4 space-y-3">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-pastel-redBorder/40 pb-2.5">
         <div class="flex items-center gap-2">
-          <span class="border border-pastel-redBorder bg-pastel-red text-black font-bold uppercase px-2 py-0.5 text-[10px]">
+          <span class="border border-pastel-redBorder bg-pastel-red text-black font-bold uppercase px-2 py-0.5 text-[10px]" id="failBadge">
             [FAILURE TRIAGE]
           </span>
-          <span class="font-bold text-pastel-red uppercase tracking-wide text-xs">
+          <span class="font-bold text-pastel-red uppercase tracking-wide text-xs" id="failTitle">
             Silicon Unit Test Assertion Failure Detected
           </span>
         </div>
         <div class="text-[11px] text-neutral-300 font-mono">
-          Exit Code: <span class="text-pastel-red font-bold">1 (Hardware Verification Failed)</span>
+          Exit Code: <span class="text-pastel-red font-bold" id="failExitCode">1 (Hardware Verification Failed)</span>
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
         <div class="space-y-1.5">
-          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Failed Assertion Location:</div>
-          <div class="bg-black border border-neutral-800 p-2 text-white font-mono" id="failLocation">-</div>
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider" id="failLocationLabel">Failed Location / Component:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-white font-mono break-all" id="failLocation">-</div>
 
-          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Assertion Diff:</div>
-          <div class="bg-black border border-neutral-800 p-2 text-pastel-red font-mono" id="failDiff">-</div>
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider" id="failDiffLabel">Failure Diff / Error Trace:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-pastel-red font-mono whitespace-pre-wrap break-all" id="failDiff">-</div>
         </div>
 
         <div class="space-y-1.5">
           <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Local Bench Reproduction Command:</div>
-          <div class="bg-black border border-neutral-800 p-2 text-pastel-yellow font-mono select-all leading-relaxed" id="failReproCmd">
+          <div class="bg-black border border-neutral-800 p-2 text-pastel-yellow font-mono select-all leading-relaxed break-all" id="failReproCmd">
             ./github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan
           </div>
-          <p class="text-[10px] text-neutral-400 leading-normal">
+          <p class="text-[10px] text-neutral-400 leading-normal" id="failSummary">
             Flashing and executing this isolated test will acquire the bench mutex and stream serial assertions directly to your terminal.
           </p>
         </div>
@@ -388,81 +442,896 @@
       } catch (e) {
         console.warn('Fallback to embedded dataset');
         historyState = {
-          runs: [
-            {
-              id: "42241968513",
-              commit: "9943335",
-              branch: "main",
-              status: "passed",
-              duration: "18.4s",
-              subsystems: ["pedals_fw", "lights_fw"],
-              tests_pass: 10,
-              tests_total: 10,
-              lock_duration_sec: 14.8,
-              static_analysis: { status: "passed", defects: 0 },
-              tests: [
-                { subsystem: "pedals_fw", name: "test_throttle_calculation_and_deadzone", file: "./main/test_main.c", line: 196, status: "PASS", details: "Deadzone (500) and Saturation (3500) verified" },
-                { subsystem: "pedals_fw", name: "test_brake_plausibility_safety_interlock", file: "./main/test_main.c", line: 197, status: "PASS", details: "Simultaneous brake and throttle >25% triggered cutoff" },
-                { subsystem: "pedals_fw", name: "test_can_packet_builder_clamping_and_zeroing", file: "./main/test_main.c", line: 198, status: "PASS", details: "DLC clamped to 8, padding zeroed" },
-                { subsystem: "pedals_fw", name: "test_can_driver_lifecycle", file: "./main/test_main.c", line: 199, status: "PASS", details: "Idempotent initialization verified" },
-                { subsystem: "pedals_fw", name: "test_can_driver_uninitialized_safety", file: "./main/test_main.c", line: 200, status: "PASS", details: "ESP_ERR_INVALID_STATE returned safely" },
-                { subsystem: "pedals_fw", name: "test_can_receive_timeout", file: "./main/test_main.c", line: 201, status: "PASS", details: "ESP_ERR_TIMEOUT after 50ms bus idle condition" },
-                { subsystem: "pedals_fw", name: "test_pedal_can_transmission", file: "./main/test_main.c", line: 202, status: "PASS", details: "10-step throttle sweep transmitted" },
-                { subsystem: "lights_fw", name: "test_voltage_conversion", file: "./lights_fw/test_main.c", line: 29, status: "PASS", details: "LTC4151 10.0V sensor calculation valid" },
-                { subsystem: "lights_fw", name: "test_state_toggle", file: "./lights_fw/test_main.c", line: 38, status: "PASS", details: "State transition IDLE <-> ACTIVE nominal" },
-                { subsystem: "lights_fw", name: "test_can_message_format", file: "./lights_fw/test_main.c", line: 48, status: "PASS", details: "0x021 frame payload formatted" }
-              ],
-              can_packets: [
-                { t: 0.5, id: "0x001", name: "FRAME_0x001", dlc: 2, raw: "00 7B", decoded: "0x007B (Dec: [0, 123])" },
-                { t: 1.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "0A", decoded: "0x0A (Dec: 10)" },
-                { t: 1.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "14", decoded: "0x14 (Dec: 20)" },
-                { t: 2.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "1E", decoded: "0x1E (Dec: 30)" },
-                { t: 2.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "28", decoded: "0x28 (Dec: 40)" },
-                { t: 3.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "32", decoded: "0x32 (Dec: 50)" },
-                { t: 3.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "3C", decoded: "0x3C (Dec: 60)" },
-                { t: 4.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "46", decoded: "0x46 (Dec: 70)" },
-                { t: 4.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "50", decoded: "0x50 (Dec: 80)" },
-                { t: 5.0, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "5A", decoded: "0x5A (Dec: 90)" },
-                { t: 5.5, id: "0x011", name: "FRAME_0x011", dlc: 1, raw: "64", decoded: "0x64 (Dec: 100)" }
-              ]
-            },
-            {
-              id: "42220194812",
-              commit: "a82910d",
-              branch: "test-failure-simulation",
-              status: "failed",
-              duration: "14.5s",
-              subsystems: ["pedals_fw"],
-              tests_pass: 6,
-              tests_total: 7,
-              lock_duration_sec: 14.1,
-              static_analysis: { status: "passed", defects: 0 },
-              tests: [
-                { subsystem: "pedals_fw", name: "test_throttle_calculation_and_deadzone", file: "./main/test_main.c", line: 196, status: "FAIL", details: "Expected 99 Was 50" },
-                { subsystem: "pedals_fw", name: "test_brake_plausibility_safety_interlock", file: "./main/test_main.c", line: 197, status: "PASS", details: "Plausibility interlock nominal" },
-                { subsystem: "pedals_fw", name: "test_can_packet_builder_clamping_and_zeroing", file: "./main/test_main.c", line: 198, status: "PASS", details: "Clamping valid" },
-                { subsystem: "pedals_fw", name: "test_can_driver_lifecycle", file: "./main/test_main.c", line: 199, status: "PASS", details: "Lifecycle valid" },
-                { subsystem: "pedals_fw", name: "test_can_driver_uninitialized_safety", file: "./main/test_main.c", line: 200, status: "PASS", details: "Safety valid" },
-                { subsystem: "pedals_fw", name: "test_can_receive_timeout", file: "./main/test_main.c", line: 201, status: "PASS", details: "Timeout valid" },
-                { subsystem: "pedals_fw", name: "test_pedal_can_transmission", file: "./main/test_main.c", line: 202, status: "PASS", details: "Transmission valid" }
-              ],
-              can_packets: [
-                { t: 0.5, id: "0x001", name: "FRAME_0x001", dlc: 2, raw: "00 79", decoded: "0x0079 (Dec: [0, 121])" }
-              ]
-            }
-          ]
-        };
+  "generated_at": "2026-11-07T00:37:51.046302+00:00",
+  "runs": [
+    {
+      "id": "42325000000",
+      "commit": "28df9a1",
+      "branch": "main",
+      "timestamp": "2026-11-07T01:25:00Z",
+      "author": "JuneKim0712",
+      "message": "feat(pedals): hardware sweep verification running on bench",
+      "status": "in_progress",
+      "failure_type": null,
+      "duration": "In Progress (8.4s elapsed)",
+      "lock_duration_sec": 8.4,
+      "subsystems": [
+        "pedals_fw"
+      ],
+      "tests_pass": 3,
+      "tests_total": 7,
+      "in_progress_details": {
+        "current_phase": "Silicon Flashing & Unity Suite Execution",
+        "target_node": "stolerpi (ARM64 HIL)",
+        "active_port": "/dev/esp32_johnathan",
+        "elapsed": "8.4s",
+        "active_test": "test_can_packet_builder_clamping_and_zeroing",
+        "summary": "Firmware compiled and flashed to ESP32-S3 silicon. Unity test runner is streaming serial assertions over /dev/esp32_johnathan."
+      },
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_throttle_calculation_and_deadzone",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:196:test_throttle_calculation_and_deadzone:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_brake_plausibility_safety_interlock",
+          "file": "./main/test_main.c",
+          "line": 197,
+          "status": "PASS",
+          "details": "../main/test_main.c:197:test_brake_plausibility_safety_interlock:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_lifecycle",
+          "file": "./main/test_main.c",
+          "line": 198,
+          "status": "PASS",
+          "details": "../main/test_main.c:198:test_can_driver_lifecycle:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_packet_builder_clamping_and_zeroing",
+          "file": "./main/test_main.c",
+          "line": 199,
+          "status": "RUNNING",
+          "details": "Streaming serial response from silicon transceiver..."
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_uninitialized_safety",
+          "file": "./main/test_main.c",
+          "line": 200,
+          "status": "QUEUED",
+          "details": "Pending completion of preceding tests"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_receive_timeout",
+          "file": "./main/test_main.c",
+          "line": 201,
+          "status": "QUEUED",
+          "details": "Pending completion of preceding tests"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_pedal_can_transmission",
+          "file": "./main/test_main.c",
+          "line": 202,
+          "status": "QUEUED",
+          "details": "Pending completion of preceding tests"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "FRAME_0x001",
+          "dlc": 2,
+          "raw": "00 7B",
+          "decoded": "0x007B (Dec: [0, 123])"
+        },
+        {
+          "t": 1.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "0A",
+          "decoded": "0x0A (Dec: 10)"
+        },
+        {
+          "t": 1.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "14",
+          "decoded": "0x14 (Dec: 20)"
+        }
+      ]
+    },
+    {
+      "id": "42318556434",
+      "commit": "ba9b4be",
+      "branch": "main",
+      "timestamp": "2026-11-07T00:37:51.046292+00:00",
+      "author": "JuneKim0712",
+      "message": "Automated Hardware Verification (All 10/10 Passed)",
+      "status": "passed",
+      "duration": "14.5s",
+      "subsystems": [
+        "pedals_fw",
+        "lights_fw"
+      ],
+      "tests_pass": 10,
+      "tests_total": 10,
+      "lock_duration_sec": 14.1,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_throttle_calculation_and_deadzone",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:199:test_throttle_calculation_and_deadzone:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_brake_plausibility_safety_interlock",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:200:test_brake_plausibility_safety_interlock:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_packet_builder_clamping_and_zeroing",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:201:test_can_packet_builder_clamping_and_zeroing:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_lifecycle",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:202:test_can_driver_lifecycle:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_uninitialized_safety",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:203:test_can_driver_uninitialized_safety:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_receive_timeout",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:204:test_can_receive_timeout:PASS"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_pedal_can_transmission",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:205:test_pedal_can_transmission:PASS"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_voltage_conversion",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:69:test_voltage_conversion:PASS"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_state_toggle",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:70:test_state_toggle:PASS"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_can_message_format",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "../main/test_main.c:71:test_can_message_format:PASS"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "0A",
+          "decoded": "0x0A (Dec: 10)"
+        },
+        {
+          "t": 0.04,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "14",
+          "decoded": "0x14 (Dec: 20)"
+        },
+        {
+          "t": 0.09,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "1E",
+          "decoded": "0x1E (Dec: 30)"
+        },
+        {
+          "t": 0.14,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "28",
+          "decoded": "0x28 (Dec: 40)"
+        },
+        {
+          "t": 0.19,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "32",
+          "decoded": "0x32 (Dec: 50)"
+        },
+        {
+          "t": 0.24,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "3C",
+          "decoded": "0x3C (Dec: 60)"
+        },
+        {
+          "t": 0.29,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "46",
+          "decoded": "0x46 (Dec: 70)"
+        },
+        {
+          "t": 0.34,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "50",
+          "decoded": "0x50 (Dec: 80)"
+        },
+        {
+          "t": 0.39,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "5A",
+          "decoded": "0x5A (Dec: 90)"
+        },
+        {
+          "t": 0.44,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "64",
+          "decoded": "0x64 (Dec: 100)"
+        }
+      ],
+      "failure_type": null
+    },
+    {
+      "id": "42316924679",
+      "commit": "1b32e65",
+      "branch": "main",
+      "timestamp": "2026-11-06T16:15:00Z",
+      "author": "JuneKim0712",
+      "message": "test(pedals): intentional assertion mismatch to validate failure triage and telemetry debugging",
+      "status": "failed",
+      "duration": "14.2s",
+      "subsystems": [
+        "pedals_fw"
+      ],
+      "tests_pass": 6,
+      "tests_total": 7,
+      "lock_duration_sec": 14.1,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_throttle_calculation_and_deadzone",
+          "file": "./main/test_main.c",
+          "line": 39,
+          "status": "FAIL",
+          "details": "Expected 99 Was 50"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_brake_plausibility_safety_interlock",
+          "file": "./main/test_main.c",
+          "line": 200,
+          "status": "PASS",
+          "details": "Simultaneous brake engagement and throttle >25% triggered cutoff"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_packet_builder_clamping_and_zeroing",
+          "file": "./main/test_main.c",
+          "line": 201,
+          "status": "PASS",
+          "details": "DLC clamped to 8; unused payload bytes zero-padded"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_lifecycle",
+          "file": "./main/test_main.c",
+          "line": 202,
+          "status": "PASS",
+          "details": "Idempotent initialization and deinitialization state verified"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_uninitialized_safety",
+          "file": "./main/test_main.c",
+          "line": 203,
+          "status": "PASS",
+          "details": "ESP_ERR_INVALID_STATE returned for uninitialized transmission"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_receive_timeout",
+          "file": "./main/test_main.c",
+          "line": 204,
+          "status": "PASS",
+          "details": "ESP_ERR_TIMEOUT returned after 50ms bus idle condition"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_pedal_can_transmission",
+          "file": "./main/test_main.c",
+          "line": 205,
+          "status": "PASS",
+          "details": "10-step throttle sweep transmitted over physical TCAN332 transceiver"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "FRAME_0x001",
+          "dlc": 2,
+          "raw": "00 7B",
+          "decoded": "0x007B (Dec: [0, 123])"
+        },
+        {
+          "t": 1.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "0A",
+          "decoded": "0x0A (Dec: 10)"
+        },
+        {
+          "t": 1.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "14",
+          "decoded": "0x14 (Dec: 20)"
+        },
+        {
+          "t": 2.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "1E",
+          "decoded": "0x1E (Dec: 30)"
+        },
+        {
+          "t": 2.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "28",
+          "decoded": "0x28 (Dec: 40)"
+        },
+        {
+          "t": 3.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "32",
+          "decoded": "0x32 (Dec: 50)"
+        },
+        {
+          "t": 3.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "3C",
+          "decoded": "0x3C (Dec: 60)"
+        },
+        {
+          "t": 4.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "46",
+          "decoded": "0x46 (Dec: 70)"
+        },
+        {
+          "t": 4.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "50",
+          "decoded": "0x50 (Dec: 80)"
+        },
+        {
+          "t": 5.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "5A",
+          "decoded": "0x5A (Dec: 90)"
+        },
+        {
+          "t": 5.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "64",
+          "decoded": "0x64 (Dec: 100)"
+        }
+      ],
+      "failure_type": "assertion_failure",
+      "failure_details": {
+        "title": "Silicon Unit Test Assertion Failure Detected",
+        "exit_code": "1 (Hardware Verification Failed)",
+        "location": "pedals_fw -> main/test_main.c:39 (test_throttle_calculation_and_deadzone)",
+        "diff": "Expected 99 Was 50 (Throttle deadzone calculation deviated by 49 counts)",
+        "repro": "./github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan",
+        "summary": "Flashing and executing this isolated test will acquire the bench mutex and stream serial assertions directly to your terminal."
+      }
+    },
+    {
+      "id": "42315000001",
+      "commit": "4f82bc1",
+      "branch": "fix/can-driver",
+      "timestamp": "2026-11-06T14:10:00Z",
+      "author": "JuneKim0712",
+      "message": "refactor(can): migrate driver structs to v2 header",
+      "status": "failed",
+      "failure_type": "build_failure",
+      "duration": "4.2s",
+      "lock_duration_sec": 0.0,
+      "subsystems": [
+        "pedals_fw"
+      ],
+      "tests_pass": 0,
+      "tests_total": 0,
+      "failure_details": {
+        "title": "Firmware Compilation & Linker Failure",
+        "exit_code": "2 (Compilation Failed)",
+        "location": "pedals_fw -> main/main.c:42:5",
+        "diff": "fatal error: unknown type name 'can_timing_config_t'; did you mean 'twai_timing_config_t'?
+  42 |     can_timing_config_t t_config;
+     |     ^~~~~~~~~~~~~~~~~~~",
+        "repro": "idf.py -C pedals_fw/test build",
+        "summary": "The ESP-IDF build failed during compilation. No binary was produced, so on-target flashing was halted."
+      },
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [],
+      "can_packets": []
+    },
+    {
+      "id": "42315000002",
+      "commit": "a187e02",
+      "branch": "chore/bench-sweep",
+      "timestamp": "2026-11-06T13:45:00Z",
+      "author": "JuneKim0712",
+      "message": "ci(hw): attempt simultaneous execution across multiple PR runners",
+      "status": "failed",
+      "failure_type": "lock_timeout",
+      "duration": "120.0s (Timeout)",
+      "lock_duration_sec": 120.0,
+      "subsystems": [
+        "pedals_fw",
+        "lights_fw"
+      ],
+      "tests_pass": 0,
+      "tests_total": 0,
+      "failure_details": {
+        "title": "Hardware Testbench Mutex Lock Contention (120s Timeout)",
+        "exit_code": "124 (Lock Timeout)",
+        "location": "stolerpi (ARM64 HIL) -> /var/lock/calsol_hil.lock",
+        "diff": "Timeout (120s) waiting for hardware bench lock. Mutex currently held by active runner job #42319999. Serial port /dev/esp32_johnathan remained locked.",
+        "repro": "ssh calsol@stolerpi \"fuser -v /var/lock/calsol_hil.lock && ls -l /dev/esp32*\"",
+        "summary": "Another workflow or engineer is currently running tests on the physical testbench node. Check runner queue or clear stale lock files."
+      },
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [],
+      "can_packets": []
+    },
+    {
+      "id": "42315000003",
+      "commit": "8c12b4e",
+      "branch": "fix/lights-buffer",
+      "timestamp": "2026-11-06T12:30:00Z",
+      "author": "JuneKim0712",
+      "message": "feat(lights): expand CAN frame queue buffer",
+      "status": "failed",
+      "failure_type": "static_analysis_failure",
+      "duration": "5.8s",
+      "lock_duration_sec": 0.0,
+      "subsystems": [
+        "lights_fw"
+      ],
+      "tests_pass": 0,
+      "tests_total": 0,
+      "failure_details": {
+        "title": "Cloud Quality Gate (cppcheck) Memory Defect Detected",
+        "exit_code": "1 (Static Analysis Gate Failed)",
+        "location": "lights_fw -> main/main.c:88 (arrayIndexOutOfBounds)",
+        "diff": "[lights_fw/main/main.c:88]: (error) Array 'tx_queue[8]' accessed at index 8, which is out of bounds [arrayIndexOutOfBounds]",
+        "repro": "./github-action/static-check.sh",
+        "summary": "Cloud static analysis detected an out-of-bounds array access. The PR quality gate blocked hardware dispatch to prevent silicon corruption."
+      },
+      "static_analysis": {
+        "status": "failed",
+        "defects": 1
+      },
+      "tests": [],
+      "can_packets": []
+    },
+    {
+      "id": "42241968513",
+      "commit": "9943335",
+      "branch": "main",
+      "timestamp": "2026-11-06T15:20:00Z",
+      "author": "JuneKim0712",
+      "message": "fix(discovery): include github-action/ in shared triggers to re-test all subsystems",
+      "status": "passed",
+      "duration": "18.4s",
+      "subsystems": [
+        "pedals_fw",
+        "lights_fw"
+      ],
+      "tests_pass": 10,
+      "tests_total": 10,
+      "lock_duration_sec": 14.8,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_throttle_calculation_and_deadzone",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "Throttle scaled 0-100% across deadzone (500) and saturation (3500)"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_brake_plausibility_safety_interlock",
+          "file": "./main/test_main.c",
+          "line": 197,
+          "status": "PASS",
+          "details": "Simultaneous brake engagement and throttle >25% triggered cutoff"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_packet_builder_clamping_and_zeroing",
+          "file": "./main/test_main.c",
+          "line": 198,
+          "status": "PASS",
+          "details": "DLC clamped to 8; unused payload bytes zero-padded"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_lifecycle",
+          "file": "./main/test_main.c",
+          "line": 199,
+          "status": "PASS",
+          "details": "Idempotent initialization and deinitialization state verified"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_uninitialized_safety",
+          "file": "./main/test_main.c",
+          "line": 200,
+          "status": "PASS",
+          "details": "ESP_ERR_INVALID_STATE returned for uninitialized transmission"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_receive_timeout",
+          "file": "./main/test_main.c",
+          "line": 201,
+          "status": "PASS",
+          "details": "ESP_ERR_TIMEOUT returned after 50ms bus idle condition"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_pedal_can_transmission",
+          "file": "./main/test_main.c",
+          "line": 202,
+          "status": "PASS",
+          "details": "10-step throttle sweep transmitted over physical TCAN332 transceiver"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_voltage_conversion",
+          "file": "./lights_fw/test_main.c",
+          "line": 29,
+          "status": "PASS",
+          "details": "LTC4151 10.0V sensor calculation within 0.001V tolerance"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_state_toggle",
+          "file": "./lights_fw/test_main.c",
+          "line": 38,
+          "status": "PASS",
+          "details": "State transition STATE_IDLE <-> STATE_ACTIVE nominal"
+        },
+        {
+          "subsystem": "lights_fw",
+          "name": "test_can_message_format",
+          "file": "./lights_fw/test_main.c",
+          "line": 48,
+          "status": "PASS",
+          "details": "Frame 0x021 formatted with 12.5V payload byte"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "FRAME_0x001",
+          "dlc": 2,
+          "raw": "00 7B",
+          "decoded": "0x007B (Dec: [0, 123])"
+        },
+        {
+          "t": 1.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "0A",
+          "decoded": "0x0A (Dec: 10)"
+        },
+        {
+          "t": 1.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "14",
+          "decoded": "0x14 (Dec: 20)"
+        },
+        {
+          "t": 2.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "1E",
+          "decoded": "0x1E (Dec: 30)"
+        },
+        {
+          "t": 2.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "28",
+          "decoded": "0x28 (Dec: 40)"
+        },
+        {
+          "t": 3.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "32",
+          "decoded": "0x32 (Dec: 50)"
+        },
+        {
+          "t": 3.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "3C",
+          "decoded": "0x3C (Dec: 60)"
+        },
+        {
+          "t": 4.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "46",
+          "decoded": "0x46 (Dec: 70)"
+        },
+        {
+          "t": 4.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "50",
+          "decoded": "0x50 (Dec: 80)"
+        },
+        {
+          "t": 5.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "5A",
+          "decoded": "0x5A (Dec: 90)"
+        },
+        {
+          "t": 5.5,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "64",
+          "decoded": "0x64 (Dec: 100)"
+        }
+      ]
+    },
+    {
+      "id": "42239660324",
+      "commit": "37138d6",
+      "branch": "main",
+      "timestamp": "2026-11-06T14:45:00Z",
+      "author": "JuneKim0712",
+      "message": "perf(ci): offload discovery to cloud, scope hardware lock to silicon access",
+      "status": "passed",
+      "duration": "16.1s",
+      "subsystems": [
+        "pedals_fw"
+      ],
+      "tests_pass": 7,
+      "tests_total": 7,
+      "lock_duration_sec": 14.2,
+      "static_analysis": {
+        "status": "passed",
+        "defects": 0
+      },
+      "tests": [
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_throttle_calculation_and_deadzone",
+          "file": "./main/test_main.c",
+          "line": 196,
+          "status": "PASS",
+          "details": "Deadzone and saturation passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_brake_plausibility_safety_interlock",
+          "file": "./main/test_main.c",
+          "line": 197,
+          "status": "PASS",
+          "details": "Brake interlock verified"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_packet_builder_clamping_and_zeroing",
+          "file": "./main/test_main.c",
+          "line": 198,
+          "status": "PASS",
+          "details": "Clamping passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_lifecycle",
+          "file": "./main/test_main.c",
+          "line": 199,
+          "status": "PASS",
+          "details": "Lifecycle passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_driver_uninitialized_safety",
+          "file": "./main/test_main.c",
+          "line": 200,
+          "status": "PASS",
+          "details": "Fault safety passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_can_receive_timeout",
+          "file": "./main/test_main.c",
+          "line": 201,
+          "status": "PASS",
+          "details": "Receive timeout passed"
+        },
+        {
+          "subsystem": "pedals_fw",
+          "name": "test_pedal_can_transmission",
+          "file": "./main/test_main.c",
+          "line": 202,
+          "status": "PASS",
+          "details": "Transmission sweep nominal"
+        }
+      ],
+      "can_packets": [
+        {
+          "t": 0.5,
+          "id": "0x001",
+          "name": "FRAME_0x001",
+          "dlc": 2,
+          "raw": "00 7A",
+          "decoded": "0x007A (Dec: [0, 122])"
+        },
+        {
+          "t": 1.0,
+          "id": "0x011",
+          "name": "FRAME_0x011",
+          "dlc": 1,
+          "raw": "32",
+          "decoded": "0x32 (Dec: 50)"
+        }
+      ]
+    }
+  ]
+};
       }
 
       populateRunSelector();
-      switchRun(historyState.runs[0].id);
+
+      // Support direct linking via URL query parameter (?run=<run_id>)
+      const urlParams = new URLSearchParams(window.location.search);
+      const requestedRun = urlParams.get('run');
+      if (requestedRun && historyState.runs.some(r => r.id === requestedRun)) {
+        switchRun(requestedRun);
+      } else {
+        switchRun(historyState.runs[0].id);
+      }
     }
 
     function populateRunSelector() {
       const select = document.getElementById('runSelect');
       select.innerHTML = historyState.runs.map(r => {
-        const isPass = r.status === 'passed';
-        const tag = isPass ? '[PASS]' : '[FAIL]';
+        let tag = '[PASS]';
+        if (r.status === 'in_progress') tag = '[IN PROGRESS]';
+        else if (r.status === 'failed') {
+          if (r.failure_type === 'build_failure') tag = '[FAIL: BUILD]';
+          else if (r.failure_type === 'lock_timeout') tag = '[FAIL: TIMEOUT]';
+          else if (r.failure_type === 'static_analysis_failure') tag = '[FAIL: STATIC CHECK]';
+          else tag = '[FAIL: ASSERTION]';
+        }
         return `<option value="${r.id}">RUN #${r.id} • ${r.commit} (${r.subsystems.join(', ')}) ${tag}</option>`;
       }).join('');
     }
@@ -470,30 +1339,78 @@
     function switchRun(runId) {
       currentRun = historyState.runs.find(r => r.id === runId) || historyState.runs[0];
       
-      document.getElementById('runCommit').innerText = currentRun.commit;
+      // Update browser URL query param (?run=...) without full reload
+      const url = new URL(window.location);
+      url.searchParams.set('run', currentRun.id);
+      window.history.replaceState(null, '', url);
+
+      document.getElementById('runSelect').value = currentRun.id;
+
+      // Update Commit link
+      const commitLink = document.getElementById('runCommitLink');
+      commitLink.innerText = currentRun.commit + ' ↗';
+      commitLink.href = `https://github.com/JuneKim0712/CAN-Testbench/commit/${currentRun.commit}`;
+
+      // Update GitHub Action Run link
+      const actionLink = document.getElementById('runActionLink');
+      actionLink.innerText = `#${currentRun.id} ↗`;
+      actionLink.href = `https://github.com/JuneKim0712/CAN-Testbench/actions/runs/${currentRun.id}`;
+
       document.getElementById('runDuration').innerText = currentRun.duration;
       document.getElementById('runLockTime').innerText = `${currentRun.lock_duration_sec}s`;
       document.getElementById('statLockScope').innerText = `${currentRun.lock_duration_sec}s`;
 
       const badge = document.getElementById('runStatusBadge');
       const triageBox = document.getElementById('failureTriageBox');
+      const inProgressBox = document.getElementById('inProgressBox');
+      const headerMutex = document.getElementById('headerMutexStatus');
 
       if (currentRun.status === 'passed') {
         badge.innerText = '[STATUS: ALL PASSED]';
         badge.className = 'border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center';
         triageBox.classList.add('hidden');
+        inProgressBox.classList.add('hidden');
+        headerMutex.innerHTML = '<span class="text-white font-semibold uppercase">Unlocked (Ready)</span>';
+      } else if (currentRun.status === 'in_progress') {
+        badge.innerText = '[STATUS: IN PROGRESS]';
+        badge.className = 'border border-pastel-cyanBorder/40 bg-pastel-cyanBg/30 text-pastel-cyan px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center animate-pulse';
+        triageBox.classList.add('hidden');
+        inProgressBox.classList.remove('hidden');
+        headerMutex.innerHTML = '<span class="text-pastel-yellow font-bold uppercase">Locked (Active Run)</span>';
+
+        const ip = currentRun.in_progress_details || {};
+        document.getElementById('inProgressPhase').innerText = ip.current_phase || 'Silicon Flashing & Unity Suite Execution';
+        document.getElementById('inProgressActiveTest').innerText = ip.active_test || 'test_can_packet_builder_clamping_and_zeroing';
+        document.getElementById('inProgressNode').innerText = ip.target_node || 'stolerpi (ARM64 HIL)';
+        document.getElementById('inProgressPort').innerText = `Port: ${ip.active_port || '/dev/esp32_johnathan'} • Serial Baud: 115200 • CAN: 500 kbps`;
+        document.getElementById('inProgressSummary').innerText = ip.summary || 'Hardware execution underway on bench.';
       } else {
-        badge.innerText = '[STATUS: ASSERTION FAILED]';
-        badge.className = 'border border-pastel-redBorder/40 bg-pastel-redBg/30 text-pastel-red px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center';
-        
-        // Populate Failure Triage Box
+        // Failed Run (Assertion, Build, Timeout, Static Check)
+        inProgressBox.classList.add('hidden');
         triageBox.classList.remove('hidden');
-        const firstFail = currentRun.tests.find(t => t.status === 'FAIL');
-        if (firstFail) {
-          document.getElementById('failLocation').innerText = `${firstFail.subsystem} -> ${firstFail.file}:${firstFail.line} (${firstFail.name})`;
-          document.getElementById('failDiff').innerText = firstFail.details;
-          document.getElementById('failReproCmd').innerText = `./github-action/cal-test.sh ${firstFail.subsystem}/test /dev/esp32_johnathan`;
+        headerMutex.innerHTML = '<span class="text-white font-semibold uppercase">Unlocked (Ready)</span>';
+
+        const fType = currentRun.failure_type || 'assertion_failure';
+        const fd = currentRun.failure_details || {};
+        const firstFail = currentRun.tests ? currentRun.tests.find(t => t.status === 'FAIL') : null;
+
+        if (fType === 'build_failure') {
+          badge.innerText = '[STATUS: COMPILATION FAILED]';
+        } else if (fType === 'lock_timeout') {
+          badge.innerText = '[STATUS: BENCH TIMEOUT]';
+        } else if (fType === 'static_analysis_failure') {
+          badge.innerText = '[STATUS: STATIC CHECK FAILED]';
+        } else {
+          badge.innerText = '[STATUS: ASSERTION FAILED]';
         }
+        badge.className = 'border border-pastel-redBorder/40 bg-pastel-redBg/30 text-pastel-red px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center';
+
+        document.getElementById('failTitle').innerText = fd.title || 'Hardware Verification Failure Detected';
+        document.getElementById('failExitCode').innerText = fd.exit_code || '1 (Hardware Verification Failed)';
+        document.getElementById('failLocation').innerText = fd.location || (firstFail ? `${firstFail.subsystem} -> ${firstFail.file}:${firstFail.line} (${firstFail.name})` : 'Unknown');
+        document.getElementById('failDiff').innerText = fd.diff || (firstFail ? firstFail.details : 'No error trace provided');
+        document.getElementById('failReproCmd').innerText = fd.repro || './github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan';
+        document.getElementById('failSummary').innerText = fd.summary || 'Execute the command above to reproduce locally.';
       }
 
       // Compute adaptive playback time window based on CAN packet timestamps
@@ -512,12 +1429,12 @@
 
       document.getElementById('statTestsPass').innerText = passCount;
       document.getElementById('statTestsTotal').innerText = totalCount;
-      document.getElementById('statCanFrames').innerText = currentRun.can_packets.length;
+      document.getElementById('statCanFrames').innerText = currentRun.can_packets ? currentRun.can_packets.length : 0;
 
-      const pct = totalCount > 0 ? (passCount / totalCount) * 100 : 100;
+      const pct = totalCount > 0 ? (passCount / totalCount) * 100 : (currentRun.status === 'passed' ? 100 : 0);
       const bar = document.getElementById('statTestBar');
       bar.style.width = `${pct}%`;
-      bar.className = currentRun.status === 'passed' ? 'h-full bg-pastel-green' : 'h-full bg-pastel-red';
+      bar.className = currentRun.status === 'passed' ? 'h-full bg-pastel-green' : (currentRun.status === 'in_progress' ? 'h-full bg-pastel-cyan' : 'h-full bg-pastel-red');
 
       // Populate ID filter and timeline legend dynamically
       populateIdFilter();
@@ -525,7 +1442,7 @@
 
       // Subsystem Badges
       const subContainer = document.getElementById('subsystemList');
-      subContainer.innerHTML = currentRun.subsystems.map(s => 
+      subContainer.innerHTML = (currentRun.subsystems || []).map(s => 
         `<span class="border border-neutral-700 bg-neutral-900 px-2 py-1 text-white font-mono uppercase text-[10px] font-semibold">${s}</span>`
       ).join('');
 
@@ -555,25 +1472,45 @@
 
     function renderTestTable() {
       const testBody = document.getElementById('testTableBody');
-      const tests = currentRun.tests.filter(t => testFilterMode === 'all' || t.status === 'FAIL');
+      const tests = (currentRun.tests || []).filter(t => testFilterMode === 'all' || t.status === 'FAIL');
 
       if (tests.length === 0) {
-        testBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-neutral-500 uppercase tracking-wider">No failing assertions present in this run.</td></tr>`;
+        let msg = 'No failing assertions present in this run.';
+        if (currentRun.failure_type === 'build_failure') {
+          msg = '[BUILD FAILED] Firmware compilation failed prior to test suite execution. See Failure Triage box above.';
+        } else if (currentRun.failure_type === 'lock_timeout') {
+          msg = '[BENCH TIMEOUT] Hardware mutex lock timed out. Execution could not reach testbench silicon.';
+        } else if (currentRun.failure_type === 'static_analysis_failure') {
+          msg = '[STATIC CHECK DEFECT] Cloud static analysis quality gate stopped execution before testbench dispatch.';
+        } else if (!currentRun.tests || currentRun.tests.length === 0) {
+          msg = 'No unit test assertions recorded for this run.';
+        }
+        testBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">${msg}</td></tr>`;
         return;
       }
 
       testBody.innerHTML = tests.map(t => {
-        const isPass = t.status === 'PASS';
-        const statusBadge = isPass
-          ? `<span class="border border-pastel-greenBorder/30 bg-pastel-greenBg/20 text-pastel-green px-1.5 py-0.5 font-bold uppercase text-[10px]">[PASS]</span>`
-          : `<span class="border border-pastel-redBorder/50 bg-pastel-redBg/40 text-pastel-red px-1.5 py-0.5 font-bold uppercase text-[10px]">[FAIL]</span>`;
+        let statusBadge = '';
+        let rowClass = 'hover:bg-neutral-900';
+        if (t.status === 'PASS') {
+          statusBadge = `<span class="border border-pastel-greenBorder/30 bg-pastel-greenBg/20 text-pastel-green px-1.5 py-0.5 font-bold uppercase text-[10px]">[PASS]</span>`;
+        } else if (t.status === 'RUNNING') {
+          statusBadge = `<span class="border border-pastel-cyanBorder/40 bg-pastel-cyanBg/30 text-pastel-cyan px-1.5 py-0.5 font-bold uppercase text-[10px] animate-pulse">[RUNNING]</span>`;
+          rowClass = 'bg-pastel-cyanBg/15 hover:bg-pastel-cyanBg/25 border-l-2 border-pastel-cyan';
+        } else if (t.status === 'QUEUED') {
+          statusBadge = `<span class="border border-neutral-700 bg-neutral-800 text-neutral-400 px-1.5 py-0.5 font-bold uppercase text-[10px]">[QUEUED]</span>`;
+          rowClass = 'opacity-60 hover:opacity-100 hover:bg-neutral-900';
+        } else {
+          statusBadge = `<span class="border border-pastel-redBorder/50 bg-pastel-redBg/40 text-pastel-red px-1.5 py-0.5 font-bold uppercase text-[10px]">[FAIL]</span>`;
+          rowClass = 'bg-pastel-redBg/15 hover:bg-pastel-redBg/25 border-l-2 border-pastel-red';
+        }
         return `
-          <tr class="${isPass ? 'hover:bg-neutral-900' : 'bg-pastel-redBg/15 hover:bg-pastel-redBg/25 border-l-2 border-pastel-red'} transition">
+          <tr class="${rowClass} transition">
             <td class="py-2 px-3">${statusBadge}</td>
             <td class="py-2 px-3 text-neutral-400 uppercase font-semibold">${t.subsystem}</td>
             <td class="py-2 px-3 text-white font-bold">${t.name}</td>
             <td class="py-2 px-3 text-neutral-500">${t.file}:${t.line}</td>
-            <td class="py-2 px-3 ${isPass ? 'text-neutral-400' : 'text-pastel-red font-bold'}">${t.details}</td>
+            <td class="py-2 px-3 ${t.status === 'FAIL' ? 'text-pastel-red font-bold' : (t.status === 'RUNNING' ? 'text-pastel-cyan font-bold' : 'text-neutral-400')}">${t.details}</td>
           </tr>
         `;
       }).join('');
@@ -709,19 +1646,36 @@
       const packets = currentRun ? (currentRun.can_packets || []) : [];
       const distinct = getDistinctIds();
 
-      // If no packets: Render clear informational notice
+      // If no packets: Render contextual informational notice
       if (packets.length === 0) {
         ctx.strokeStyle = '#1e1e1e';
         ctx.lineWidth = 1;
         ctx.strokeRect(marginL, 20, plotW, h - 45);
 
-        ctx.fillStyle = '#737373';
+        let mainMsg = '[PURE LOGIC UNIT TEST • NO PHYSICAL CAN FRAMES BROADCAST]';
+        let subMsg = 'All test assertions executed in-memory on physical silicon without external bus activity.';
+
+        if (currentRun.status === 'in_progress') {
+          mainMsg = '[BUS CAPTURE IN PROGRESS • LISTENING ON /dev/esp32_ahmed...]';
+          subMsg = 'Differential transceiver is actively sampling bus transitions during execution.';
+        } else if (currentRun.failure_type === 'build_failure') {
+          mainMsg = '[BUILD FAILED • EXECUTION HALTED PRIOR TO FLASHING SILICON]';
+          subMsg = 'Firmware compilation failed; no transceiver packets were generated.';
+        } else if (currentRun.failure_type === 'lock_timeout') {
+          mainMsg = '[BENCH MUTEX TIMEOUT • HARDWARE ACCESS BLOCKED]';
+          subMsg = 'Execution timed out waiting for hardware mutex (/var/lock/calsol_hil.lock).';
+        } else if (currentRun.failure_type === 'static_analysis_failure') {
+          mainMsg = '[STATIC ANALYSIS DEFECT • HARDWARE DISPATCH BLOCKED]';
+          subMsg = 'Cloud static analysis gate failed; tests were not dispatched to physical silicon.';
+        }
+
+        ctx.fillStyle = currentRun.status === 'in_progress' ? '#7dd3fc' : '#737373';
         ctx.font = '11px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('[PURE LOGIC UNIT TEST • NO PHYSICAL CAN FRAMES BROADCAST]', marginL + plotW / 2, h / 2 - 8);
+        ctx.fillText(mainMsg, marginL + plotW / 2, h / 2 - 8);
         ctx.font = '9px monospace';
         ctx.fillStyle = '#525252';
-        ctx.fillText('All test assertions executed in-memory on physical silicon without external bus activity.', marginL + plotW / 2, h / 2 + 12);
+        ctx.fillText(subMsg, marginL + plotW / 2, h / 2 + 12);
         ctx.textAlign = 'left';
         updateHUD();
         return;
