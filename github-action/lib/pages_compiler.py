@@ -58,14 +58,8 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
                 if sub_name and sub_name not in subsystems_tested:
                     subsystems_tested.append(sub_name)
 
-                passed = data.get("passed", 0)
-                failed = data.get("failed", 0)
-                ignored = data.get("ignored", 0)
-                total = data.get("total", passed + failed + ignored)
                 duration = data.get("duration", 0.0)
 
-                total_tests_pass += passed
-                total_tests_count += total
                 if duration > max_duration:
                     max_duration = duration
 
@@ -83,6 +77,11 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
                         })
         except Exception as e:
             print(f"[-] Error reading {r_path}: {e}")
+
+    # Derive accurate pass/total counts from parsed test assertions
+    if all_tests:
+        total_tests_pass = sum(1 for t in all_tests if t.get("status") == "PASS")
+        total_tests_count = len(all_tests)
 
     # Fallback if no sub-reports found (e.g. direct invocation)
     if not subsystems_tested:

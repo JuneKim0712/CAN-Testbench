@@ -394,7 +394,7 @@
     let currentRun = null;
     let isPlaying = false;
     let playbackTime = 0.0;
-    const maxPlaybackTime = 6.0;
+    let maxPlaybackTime = 6.0;
     let animId = null;
     let lastTime = 0;
     let testFilterMode = 'all'; // 'all' or 'fail'
@@ -518,12 +518,25 @@
         }
       }
 
-      // Stats
-      document.getElementById('statTestsPass').innerText = currentRun.tests_pass;
-      document.getElementById('statTestsTotal').innerText = currentRun.tests_total;
+      // Compute adaptive playback time window based on CAN packet timestamps
+      const maxT = currentRun.can_packets && currentRun.can_packets.length > 0 
+        ? Math.max(...currentRun.can_packets.map(p => p.t)) 
+        : 0;
+      maxPlaybackTime = Math.max(0.6, Math.ceil(maxT * 1.25 * 10) / 10);
+
+      // Stats - derive defensively from parsed assertions if available
+      const passCount = currentRun.tests && currentRun.tests.length > 0
+        ? currentRun.tests.filter(t => t.status === 'PASS').length 
+        : currentRun.tests_pass;
+      const totalCount = currentRun.tests && currentRun.tests.length > 0 
+        ? currentRun.tests.length 
+        : currentRun.tests_total;
+
+      document.getElementById('statTestsPass').innerText = passCount;
+      document.getElementById('statTestsTotal').innerText = totalCount;
       document.getElementById('statCanFrames').innerText = currentRun.can_packets.length;
 
-      const pct = (currentRun.tests_pass / currentRun.tests_total) * 100;
+      const pct = totalCount > 0 ? (passCount / totalCount) * 100 : 100;
       const bar = document.getElementById('statTestBar');
       bar.style.width = `${pct}%`;
       bar.className = currentRun.status === 'passed' ? 'h-full bg-pastel-green' : 'h-full bg-pastel-red';
@@ -535,7 +548,7 @@
       ).join('');
 
       // Test Table
-      document.getElementById('testRatioLabel').innerText = `${currentRun.tests_pass} / ${currentRun.tests_total} PASSED`;
+      document.getElementById('testRatioLabel').innerText = `${passCount} / ${totalCount} PASSED`;
       renderTestTable();
 
       resetPlayback();
@@ -644,8 +657,14 @@
       ctx.strokeStyle = '#1e1e1e';
       ctx.lineWidth = 1;
 
-      // Vertical Time Lines (every 1 second)
-      for (let sec = 0; sec <= maxPlaybackTime; sec += 1.0) {
+      // Vertical Time Lines (adaptive interval)
+      let timeStep = 1.0;
+      if (maxPlaybackTime <= 0.8) timeStep = 0.1;
+      else if (maxPlaybackTime <= 1.5) timeStep = 0.2;
+      else if (maxPlaybackTime <= 3.5) timeStep = 0.5;
+      else timeStep = 1.0;
+
+      for (let sec = 0; sec <= maxPlaybackTime + 0.001; sec += timeStep) {
         const x = marginL + (sec / maxPlaybackTime) * plotW;
         ctx.beginPath();
         ctx.moveTo(x, 10);
@@ -654,7 +673,8 @@
 
         ctx.fillStyle = '#666666';
         ctx.font = '9px monospace';
-        ctx.fillText(`+${sec.toFixed(0)}s`, x - 8, h - 2);
+        const label = timeStep < 1.0 ? `+${sec.toFixed(2)}s` : `+${sec.toFixed(0)}s`;
+        ctx.fillText(label, x - 14, h - 2);
       }
 
       // Horizontal Lines & Labels for Channel 1 (Throttle: 0%, 25%, 50%, 75%, 100%)
