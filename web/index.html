@@ -895,6 +895,7 @@
     let bridgeConnected = false;
 
     // Dynamic, assumption-free CAN ID color hashing (works for any ID on the bus)
+    const CAN_COLORS_LIST = ['#86efac', '#fde047', '#7dd3fc', '#fca5a5', '#c084fc', '#fdba74', '#f9a8d4', '#6ee7b7', '#93c5fd'];
     function getCanIdColor(canId) {
       if (!canId) return '#ffffff';
       let hash = 0;
@@ -902,8 +903,7 @@
         hash = (hash << 5) - hash + canId.charCodeAt(i);
         hash |= 0;
       }
-      const palette = ['#86efac', '#fde047', '#7dd3fc', '#fca5a5', '#c084fc', '#fdba74', '#f9a8d4', '#6ee7b7', '#93c5fd'];
-      return palette[Math.abs(hash) % palette.length];
+      return CAN_COLORS_LIST[Math.abs(hash) % CAN_COLORS_LIST.length];
     }
 
     // Auto-discover unique CAN IDs from real traffic without hardcoding
@@ -953,8 +953,10 @@
         }
       });
 
-      // Redraw waveform if switching into test runs
+      // Redraw waveform and refresh tables if switching into test runs
       if (tabId === 'runs') {
+        renderTestTable();
+        renderPacketsTable();
         requestAnimationFrame(() => updateUI());
       }
     }
@@ -1229,8 +1231,6 @@
           const filtered = getFilteredRuns();
           if (filtered.length > 0) switchRun(filtered[0].id);
         }
-        // Direct link from CI: automatically switch to runs view
-        setActiveTab('runs');
       } else {
         const filtered = getFilteredRuns();
         if (filtered.length > 0) switchRun(filtered[0].id);
@@ -1240,10 +1240,12 @@
       renderOverviewRunsTable();
       renderHistoryTable();
 
-      // Handle Initial Tab Hash
+      // Handle Initial Tab Hash or requestedRun parameter
       const hash = window.location.hash.replace('#', '');
       if (['overview', 'telemetry', 'runs'].includes(hash)) {
         setActiveTab(hash);
+      } else if (requestedRun) {
+        setActiveTab('runs');
       } else {
         setActiveTab('overview');
       }
@@ -1576,8 +1578,11 @@
     }
 
     function getColorForId(canId, distinctIds) {
-      const idx = distinctIds.indexOf(canId);
-      return idx >= 0 ? CAN_COLORS_LIST[idx % CAN_COLORS_LIST.length] : '#ffffff';
+      if (distinctIds && Array.isArray(distinctIds)) {
+        const idx = distinctIds.indexOf(canId);
+        if (idx >= 0) return CAN_COLORS_LIST[idx % CAN_COLORS_LIST.length];
+      }
+      return getCanIdColor(canId);
     }
 
     function populateIdFilter() {
@@ -1586,6 +1591,7 @@
       const distinct = getDistinctIds();
       if (distinct.length === 0) {
         select.innerHTML = '<option value="all">NO TRAFFIC (0 FRAMES)</option>';
+        select.value = 'all';
         return;
       }
       let html = `<option value="all">ALL IDS (${currentRun.can_packets.length} FRAMES)</option>`;
@@ -1595,6 +1601,7 @@
         html += `<option value="${id}">${id} • ${name} (${count} frames)</option>`;
       });
       select.innerHTML = html;
+      select.value = 'all';
     }
 
     function updateTimelineLegend() {
@@ -1626,7 +1633,7 @@
 
     // ─── PACKET TABLE RENDERER (TEST RUNS TAB) ──────────────────────────────
     function renderPacketsTable() {
-      const filter = dom.idFilter ? dom.idFilter.value : 'all';
+      const filter = (dom.idFilter && dom.idFilter.value) ? dom.idFilter.value : 'all';
       const tbody = dom.packetTableBody;
       if (!tbody) return;
       const packets = currentRun ? (currentRun.can_packets || []) : [];
