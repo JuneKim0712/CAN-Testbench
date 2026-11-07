@@ -349,54 +349,51 @@ class CANBridgeDaemon:
         except Exception:
             pass
 
+    @staticmethod
+    def _safe_send(sock: socket.socket, data: bytes) -> bool:
+        try:
+            sock.settimeout(0.05)
+            sock.sendall(data)
+            return True
+        except Exception:
+            return False
+
     def broadcast(self, event: dict):
         text_line = json.dumps(event) + "\n"
         if self.log_file:
-            self.log_file.write(text_line)
+            try:
+                self.log_file.write(text_line)
+            except Exception:
+                pass
 
         raw_bytes = text_line.encode("utf-8")
         ws_bytes = ws_encode_frame(json.dumps(event))
         sse_bytes = sse_encode_event(json.dumps(event))
 
+        # Snapshot client lists under lock to avoid holding the mutex during network I/O
         with self._lock:
-            # Broadcast to raw Unix & TCP clients
-            dead_raw = []
-            for c in self.raw_clients:
-                try:
-                    c.sendall(raw_bytes)
-                except Exception:
-                    dead_raw.append(c)
-            for d in dead_raw:
-                if d in self.raw_clients:
-                    self.raw_clients.remove(d)
-                try: d.close()
-                except Exception: pass
+            raw_targets = list(self.raw_clients)
+            ws_targets = list(self.ws_clients)
+            sse_targets = list(self.sse_clients)
 
-            # Broadcast to WebSocket clients
-            dead_ws = []
-            for w in self.ws_clients:
-                try:
-                    w.sendall(ws_bytes)
-                except Exception:
-                    dead_ws.append(w)
-            for d in dead_ws:
-                if d in self.ws_clients:
-                    self.ws_clients.remove(d)
-                try: d.close()
-                except Exception: pass
+        dead_raw = [c for c in raw_targets if not self._safe_send(c, raw_bytes)]
+        dead_ws = [w for w in ws_targets if not self._safe_send(w, ws_bytes)]
+        dead_sse = [s for s in sse_targets if not self._safe_send(s, sse_bytes)]
 
-            # Broadcast to SSE clients
-            dead_sse = []
-            for s in self.sse_clients:
-                try:
-                    s.sendall(sse_bytes)
-                except Exception:
-                    dead_sse.append(s)
-            for d in dead_sse:
-                if d in self.sse_clients:
-                    self.sse_clients.remove(d)
-                try: d.close()
-                except Exception: pass
+        if dead_raw or dead_ws or dead_sse:
+            with self._lock:
+                for c in dead_raw:
+                    if c in self.raw_clients: self.raw_clients.remove(c)
+                    try: c.close()
+                    except Exception: pass
+                for w in dead_ws:
+                    if w in self.ws_clients: self.ws_clients.remove(w)
+                    try: w.close()
+                    except Exception: pass
+                for s in dead_sse:
+                    if s in self.sse_clients: self.sse_clients.remove(s)
+                    try: s.close()
+                    except Exception: pass
 
     def inject_frame(self, can_id: int, payload: bytes) -> bool:
         if not self.virtual and self.serial:
