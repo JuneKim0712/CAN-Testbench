@@ -5,7 +5,7 @@
 - Software implementation is on `codex/reliable-can-testbench` in the user fork.
 - Both production firmwares now build for ESP32-S3; both subsystem test projects
   and a fresh copied developer template also built on the Pi.
-- Twenty software regressions pass on Linux, including actual Unix-socket
+- Twenty-one software regressions pass on Linux, including actual Unix-socket
   command validation, slow-client disconnects, overload accounting, snapshots,
   stale-report rejection, manifest validation, and contradictory Unity results.
 - The capture-first coordinator was tested on the DUT. Releasing DTR before
@@ -31,6 +31,28 @@
 The whole plan is not verified until independent physical reception and the
 remaining physical fault/load gates pass. Software fixture results cannot close
 those gates.
+
+## Final additional gates
+
+- Changed partition layout: passed. The fresh template was fully flashed from
+  generated metadata with factory app offset 0x20000 and all three logic tests
+  executed successfully. This exercises the old fixed-offset failure scenario.
+- Debugger USB recovery: passed. Only the identified debugger CDC interface was
+  temporarily unbound/rebound under the shared-bus lock. Health reported the
+  disconnect, recorded its counter, and recovered automatically. Capture count
+  stayed zero throughout; no fallback frames were fabricated.
+- Slow consumer and duplicate daemon: passed against the deployed code. A slow
+  Unix-socket client is disconnected; a second daemon cannot unlink the live
+  socket. A stale staging module was detected during test setup and excluded;
+  results above are from the deployed release module.
+- Counter synchronization: final ISR/task critical sections compiled on ESP32-S3.
+- CI now runs software regressions, including temporary Unix-socket transport
+  tests, before allocating hardware. Workflow token scope permits read-only job
+  inspection and failure logs use only the current run's directory.
+
+Physical transceiver power/wiring, physical TX/RX delivery, real bus-load/soak,
+and physical bus fault recovery cannot be marked passed while neither node
+receives the other's traffic. They require bench-side correction/confirmation.
 
 November 7, 2026. This is an intermediate checkpoint, not release approval.
 

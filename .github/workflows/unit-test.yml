@@ -41,6 +41,8 @@ jobs:
           sudo apt-get install -y -qq cppcheck python3-serial
 
       - name: Run Software Regression Tests
+        env:
+          CALSOL_NETWORK_TESTS: '1'
         run: python3 -m unittest discover -s github-action/lib -p 'test_*.py'
 
       - name: Run Quality Gate Checks

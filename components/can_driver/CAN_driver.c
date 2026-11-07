@@ -8,6 +8,7 @@ static twai_node_handle_t s_node = NULL;
 static QueueHandle_t s_rx_queue = NULL;
 static volatile uint32_t s_rx_queue_overflows = 0;
 static volatile uint32_t s_tx_errors = 0;
+static portMUX_TYPE s_stats_mux = portMUX_INITIALIZER_UNLOCKED;
 // Initialized during single-owner startup; retained across driver restarts.
 static SemaphoreHandle_t s_api_mutex;
 static SemaphoreHandle_t s_rx_mutex;
@@ -27,12 +28,25 @@ static bool IRAM_ATTR CAN_tx_cb(twai_node_handle_t handle,
 
 uint32_t CAN_get_rx_overflow_count(void)
 {
-    return s_rx_queue_overflows;
+    portENTER_CRITICAL(&s_stats_mux);
+    uint32_t count = s_rx_queue_overflows;
+    portEXIT_CRITICAL(&s_stats_mux);
+    return count;
 }
 
 uint32_t CAN_get_tx_error_count(void)
 {
-    return s_tx_errors;
+    portENTER_CRITICAL(&s_stats_mux);
+    uint32_t count = s_tx_errors;
+    portEXIT_CRITICAL(&s_stats_mux);
+    return count;
+}
+
+static void count_tx_error(void)
+{
+    portENTER_CRITICAL(&s_stats_mux);
+    s_tx_errors++;
+    portEXIT_CRITICAL(&s_stats_mux);
 }
 
 //ISR-context RX callback
@@ -71,7 +85,9 @@ static bool IRAM_ATTR CAN_rx_cb(twai_node_handle_t handle,
     BaseType_t hp_task_woken = pdFALSE;
     BaseType_t send_res = xQueueSendFromISR(s_rx_queue, &msg, &hp_task_woken);
     if (send_res != pdPASS) {
+        portENTER_CRITICAL_ISR(&s_stats_mux);
         s_rx_queue_overflows++;
+        portEXIT_CRITICAL_ISR(&s_stats_mux);
     }
 
     if (hp_task_woken == pdTRUE) {
@@ -247,7 +263,7 @@ esp_err_t CAN_send(const CAN_message_t *frame, uint32_t timeout_ms)
     s_tx_success = false;
     esp_err_t ret = twai_node_transmit(s_node, &s_tx_frame, (int)timeout_ms);
     if (ret != ESP_OK) {
-        s_tx_errors++;
+        count_tx_error();
         xSemaphoreGive(s_api_mutex);
         return ret;
     }
@@ -259,7 +275,7 @@ esp_err_t CAN_send(const CAN_message_t *frame, uint32_t timeout_ms)
         if (!s_tx_success) ret = ESP_FAIL;
     }
     if (ret != ESP_OK) {
-        s_tx_errors++;
+        count_tx_error();
     } else {
         s_tx_pending = false;
     }

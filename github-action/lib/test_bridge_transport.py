@@ -12,6 +12,22 @@ from can_bridge_daemon import CANBridgeDaemon
 
 @unittest.skipUnless(os.environ.get('CALSOL_NETWORK_TESTS') == '1', 'Enable on Linux verification host')
 class TransportTests(unittest.TestCase):
+    def test_second_instance_cannot_unlink_live_socket(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / 'fixture.sock')
+            first = CANBridgeDaemon(unix_socket=path, tcp_port=0, ws_port=0,
+                                    log_path=None, virtual=True)
+            second = CANBridgeDaemon(unix_socket=path, tcp_port=0, ws_port=0,
+                                     log_path=None, virtual=True)
+            first.start()
+            try:
+                with self.assertRaises(RuntimeError):
+                    second.start()
+                second.stop()
+                self.assertTrue(Path(path).exists())
+            finally:
+                first.stop()
+
     def test_commands_and_slow_consumer(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / 'fixture.sock')
