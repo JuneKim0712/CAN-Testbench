@@ -63,57 +63,18 @@ def unpack_cobs_frame(raw: bytes) -> tuple[int, int, bytes] | None:
     return can_id, dlc, bytes(raw[2 : 2 + dlc])
 
 
-def decode_calsol_message(can_id: int, data: bytes) -> tuple[str, str]:
-    """Decodes standard CalSol Gen11 message IDs into human-readable signals."""
-    if can_id == 0x011:
-        throttle = data[0] if len(data) > 0 else 0
-        cutoff = "TRIPPED" if (throttle > 25 and len(data) > 1 and data[1]) else "OK"
-        return "PEDALS_THROTTLE", f"Throttle: {throttle}% | Interlock: {cutoff}"
-    elif can_id == 0x012:
-        brake = data[0] if len(data) > 0 else 0
-        return "PEDALS_BRAKE", f"Brake Pressure: {brake}%"
-    elif can_id == 0x015:
-        volts = (data[0] / 10.0) if len(data) > 0 else 0.0
-        return "PEDALS_POWER", f"Sensor Bus: {volts:.1f}V"
-    elif can_id == 0x020:
-        status_byte = data[0] if len(data) > 0 else 0
-        brake_active = "ACTIVE" if (status_byte & 1) else "OFF"
-        hazard_active = "ACTIVE" if (status_byte & 2) else "OFF"
-        return "LIGHTS_STATUS", f"Brakelights: {brake_active} | Hazards: {hazard_active}"
-    elif can_id == 0x200:
-        angle = int.from_bytes(data[:2], "little", signed=True) / 10.0 if len(data) >= 2 else 0.0
-        return "STEERING_ANGLE", f"Wheel Angle: {angle:+.1f}°"
-    elif can_id == 0x301:
-        pack_v = int.from_bytes(data[:2], "little") / 10.0 if len(data) >= 2 else 0.0
-        soc = data[2] if len(data) >= 3 else 0
-        curr = int.from_bytes(data[3:5], "little", signed=True) / 10.0 if len(data) >= 5 else 0.0
-        return "BMS_TELEMETRY", f"Pack: {pack_v:.1f}V | SoC: {soc}% | Current: {curr:+.1f}A"
-    elif can_id == 0x302:
-        faults = data[0] if len(data) >= 1 else 0
-        return "BMS_FAULTS", f"Fault Mask: 0x{faults:02X}"
-    elif can_id == 0x501:
-        torque = int.from_bytes(data[:2], "little", signed=True) / 10.0 if len(data) >= 2 else 0.0
-        return "MOTOR_CMD", f"Torque Setpoint: {torque:+.1f} Nm"
-    elif can_id == 0x502:
-        rpm = int.from_bytes(data[:2], "little", signed=True) if len(data) >= 2 else 0
-        inv_temp = data[2] if len(data) >= 3 else 0
-        motor_temp = data[3] if len(data) >= 4 else 0
-        return "MOTOR_TELEMETRY", f"RPM: {rpm} | Inverter: {inv_temp}°C | Motor: {motor_temp}°C"
-    elif can_id == 0x503:
-        bus_v = int.from_bytes(data[:2], "little") / 10.0 if len(data) >= 2 else 0.0
-        bus_i = int.from_bytes(data[2:4], "little") / 10.0 if len(data) >= 4 else 0.0
-        return "MOTOR_BUS", f"DC Bus: {bus_v:.1f}V | Bus Current: {bus_i:.1f}A"
-    elif 0x001 <= can_id <= 0x00F:
-        names = {
-            0x001: "HEARTBEAT_BMS",
-            0x002: "HEARTBEAT_MOTOR",
-            0x003: "HEARTBEAT_STEERING",
-            0x004: "HEARTBEAT_PEDALS",
-            0x005: "HEARTBEAT_LIGHTS"
-        }
-        return names.get(can_id, f"HEARTBEAT_0x{can_id:02X}"), f"Node Active (seq {data[0] if data else 0})"
-    else:
-        return f"CAN_0x{can_id:03X}", f"Raw: {data.hex().upper()}"
+def format_raw_payload(can_id: int, data: bytes) -> tuple[str, str]:
+    """Formats raw CAN packet payload into precise hexadecimal and decimal representation without assumptions."""
+    msg_name = f"FRAME_0x{can_id:03X}"
+    if not data:
+        return msg_name, "Empty Payload (DLC 0)"
+    
+    hex_str = data.hex().upper()
+    if len(data) == 1:
+        return msg_name, f"0x{hex_str} (Dec: {data[0]})"
+    
+    dec_list = list(data)
+    return msg_name, f"0x{hex_str} (Dec: {dec_list})"
 
 
 # ─── Live CAN Bus Monitor Thread ──────────────────────────────────────────────
@@ -210,7 +171,7 @@ class LiveCANMonitor(threading.Thread):
 
     def _record_frame(self, can_id: int, dlc: int, data: bytes):
         t_rel = time.time() - self.start_time
-        msg_name, signal_desc = decode_calsol_message(can_id, data)
+        msg_name, signal_desc = format_raw_payload(can_id, data)
         hex_str = data.hex().upper()
         frame_obj = {
             "rel_time": f"+{t_rel:.3f}s",
