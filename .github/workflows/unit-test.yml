@@ -123,6 +123,7 @@ jobs:
           python3 github-action/lib/pr_reporter.py --artifacts-dir pr_artifacts
 
       - name: Ingest Run Telemetry for Web Dashboard
+        if: always()
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -130,3 +131,11 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
         run: |
           python3 github-action/lib/pages_compiler.py
+
+      - name: Upload Telemetry Web Bundle
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: telemetry-web-bundle
+          path: web/
+          retention-days: 14

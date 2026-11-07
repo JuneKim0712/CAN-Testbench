@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CalSol Gen 11 - Hardware Testbench Telemetry</title>
-  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -26,6 +25,9 @@
               yellow: '#fde047',
               yellowBg: '#713f12',
               yellowBorder: '#eab308',
+              cyan: '#7dd3fc',
+              cyanBg: '#0c4a6e',
+              cyanBorder: '#38bdf8',
             }
           }
         }
@@ -35,8 +37,6 @@
   <style>
     /* Strict right angles across all elements */
     * { border-radius: 0 !important; }
-    
-    /* Minimalist scrollbars */
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: #0a0a0a; }
     ::-webkit-scrollbar-thumb { background: #262626; }
@@ -55,7 +55,7 @@
         <div>
           <div class="flex items-center gap-2">
             <span class="text-sm font-bold tracking-tight text-white uppercase">Hardware Testbench Telemetry Portal</span>
-            <span class="border border-[#22c55e]/40 bg-[#14532d]/30 text-pastel-green px-1.5 py-0.2 text-[10px] tracking-wide uppercase font-semibold">
+            <span class="border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-1.5 py-0.2 text-[10px] tracking-wide uppercase font-semibold">
               NODE ACTIVE
             </span>
           </div>
@@ -66,7 +66,7 @@
       <div class="flex items-center gap-2">
         <div class="border border-neutral-800 bg-neutral-900 px-3 py-1 flex items-center gap-2 text-[11px]">
           <span class="text-neutral-500 uppercase">Hardware Mutex:</span>
-          <span class="text-white font-semibold uppercase" id="topHardwareStatus">Unlocked (Ready)</span>
+          <span class="text-white font-semibold uppercase">Unlocked (Ready)</span>
         </div>
         <div class="border border-neutral-800 bg-neutral-900 px-3 py-1 flex items-center gap-2 text-[11px]">
           <span class="text-neutral-500 uppercase">Bus Listeners:</span>
@@ -85,14 +85,12 @@
         <div>
           <label class="block text-[10px] uppercase text-neutral-500 mb-1 tracking-wider">Select Test Run</label>
           <select id="runSelect" onchange="switchRun(this.value)" class="bg-black border border-neutral-700 text-neutral-100 text-xs px-2.5 py-1.5 focus:outline-none focus:border-white">
-            <!-- Dynamically populated from data/history.json -->
           </select>
         </div>
 
         <div>
           <label class="block text-[10px] uppercase text-neutral-500 mb-1 tracking-wider">Active Subsystems</label>
           <div class="flex items-center gap-1.5" id="subsystemList">
-            <!-- Badges -->
           </div>
         </div>
       </div>
@@ -115,6 +113,43 @@
           <span id="runStatusBadge" class="border px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center">
             -
           </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAILURE ROOT CAUSE & DEBUGGING TRIAGE BOX (Conditional) -->
+    <section id="failureTriageBox" class="hidden border border-pastel-redBorder/60 bg-pastel-redBg/20 p-4 space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-pastel-redBorder/40 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="border border-pastel-redBorder bg-pastel-red text-black font-bold uppercase px-2 py-0.5 text-[10px]">
+            [FAILURE TRIAGE]
+          </span>
+          <span class="font-bold text-pastel-red uppercase tracking-wide text-xs">
+            Silicon Unit Test Assertion Failure Detected
+          </span>
+        </div>
+        <div class="text-[11px] text-neutral-300 font-mono">
+          Exit Code: <span class="text-pastel-red font-bold">1 (Hardware Verification Failed)</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div class="space-y-1.5">
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Failed Assertion Location:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-white font-mono" id="failLocation">-</div>
+
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Assertion Diff:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-pastel-red font-mono" id="failDiff">-</div>
+        </div>
+
+        <div class="space-y-1.5">
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Local Bench Reproduction Command:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-pastel-yellow font-mono select-all leading-relaxed" id="failReproCmd">
+            ./github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan
+          </div>
+          <p class="text-[10px] text-neutral-400 leading-normal">
+            Flashing and executing this isolated test will acquire the bench mutex and stream serial assertions directly to your terminal.
+          </p>
         </div>
       </div>
     </section>
@@ -148,20 +183,20 @@
 
       <div class="border border-neutral-800 bg-neutral-950 p-3">
         <div class="text-[10px] uppercase text-neutral-500 tracking-wider">Critical Section Scope</div>
-        <div class="text-xl font-bold mt-1 text-white font-mono">14.8s</div>
+        <div class="text-xl font-bold mt-1 text-white font-mono" id="statLockScope">14.8s</div>
         <div class="text-[10px] text-neutral-500 uppercase mt-1 tracking-wider">flock -x 200 (Flash + Run Only)</div>
       </div>
     </section>
 
-    <!-- CAN BUS TELEMETRY & WAVEFORM SECTION -->
-    <section class="border border-neutral-800 bg-neutral-950 p-4 space-y-4">
+    <!-- CAN BUS OSCILLOSCOPE & SIGNAL REPLAY -->
+    <section class="border border-neutral-800 bg-neutral-950 p-4 space-y-3">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
         <div>
           <h2 class="text-xs font-bold text-white uppercase tracking-wider">
-            [TELEMETRY] Physical CAN Bus Oscilloscope & Signal Replay
+            [TELEMETRY] Multi-Channel CAN Bus Oscilloscope & Signal Analyzer
           </h2>
           <p class="text-[11px] text-neutral-500 uppercase mt-0.5 tracking-wide">
-            Decoded differential packet signals captured via hardware debugger node (/dev/esp32_ahmed)
+            Calibrated signal traces reconstructed from physical TCAN332 transceiver packets on /dev/esp32_ahmed
           </p>
         </div>
 
@@ -184,27 +219,57 @@
         </div>
       </div>
 
-      <!-- Waveform Canvas -->
-      <div class="space-y-2">
-        <div class="flex items-center justify-between text-[11px]">
+      <!-- LIVE DIGITAL HEADS-UP DISPLAY (HUD) -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 border border-neutral-800 bg-black p-2.5 text-[11px]">
+        <div>
+          <span class="text-[10px] uppercase text-neutral-500 block">Relative Time</span>
+          <span class="font-bold text-white font-mono" id="hudTime">t = +0.00s</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-2">
+          <span class="text-[10px] uppercase text-pastel-yellow block">Throttle Demand [0x011]</span>
+          <span class="font-bold text-pastel-yellow font-mono" id="hudThrottle">0% (0 ADC)</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-2">
+          <span class="text-[10px] uppercase text-pastel-cyan block">Bus Voltage [0x001]</span>
+          <span class="font-bold text-pastel-cyan font-mono" id="hudVoltage">12.0V Nominal</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-2">
+          <span class="text-[10px] uppercase text-neutral-400 block">Safety Interlock</span>
+          <span class="font-bold text-pastel-green font-mono uppercase" id="hudInterlock">NORMAL (OK)</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-2 col-span-2 sm:col-span-1">
+          <span class="text-[10px] uppercase text-neutral-500 block">Active CAN Frame</span>
+          <span class="font-bold text-neutral-300 font-mono" id="hudFrame">0x000 (IDLE)</span>
+        </div>
+      </div>
+
+      <!-- DUAL-CHANNEL CALIBRATED WAVEFORM CANVAS -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between text-[10px] uppercase text-neutral-400">
           <div class="flex items-center gap-4">
             <span class="flex items-center gap-1.5">
-              <span class="w-2.5 h-2.5 bg-pastel-yellow inline-block"></span>
-              <span class="text-neutral-300 uppercase">Throttle Demand (%) [0x011]</span>
+              <span class="w-2 h-2 bg-pastel-yellow inline-block"></span>
+              <span>Channel A: Throttle Demand (0 - 100%)</span>
             </span>
             <span class="flex items-center gap-1.5">
-              <span class="w-2.5 h-2.5 bg-neutral-400 inline-block"></span>
-              <span class="text-neutral-300 uppercase">Pack Bus Voltage (x10 V) [0x001]</span>
+              <span class="w-2 h-2 bg-pastel-cyan inline-block"></span>
+              <span>Channel B: Sensor Bus Voltage (0 - 15V)</span>
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-0.5 border-t border-dashed border-pastel-red inline-block"></span>
+              <span>25% Cutoff Threshold</span>
             </span>
           </div>
-          <div class="font-mono text-neutral-400 uppercase tracking-wider" id="timelineDisplay">
-            t = 0.00s / 6.00s
+          <div class="font-mono text-neutral-500">
+            Click / Scrub Canvas to Inspect
           </div>
         </div>
 
-        <div class="relative bg-black border border-neutral-800 h-44 overflow-hidden">
+        <div class="relative bg-black border border-neutral-800 h-64 overflow-hidden cursor-crosshair" id="canvasContainer" onclick="handleCanvasClick(event)" onmousemove="handleCanvasHover(event)" onmouseleave="handleCanvasLeave()">
           <canvas id="waveformCanvas" class="w-full h-full block"></canvas>
-          <div id="playhead" class="absolute top-0 bottom-0 w-[1px] bg-white shadow-none pointer-events-none" style="left: 0%;"></div>
+          <div id="playhead" class="absolute top-0 bottom-0 w-[1px] bg-white pointer-events-none" style="left: 0%;"></div>
+          <div id="hoverCursor" class="hidden absolute top-0 bottom-0 w-[1px] border-l border-dashed border-neutral-400 pointer-events-none"></div>
+          <div id="hoverTooltip" class="hidden absolute top-2 bg-neutral-900 border border-neutral-700 text-white text-[10px] px-2 py-1 pointer-events-none font-mono"></div>
         </div>
 
         <!-- Scrubber -->
@@ -226,7 +291,7 @@
           </div>
         </div>
 
-        <div class="border border-neutral-800 overflow-x-auto max-h-56">
+        <div class="border border-neutral-800 overflow-x-auto max-h-48">
           <table class="w-full text-left font-mono text-[11px]">
             <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 uppercase text-[10px] tracking-wider sticky top-0">
               <tr>
@@ -239,7 +304,6 @@
               </tr>
             </thead>
             <tbody id="packetTableBody" class="divide-y divide-neutral-900 bg-black text-neutral-200">
-              <!-- Populated by script -->
             </tbody>
           </table>
         </div>
@@ -252,17 +316,23 @@
       <!-- Test Table (2 cols) -->
       <div class="lg:col-span-2 border border-neutral-800 bg-neutral-950 p-4 space-y-3">
         <div class="flex items-center justify-between border-b border-neutral-800 pb-2">
-          <h2 class="text-xs font-bold text-white uppercase tracking-wider">
-            [ASSERTIONS] Silicon On-Target Unit Tests (Unity)
-          </h2>
+          <div class="flex items-center gap-2">
+            <h2 class="text-xs font-bold text-white uppercase tracking-wider">
+              [ASSERTIONS] Silicon On-Target Unit Tests (Unity)
+            </h2>
+            <div class="flex items-center bg-black border border-neutral-800 p-0.5 text-[10px]">
+              <button id="btnFilterAll" onclick="setTestFilter('all')" class="px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase">All Tests</button>
+              <button id="btnFilterFail" onclick="setTestFilter('fail')" class="px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase">Failed Only</button>
+            </div>
+          </div>
           <span class="text-[11px] font-mono text-neutral-400 uppercase" id="testRatioLabel">
             0 / 0 Passed
           </span>
         </div>
 
-        <div class="border border-neutral-800 overflow-x-auto">
+        <div class="border border-neutral-800 overflow-x-auto max-h-72">
           <table class="w-full text-left font-mono text-[11px]">
-            <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 uppercase text-[10px] tracking-wider">
+            <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 uppercase text-[10px] tracking-wider sticky top-0">
               <tr>
                 <th class="py-1.5 px-3">Result</th>
                 <th class="py-1.5 px-3">Subsystem</th>
@@ -272,7 +342,6 @@
               </tr>
             </thead>
             <tbody id="testTableBody" class="divide-y divide-neutral-900 bg-black text-neutral-200">
-              <!-- Populated by script -->
             </tbody>
           </table>
         </div>
@@ -328,18 +397,18 @@
     const maxPlaybackTime = 6.0;
     let animId = null;
     let lastTime = 0;
+    let testFilterMode = 'all'; // 'all' or 'fail'
 
-    // Load history from data/history.json or fallback
     async function initData() {
       try {
         const res = await fetch('data/history.json');
         if (res.ok) {
           historyState = await res.json();
         } else {
-          throw new Error('fetch failed');
+          throw new Error('fetch error');
         }
       } catch (e) {
-        console.warn('Could not load data/history.json, using embedded fallback');
+        console.warn('Fallback to embedded dataset');
         historyState = {
           runs: [
             {
@@ -378,6 +447,30 @@
                 { t: 5.0, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "5A", decoded: "Throttle: 90% (230 ADC)" },
                 { t: 5.5, id: "0x011", name: "THROTTLE_COMMAND", dlc: 1, raw: "64", decoded: "Throttle: 100% (255 ADC)" }
               ]
+            },
+            {
+              id: "42220194812",
+              commit: "a82910d",
+              branch: "test-failure-simulation",
+              status: "failed",
+              duration: "14.5s",
+              subsystems: ["pedals_fw"],
+              tests_pass: 6,
+              tests_total: 7,
+              lock_duration_sec: 14.1,
+              static_analysis: { status: "passed", defects: 0 },
+              tests: [
+                { subsystem: "pedals_fw", name: "test_throttle_calculation_and_deadzone", file: "./main/test_main.c", line: 196, status: "FAIL", details: "Expected 99 Was 50" },
+                { subsystem: "pedals_fw", name: "test_brake_plausibility_safety_interlock", file: "./main/test_main.c", line: 197, status: "PASS", details: "Plausibility interlock nominal" },
+                { subsystem: "pedals_fw", name: "test_can_packet_builder_clamping_and_zeroing", file: "./main/test_main.c", line: 198, status: "PASS", details: "Clamping valid" },
+                { subsystem: "pedals_fw", name: "test_can_driver_lifecycle", file: "./main/test_main.c", line: 199, status: "PASS", details: "Lifecycle valid" },
+                { subsystem: "pedals_fw", name: "test_can_driver_uninitialized_safety", file: "./main/test_main.c", line: 200, status: "PASS", details: "Safety valid" },
+                { subsystem: "pedals_fw", name: "test_can_receive_timeout", file: "./main/test_main.c", line: 201, status: "PASS", details: "Timeout valid" },
+                { subsystem: "pedals_fw", name: "test_pedal_can_transmission", file: "./main/test_main.c", line: 202, status: "PASS", details: "Transmission valid" }
+              ],
+              can_packets: [
+                { t: 0.5, id: "0x001", name: "PEDALS_STATUS", dlc: 2, raw: "00 79", decoded: "Heartbeat: ACTIVE | Bus Voltage: 12.1V" }
+              ]
             }
           ]
         };
@@ -402,14 +495,27 @@
       document.getElementById('runCommit').innerText = currentRun.commit;
       document.getElementById('runDuration').innerText = currentRun.duration;
       document.getElementById('runLockTime').innerText = `${currentRun.lock_duration_sec}s`;
+      document.getElementById('statLockScope').innerText = `${currentRun.lock_duration_sec}s`;
 
       const badge = document.getElementById('runStatusBadge');
+      const triageBox = document.getElementById('failureTriageBox');
+
       if (currentRun.status === 'passed') {
         badge.innerText = '[STATUS: ALL PASSED]';
         badge.className = 'border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center';
+        triageBox.classList.add('hidden');
       } else {
         badge.innerText = '[STATUS: ASSERTION FAILED]';
         badge.className = 'border border-pastel-redBorder/40 bg-pastel-redBg/30 text-pastel-red px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center';
+        
+        // Populate Failure Triage Box
+        triageBox.classList.remove('hidden');
+        const firstFail = currentRun.tests.find(t => t.status === 'FAIL');
+        if (firstFail) {
+          document.getElementById('failLocation').innerText = `${firstFail.subsystem} -> ${firstFail.file}:${firstFail.line} (${firstFail.name})`;
+          document.getElementById('failDiff').innerText = firstFail.details;
+          document.getElementById('failReproCmd').innerText = `./github-action/cal-test.sh ${firstFail.subsystem}/test /dev/esp32_johnathan`;
+        }
       }
 
       // Stats
@@ -430,26 +536,48 @@
 
       // Test Table
       document.getElementById('testRatioLabel').innerText = `${currentRun.tests_pass} / ${currentRun.tests_total} PASSED`;
-      const testBody = document.getElementById('testTableBody');
-      testBody.innerHTML = currentRun.tests.map(t => {
-        const isPass = t.status === 'PASS';
-        const statusBadge = isPass
-          ? `<span class="border border-pastel-greenBorder/30 bg-pastel-greenBg/20 text-pastel-green px-1.5 py-0.5 font-bold uppercase text-[10px]">[PASS]</span>`
-          : `<span class="border border-pastel-redBorder/30 bg-pastel-redBg/20 text-pastel-red px-1.5 py-0.5 font-bold uppercase text-[10px]">[FAIL]</span>`;
-        return `
-          <tr class="${isPass ? 'hover:bg-neutral-950' : 'bg-pastel-redBg/10 hover:bg-pastel-redBg/20'} transition">
-            <td class="py-2 px-3">${statusBadge}</td>
-            <td class="py-2 px-3 text-neutral-400 uppercase font-semibold">${t.subsystem}</td>
-            <td class="py-2 px-3 text-white font-bold">${t.name}</td>
-            <td class="py-2 px-3 text-neutral-500">${t.file}:${t.line}</td>
-            <td class="py-2 px-3 ${isPass ? 'text-neutral-400' : 'text-pastel-red font-semibold'}">${t.details}</td>
-          </tr>
-        `;
-      }).join('');
+      renderTestTable();
 
       resetPlayback();
       drawWaveform();
       renderPacketsTable();
+    }
+
+    function setTestFilter(mode) {
+      testFilterMode = mode;
+      document.getElementById('btnFilterAll').className = mode === 'all' 
+        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase' 
+        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      document.getElementById('btnFilterFail').className = mode === 'fail' 
+        ? 'px-2 py-0.5 bg-pastel-redBg text-pastel-red font-bold uppercase border border-pastel-redBorder/40' 
+        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      renderTestTable();
+    }
+
+    function renderTestTable() {
+      const testBody = document.getElementById('testTableBody');
+      const tests = currentRun.tests.filter(t => testFilterMode === 'all' || t.status === 'FAIL');
+
+      if (tests.length === 0) {
+        testBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-neutral-500 uppercase tracking-wider">No failing assertions present in this run.</td></tr>`;
+        return;
+      }
+
+      testBody.innerHTML = tests.map(t => {
+        const isPass = t.status === 'PASS';
+        const statusBadge = isPass
+          ? `<span class="border border-pastel-greenBorder/30 bg-pastel-greenBg/20 text-pastel-green px-1.5 py-0.5 font-bold uppercase text-[10px]">[PASS]</span>`
+          : `<span class="border border-pastel-redBorder/50 bg-pastel-redBg/40 text-pastel-red px-1.5 py-0.5 font-bold uppercase text-[10px]">[FAIL]</span>`;
+        return `
+          <tr class="${isPass ? 'hover:bg-neutral-900' : 'bg-pastel-redBg/15 hover:bg-pastel-redBg/25 border-l-2 border-pastel-red'} transition">
+            <td class="py-2 px-3">${statusBadge}</td>
+            <td class="py-2 px-3 text-neutral-400 uppercase font-semibold">${t.subsystem}</td>
+            <td class="py-2 px-3 text-white font-bold">${t.name}</td>
+            <td class="py-2 px-3 text-neutral-500">${t.file}:${t.line}</td>
+            <td class="py-2 px-3 ${isPass ? 'text-neutral-400' : 'text-pastel-red font-bold'}">${t.details}</td>
+          </tr>
+        `;
+      }).join('');
     }
 
     function renderPacketsTable() {
@@ -479,7 +607,7 @@
       `).join('');
     }
 
-    // Canvas Oscilloscope Renderer
+    // ─── DUAL-CHANNEL OSCILLOSCOPE DRAWING ───────────────────────────────────────
     function drawWaveform() {
       const canvas = document.getElementById('waveformCanvas');
       const ctx = canvas.getContext('2d');
@@ -494,55 +622,224 @@
 
       ctx.clearRect(0, 0, w, h);
 
-      // Grid Lines (Sharp right angles)
-      ctx.strokeStyle = '#171717';
+      const marginL = 50;
+      const marginR = 15;
+      const plotW = w - marginL - marginR;
+      
+      // Top Channel: Throttle (0% to 100%)
+      const ch1Top = 20;
+      const ch1H = 95;
+      const ch1Bottom = ch1Top + ch1H;
+
+      // Bottom Channel: Voltage (0V to 15V)
+      const ch2Top = 135;
+      const ch2H = 75;
+      const ch2Bottom = ch2Top + ch2H;
+
+      // Event Raster Lane
+      const rasterTop = 225;
+      const rasterH = 15;
+
+      // ── Grid & Axes ────────────────────────────────────────────────────────
+      ctx.strokeStyle = '#1e1e1e';
       ctx.lineWidth = 1;
-      for (let y = 20; y < h; y += 30) {
+
+      // Vertical Time Lines (every 1 second)
+      for (let sec = 0; sec <= maxPlaybackTime; sec += 1.0) {
+        const x = marginL + (sec / maxPlaybackTime) * plotW;
         ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
+        ctx.moveTo(x, 10);
+        ctx.lineTo(x, h - 5);
         ctx.stroke();
+
+        ctx.fillStyle = '#666666';
+        ctx.font = '9px monospace';
+        ctx.fillText(`+${sec.toFixed(0)}s`, x - 8, h - 2);
       }
-      for (let x = 0; x < w; x += 60) {
+
+      // Horizontal Lines & Labels for Channel 1 (Throttle: 0%, 25%, 50%, 75%, 100%)
+      [0, 25, 50, 75, 100].forEach(val => {
+        const y = ch1Bottom - (val / 100) * ch1H;
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
+        ctx.moveTo(marginL, y);
+        ctx.lineTo(marginL + plotW, y);
+        ctx.strokeStyle = (val === 25) ? '#ef4444' : '#1c1c1c';
+        ctx.setLineDash(val === 25 ? [4, 4] : []);
         ctx.stroke();
-      }
+        ctx.setLineDash([]);
 
-      // Draw Throttle Sweep (Pastel Yellow #fde047)
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
+        ctx.fillStyle = (val === 25) ? '#fca5a5' : '#737373';
+        ctx.font = '9px monospace';
+        ctx.fillText(`${val}%`, 14, y + 3);
+      });
 
-      const throttlePoints = currentRun.can_packets.filter(p => p.id === '0x011');
-      if (throttlePoints.length > 0) {
-        throttlePoints.forEach((pt, i) => {
-          const val = parseInt(pt.raw, 16);
-          const x = (pt.t / maxPlaybackTime) * w;
-          const y = h - ((val / 100) * (h - 40) + 20);
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
+      // Label 25% Cutoff Threshold
+      ctx.fillStyle = '#fca5a5';
+      ctx.font = '9px monospace';
+      ctx.fillText('[25% CUTOFF THRESHOLD]', marginL + plotW - 130, ch1Bottom - (25 / 100) * ch1H - 4);
+
+      // Horizontal Lines & Labels for Channel 2 (Voltage: 0V, 5V, 10V, 12V, 15V)
+      [0, 5, 10, 12, 15].forEach(val => {
+        const y = ch2Bottom - (val / 15) * ch2H;
+        ctx.beginPath();
+        ctx.moveTo(marginL, y);
+        ctx.lineTo(marginL + plotW, y);
+        ctx.strokeStyle = (val === 12) ? '#38bdf8' : '#1c1c1c';
+        ctx.setLineDash(val === 12 ? [4, 4] : []);
         ctx.stroke();
+        ctx.setLineDash([]);
 
-        // Right-angle marker dots
-        throttlePoints.forEach(pt => {
-          const val = parseInt(pt.raw, 16);
-          const x = (pt.t / maxPlaybackTime) * w;
-          const y = h - ((val / 100) * (h - 40) + 20);
-          ctx.fillStyle = pt.t <= playbackTime ? '#fde047' : '#525252';
-          ctx.fillRect(x - 2, y - 2, 4, 4); // Square right-angle point
-        });
-      }
+        ctx.fillStyle = (val === 12) ? '#7dd3fc' : '#737373';
+        ctx.font = '9px monospace';
+        ctx.fillText(`${val}V`, 14, y + 3);
+      });
 
-      // Baseline reference (Voltage #a3a3a3)
-      ctx.strokeStyle = '#525252';
+      ctx.fillStyle = '#7dd3fc';
+      ctx.font = '9px monospace';
+      ctx.fillText('[12.0V NOMINAL AUX]', marginL + plotW - 115, ch2Bottom - (12 / 15) * ch2H - 4);
+
+      // Channel Separator Line
+      ctx.strokeStyle = '#262626';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(0, h - 50);
-      ctx.lineTo(w, h - 50);
+      ctx.moveTo(marginL, 122);
+      ctx.lineTo(marginL + plotW, 122);
       ctx.stroke();
+
+      // ── Plot Channel 1: Stepped Throttle Demand (Pastel Yellow) ─────────────
+      const throttlePackets = currentRun.can_packets.filter(p => p.id === '0x011');
+      if (throttlePackets.length > 0) {
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        let prevX = marginL;
+        let prevY = ch1Bottom;
+
+        throttlePackets.forEach((p, idx) => {
+          const x = marginL + (p.t / maxPlaybackTime) * plotW;
+          const val = parseInt(p.raw, 16);
+          const y = ch1Bottom - (val / 100) * ch1H;
+
+          // Step-and-hold (horizontal then vertical)
+          ctx.lineTo(x, prevY);
+          ctx.lineTo(x, y);
+
+          prevX = x;
+          prevY = y;
+        });
+        // Extend to end of plot
+        ctx.lineTo(marginL + plotW, prevY);
+        ctx.stroke();
+
+        // Right-Angle Packet Dots
+        throttlePackets.forEach(p => {
+          const x = marginL + (p.t / maxPlaybackTime) * plotW;
+          const val = parseInt(p.raw, 16);
+          const y = ch1Bottom - (val / 100) * ch1H;
+          ctx.fillStyle = p.t <= playbackTime ? '#fde047' : '#525252';
+          ctx.fillRect(x - 2.5, y - 2.5, 5, 5); // Crisp square point
+        });
+      }
+
+      // ── Plot Channel 2: Sensor Bus Voltage (Pastel Cyan) ───────────────────
+      const statusPackets = currentRun.can_packets.filter(p => p.id === '0x001');
+      if (statusPackets.length > 0) {
+        ctx.strokeStyle = '#7dd3fc';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        let vPrevX = marginL;
+        let vPrevY = ch2Bottom - (12.3 / 15) * ch2H;
+        ctx.moveTo(vPrevX, vPrevY);
+
+        statusPackets.forEach(p => {
+          const x = marginL + (p.t / maxPlaybackTime) * plotW;
+          const rawVolt = p.raw.split(' ')[1] ? parseInt(p.raw.split(' ')[1], 16) / 10.0 : 12.0;
+          const y = ch2Bottom - (rawVolt / 15) * ch2H;
+          ctx.lineTo(x, y);
+          vPrevX = x;
+          vPrevY = y;
+        });
+        ctx.lineTo(marginL + plotW, vPrevY);
+        ctx.stroke();
+
+        statusPackets.forEach(p => {
+          const x = marginL + (p.t / maxPlaybackTime) * plotW;
+          const rawVolt = p.raw.split(' ')[1] ? parseInt(p.raw.split(' ')[1], 16) / 10.0 : 12.0;
+          const y = ch2Bottom - (rawVolt / 15) * ch2H;
+          ctx.fillStyle = p.t <= playbackTime ? '#7dd3fc' : '#404040';
+          ctx.fillRect(x - 2.5, y - 2.5, 5, 5);
+        });
+      }
+
+      // ── Event Raster Lane (Bottom) ─────────────────────────────────────────
+      ctx.fillStyle = '#121212';
+      ctx.fillRect(marginL, rasterTop, plotW, rasterH);
+      ctx.strokeStyle = '#262626';
+      ctx.strokeRect(marginL, rasterTop, plotW, rasterH);
+
+      ctx.fillStyle = '#666666';
+      ctx.font = '8px monospace';
+      ctx.fillText('BUS TICKS', 4, rasterTop + 10);
+
+      currentRun.can_packets.forEach(p => {
+        const x = marginL + (p.t / maxPlaybackTime) * plotW;
+        ctx.fillStyle = (p.id === '0x011') ? '#fde047' : ((p.id === '0x001') ? '#86efac' : '#c084fc');
+        ctx.fillRect(x - 1, rasterTop + 2, 2, rasterH - 4);
+      });
+
+      // ── Update Digital Heads-Up Display (HUD) ──────────────────────────────
+      updateHUD();
+    }
+
+    function updateHUD() {
+      document.getElementById('hudTime').innerText = `t = +${playbackTime.toFixed(2)}s`;
+
+      // Find active throttle at playbackTime
+      const activeThrottle = currentRun.can_packets
+        .filter(p => p.id === '0x011' && p.t <= playbackTime)
+        .slice(-1)[0];
+
+      if (activeThrottle) {
+        const val = parseInt(activeThrottle.raw, 16);
+        const adc = Math.round((val / 100) * 3000 + 500);
+        document.getElementById('hudThrottle').innerText = `${val}% (${adc} ADC)`;
+        
+        // Interlock status
+        if (val > 25) {
+          document.getElementById('hudInterlock').innerText = 'HIGH THROTTLE (>25%)';
+          document.getElementById('hudInterlock').className = 'font-bold text-pastel-yellow font-mono uppercase';
+        } else {
+          document.getElementById('hudInterlock').innerText = 'NORMAL (OK)';
+          document.getElementById('hudInterlock').className = 'font-bold text-pastel-green font-mono uppercase';
+        }
+      } else {
+        document.getElementById('hudThrottle').innerText = '0% (0 ADC)';
+        document.getElementById('hudInterlock').innerText = 'STANDBY (0%)';
+        document.getElementById('hudInterlock').className = 'font-bold text-neutral-400 font-mono uppercase';
+      }
+
+      // Find active voltage
+      const activeVolt = currentRun.can_packets
+        .filter(p => p.id === '0x001' && p.t <= playbackTime)
+        .slice(-1)[0];
+      if (activeVolt) {
+        const v = activeVolt.raw.split(' ')[1] ? (parseInt(activeVolt.raw.split(' ')[1], 16) / 10.0).toFixed(1) : '12.3';
+        document.getElementById('hudVoltage').innerText = `${v}V (LTC4151)`;
+      } else {
+        document.getElementById('hudVoltage').innerText = '12.0V Nominal';
+      }
+
+      // Last CAN frame
+      const lastFrame = currentRun.can_packets
+        .filter(p => p.t <= playbackTime)
+        .slice(-1)[0];
+      if (lastFrame) {
+        document.getElementById('hudFrame').innerText = `${lastFrame.id} (${lastFrame.name})`;
+      } else {
+        document.getElementById('hudFrame').innerText = '0x000 (BUS IDLE)';
+      }
     }
 
     function togglePlayback() {
@@ -586,12 +883,63 @@
     }
 
     function updateUI() {
-      document.getElementById('timelineDisplay').innerText = `t = ${playbackTime.toFixed(2)}s / ${maxPlaybackTime.toFixed(2)}s`;
       const pct = (playbackTime / maxPlaybackTime) * 100;
       document.getElementById('timeScrubber').value = pct;
-      document.getElementById('playhead').style.left = `${pct}%`;
+
+      const canvas = document.getElementById('waveformCanvas');
+      const marginL = 50;
+      const marginR = 15;
+      const plotW = canvas.clientWidth - marginL - marginR;
+      const xPixel = marginL + (playbackTime / maxPlaybackTime) * plotW;
+
+      document.getElementById('playhead').style.left = `${(xPixel / canvas.clientWidth) * 100}%`;
       drawWaveform();
       renderPacketsTable();
+    }
+
+    // Canvas Click & Hover Interactions
+    function handleCanvasClick(e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const marginL = 50;
+      const marginR = 15;
+      const plotW = rect.width - marginL - marginR;
+
+      if (clickX >= marginL && clickX <= marginL + plotW) {
+        const fraction = (clickX - marginL) / plotW;
+        playbackTime = Math.max(0, Math.min(maxPlaybackTime, fraction * maxPlaybackTime));
+        updateUI();
+      }
+    }
+
+    function handleCanvasHover(e) {
+      const container = document.getElementById('canvasContainer');
+      const rect = container.getBoundingClientRect();
+      const hoverX = e.clientX - rect.left;
+      const marginL = 50;
+      const marginR = 15;
+      const plotW = rect.width - marginL - marginR;
+
+      const cursor = document.getElementById('hoverCursor');
+      const tooltip = document.getElementById('hoverTooltip');
+
+      if (hoverX >= marginL && hoverX <= marginL + plotW) {
+        cursor.classList.remove('hidden');
+        tooltip.classList.remove('hidden');
+        cursor.style.left = `${hoverX}px`;
+
+        const fraction = (hoverX - marginL) / plotW;
+        const hoverT = fraction * maxPlaybackTime;
+        tooltip.style.left = `${Math.min(rect.width - 90, hoverX + 8)}px`;
+        tooltip.innerText = `t = +${hoverT.toFixed(2)}s`;
+      } else {
+        handleCanvasLeave();
+      }
+    }
+
+    function handleCanvasLeave() {
+      document.getElementById('hoverCursor').classList.add('hidden');
+      document.getElementById('hoverTooltip').classList.add('hidden');
     }
 
     window.addEventListener('resize', drawWaveform);
