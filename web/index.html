@@ -272,7 +272,7 @@
   <!-- ========================================================================= -->
   <main id="viewTelemetry" class="hidden max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
 
-    <section class="connection-panel border border-neutral-800 bg-neutral-950 p-4 space-y-3" aria-label="Debugger connection">
+    <details class="connection-panel border border-neutral-800 bg-neutral-950 p-4 space-y-3" aria-label="Debugger connection"><summary>Advanced: direct private connection</summary>
       <h2>Connect to the CAN debugger</h2>
       <p>The Raspberry Pi streams messages received by the debugger ESP32. A bridge connection alone does not confirm the CAN bus works.</p>
       <form onsubmit="event.preventDefault(); setBridgeUrl(document.getElementById('bridgeEndpoint').value)">
@@ -283,6 +283,11 @@
       <p id="bridgeStatusLabel" role="status" aria-live="polite">Not connected</p>
       <p>GitHub Pages requires a secure wss:// or https:// endpoint. HTTP polling takes over if WebSocket fails. With the SSH tunnel running, use the <a class="text-pastel-cyan underline" href="http://127.0.0.1:18880/?bridge=ws%3A%2F%2F127.0.0.1%3A18765%2Fws#telemetry" target="_blank" rel="noopener">private live viewer</a>.</p>
       <p id="deviceHealthDetail" class="text-neutral-400">Last checked: never. Last physical CAN reception: unknown.</p>
+    </details>
+    <section class="border border-neutral-800 bg-neutral-950 p-4" aria-live="polite">
+      <h2>Public CAN telemetry</h2>
+      <p id="publicFeedStatus">Loading the latest bench snapshot automatically…</p>
+      <p>Read-only snapshots update approximately every five minutes. GitHub scheduling and caching can delay updates.</p>
     </section>
     <!-- SNIFFER CONSOLE HEADER -->
     <section class="border border-neutral-800 bg-neutral-950 p-4 space-y-3">
@@ -822,9 +827,12 @@
       bridgeUrl = '';
       try { localStorage.removeItem('calsol_bridge_url'); } catch (e) {}
     }
+    const PUBLIC_FEED_URL = 'https://raw.githubusercontent.com/JuneKim0712/CAN-Testbench/telemetry-feed/public-telemetry.json';
+    let publicSnapshot = null;
     let bridgeConnected = false;
     let httpLiveAt = 0;
     let streamPollBusy = false;
+    let lastPublicAttempt = 0;
     function bridgeHttpUrl(endpoint, path) {
       const url = new URL(endpoint);
       url.protocol = ['wss:', 'https:'].includes(url.protocol) ? 'https:' : 'http:';
@@ -837,12 +845,18 @@
     let healthCheckedAt = 0;
     let healthRequest = 0;
     function renderDeviceHealth() {
+      const publicFresh = !bridgeUrl && publicSnapshot && Date.now() - Date.parse(publicSnapshot.updated_at) < 15 * 60 * 1000;
       const fresh = Boolean(bridgeUrl && deviceHealth && Date.now() - healthCheckedAt < 10000);
       const set = (id, text) => { const el = document.getElementById(id); if (el) { el.textContent = text; el.className = 'text-neutral-200'; } };
       set('deviceBridgeState', fresh ? 'Bridge reachable' : healthCheckedAt ? 'Stale / unreachable' : 'Unknown');
       set('deviceDebuggerState', fresh ? deviceHealth.mode === 'software_test' ? 'Simulation — no physical debugger' : deviceHealth.serial_connected ? 'USB connected' : 'USB disconnected' : 'Unknown');
       set('deviceDutState', 'Unknown — no live DUT evidence');
       set('overviewHealthSummary', fresh ? 'Bridge health checked ' + new Date(healthCheckedAt).toLocaleTimeString() : 'Connect to the bridge for live status');
+      if (!bridgeUrl) {
+        set('deviceBridgeState', publicFresh ? publicSnapshot.bridge_available ? 'Reachable at snapshot time' : 'Offline at snapshot time' : 'Snapshot stale / unavailable');
+        set('deviceDebuggerState', publicFresh ? publicSnapshot.mode === 'software_test' ? 'Simulation' : publicSnapshot.serial_connected ? 'USB connected at snapshot time' : 'USB disconnected at snapshot time' : 'Unknown');
+        set('overviewHealthSummary', publicFresh ? 'Public snapshot: ' + new Date(publicSnapshot.updated_at).toLocaleString() : 'Public snapshot stale / unavailable');
+      }
       const last = fresh && deviceHealth.last_rx_at ? deviceHealth.last_rx_at : 'unknown';
       set('deviceHealthDetail', `Last checked: ${healthCheckedAt ? new Date(healthCheckedAt).toLocaleTimeString() : 'never'}. Last physical CAN reception: ${last}. DUT presence requires a verified heartbeat.`);
     }
@@ -1075,8 +1089,10 @@
         if (bridgeConnected || streamPaused || streamPollBusy) return;
         streamPollBusy = true;
         const endpoint = bridgeUrl;
+        if (!endpoint && Date.now() - lastPublicAttempt < 30000) { streamPollBusy = false; return; }
+        if (!endpoint) lastPublicAttempt = Date.now();
         try {
-          const res = await fetch(endpoint ? bridgeHttpUrl(endpoint, '/api/frames') : 'data/live_stream.json?t=' + Date.now(), {cache: 'no-store', signal: AbortSignal.timeout(2500)});
+          const res = await fetch(endpoint ? bridgeHttpUrl(endpoint, '/api/frames') : PUBLIC_FEED_URL + '?t=' + Math.floor(Date.now() / 30000), {cache: 'no-store', signal: AbortSignal.timeout(2500)});
           if (endpoint !== bridgeUrl || bridgeConnected) return;
           if (!res.ok) throw new Error('HTTP ' + res.status);
           if (res.ok) {
@@ -1101,11 +1117,17 @@
               streamPackets = incoming.concat(streamPackets).slice(0, MAX_STREAM_HISTORY);
               const updated = Date.parse(payload.updated_at);
               const age = Number.isFinite(updated) ? Math.max(0, Math.floor((Date.now() - updated) / 1000)) : null;
-              if (!bridgeUrl) updateBridgeStatusUI(false, age === null ? 'Snapshot timestamp unavailable' : `Historical snapshot • updated ${age}s ago`);
+              if (!bridgeUrl) {
+                publicSnapshot = payload;
+                const label = age === null ? 'Snapshot timestamp unavailable' : `Public snapshot • captured ${age}s ago${age > 900 ? ' • STALE' : ''}${payload.bridge_available ? '' : ' • bridge offline'}`;
+                document.getElementById('publicFeedStatus').textContent = label;
+                updateBridgeStatusUI(false, label);
+              }
               if (incoming.length) scheduleStreamRender();
             }
           }
         } catch (e) {
+          if (!endpoint) document.getElementById('publicFeedStatus').textContent = 'Public feed unavailable. Previously received data is retained; check its timestamp.';
           if (endpoint === bridgeUrl && endpoint && !bridgeConnected) {
             httpLiveAt = 0;
             updateBridgeStatusUI(false, 'Bridge unreachable: check endpoint, HTTPS, SSH tunnel and network access.');
