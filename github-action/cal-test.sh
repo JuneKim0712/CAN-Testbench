@@ -152,17 +152,38 @@ if [ -d "$TARGET" ]; then
     cp -f build/flasher_args.json "$ARTIFACTS_DIR/" 2>/dev/null || true
 fi
 
-# 6. Mutex lock on the hardware device (Scoped strictly to physical flashing and test execution)
+# 6. Ensure persistent CAN bridge daemon is listening BEFORE flashing DUT so boot traffic is never lost
+if [ -S "/tmp/calsol_can.sock" ]; then
+    if ! python3 -c "import socket; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect('/tmp/calsol_can.sock'); s.close()" 2>/dev/null; then
+        rm -f "/tmp/calsol_can.sock" 2>/dev/null || true
+    fi
+fi
+
+if [ ! -S "/tmp/calsol_can.sock" ] && [ -e "$CAN_DEBUGGER_PORT" ]; then
+    echo "[*] Launching permanent CAN Debugger daemon on ${CAN_DEBUGGER_PORT} before DUT boot..."
+    python3 "${SCRIPT_DIR}/lib/can_bridge_daemon.py" \
+        --port "$CAN_DEBUGGER_PORT" \
+        --unix-socket "/tmp/calsol_can.sock" \
+        --tcp-port 5555 \
+        --ws-port 8765 \
+        --json-out "${REPO_ROOT}/web/data/live_stream.json" > /tmp/calsol_can_daemon.log 2>&1 &
+    sleep 0.8
+fi
+
+# 7. Unified Hardware Mutex Lock (Derived from resolved canonical device path)
+REAL_PORT=$(readlink -f "$PORT" 2>/dev/null || realpath "$PORT" 2>/dev/null || echo "$PORT")
+PORT_TAG=$(echo "$REAL_PORT" | tr '/' '_')
 LOCK_DIR="/tmp/calsol_locks"
 mkdir -p "$LOCK_DIR"
-LOCK_FILE="${LOCK_DIR}/${BOARD_NAME}.lock"
+LOCK_FILE="${LOCK_DIR}/hw${PORT_TAG}.lock"
+
 exec 200>"$LOCK_FILE"
 if ! flock -w 30 200; then
-    echo "[-] ERROR: Board '${BOARD_NAME}' is currently in use by another process!"
+    echo "[-] ERROR: Board '${BOARD_NAME}' (${PORT} -> ${REAL_PORT}) is currently in use by another process!"
     exit 1
 fi
 
-# 7. Flash Silicon
+# 8. Flash Silicon
 if [ -d "$TARGET" ]; then
     gh_group "Flashing Silicon (${BOARD_NAME} @ ${BAUD} baud)"
     # Try high-speed app partition flashing first; fallback to full flash if needed
@@ -190,30 +211,11 @@ elif [ -f "$TARGET" ]; then
     gh_endgroup
 fi
 
-# 7. Parse Unity test results over serial & live CAN stream
+# 9. Parse Unity test results over serial & live CAN stream
 PARSER="${SCRIPT_DIR}/lib/unity_parser.py"
 SERIAL_LOG="${LOG_DIR}/${SUBSYSTEM_SLUG}_serial.log"
 RESULTS_JSON="${LOG_DIR}/${SUBSYSTEM_SLUG}_test_results.json"
 CAN_TRACE_FILE="${LOG_DIR}/${SUBSYSTEM_SLUG}_can_trace.jsonl"
-
-# Clean up any stale or orphaned socket
-if [ -S "/tmp/calsol_can.sock" ]; then
-    if ! python3 -c "import socket; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect('/tmp/calsol_can.sock'); s.close()" 2>/dev/null; then
-        rm -f "/tmp/calsol_can.sock" 2>/dev/null || true
-    fi
-fi
-
-# Spin up permanent CAN bridge daemon on debugger port if not already active
-if [ ! -S "/tmp/calsol_can.sock" ] && [ -e "$CAN_DEBUGGER_PORT" ]; then
-    echo "[*] Launching permanent CAN Debugger daemon on ${CAN_DEBUGGER_PORT}..."
-    python3 "${SCRIPT_DIR}/lib/can_bridge_daemon.py" \
-        --port "$CAN_DEBUGGER_PORT" \
-        --unix-socket "/tmp/calsol_can.sock" \
-        --tcp-port 5555 \
-        --ws-port 8765 \
-        --json-out "${REPO_ROOT}/web/data/live_stream.json" > /tmp/calsol_can_daemon.log 2>&1 &
-    sleep 0.5
-fi
 
 gh_group "On-Target Silicon Execution & Live CAN Stream (${SUBSYSTEM_SLUG})"
 echo "[*] Monitoring DUT UART output & physical CAN bus traffic..."

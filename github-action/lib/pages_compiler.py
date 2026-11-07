@@ -10,6 +10,7 @@ import sys
 import json
 import glob
 import time
+import collections
 from datetime import datetime, timezone
 
 def compile_run_record(repo_root, run_id=None, commit_sha=None):
@@ -41,44 +42,105 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
     seen_tests = set()
     max_duration = 0.0
 
-    # Search for all test result files (*test_results*.json) across repo and pr_artifacts
-    report_pattern = os.path.join(repo_root, "**", "*test_results*.json")
-    for r_path in glob.glob(report_pattern, recursive=True):
-        if "web" in r_path:
-            continue
-        try:
-            with open(r_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                sub_name = data.get("subsystem", "")
-                if not sub_name:
-                    base = os.path.basename(r_path)
-                    sub_name = base.replace("_test_results.json", "").replace("test_results.json", "")
-                if not sub_name:
-                    sub_name = os.path.basename(os.path.dirname(r_path))
+    # Locate active run artifact directories to avoid stale crosses
+    candidate_dirs = []
+    pr_artifacts = os.path.join(repo_root, "pr_artifacts")
+    logs_dir = os.path.join(repo_root, "github-action", ".logs")
+    if os.path.isdir(pr_artifacts):
+        candidate_dirs.append(pr_artifacts)
+    if os.path.isdir(logs_dir):
+        candidate_dirs.append(logs_dir)
+    if not candidate_dirs:
+        candidate_dirs = [repo_root]
 
-                if sub_name and sub_name not in subsystems_tested:
-                    subsystems_tested.append(sub_name)
+    sub_reports = {}
+    subsystem_can_traces = collections.defaultdict(list)
 
-                duration = data.get("duration", 0.0)
+    # Search only in target artifact directories
+    for c_dir in candidate_dirs:
+        for r_path in glob.glob(os.path.join(c_dir, "**", "*test_results*.json"), recursive=True):
+            if "web" in r_path:
+                continue
+            try:
+                with open(r_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    sub_name = data.get("subsystem", "")
+                    if not sub_name:
+                        base = os.path.basename(r_path)
+                        sub_name = base.replace("_test_results.json", "").replace("test_results.json", "")
+                    if not sub_name:
+                        sub_name = os.path.basename(os.path.dirname(r_path))
 
-                if duration > max_duration:
-                    max_duration = duration
+                    if sub_name:
+                        sub_reports[sub_name] = data
+                        if sub_name not in subsystems_tested:
+                            subsystems_tested.append(sub_name)
 
-                for t in data.get("tests", []):
-                    t_name = t.get("name", "unknown")
-                    key = (sub_name, t_name)
-                    if key not in seen_tests:
-                        seen_tests.add(key)
-                        all_tests.append({
-                            "subsystem": sub_name,
-                            "name": t_name,
-                            "file": t.get("file", "./main/test_main.c"),
-                            "line": t.get("line", 196),
-                            "status": t.get("status", "PASS"),
-                            "details": t.get("details", "")
+                    duration = data.get("duration", 0.0)
+                    if duration > max_duration:
+                        max_duration = duration
+
+                    for t in data.get("tests", []):
+                        t_name = t.get("name", "unknown")
+                        key = (sub_name, t_name)
+                        if key not in seen_tests:
+                            seen_tests.add(key)
+                            all_tests.append({
+                                "subsystem": sub_name,
+                                "name": t_name,
+                                "file": t.get("file", "./main/test_main.c"),
+                                "line": t.get("line", 196),
+                                "status": t.get("status", "PASS"),
+                                "details": t.get("details", "")
+                            })
+            except Exception as e:
+                print(f"[-] Error reading {r_path}: {e}")
+
+        # Ingest subsystem-specific CAN traces from target artifact directories
+        for t_path in glob.glob(os.path.join(c_dir, "**", "*can_trace*.jsonl"), recursive=True):
+            if "web" in t_path:
+                continue
+            base_t = os.path.basename(t_path).lower()
+            matched_sub = None
+            if "pedals" in base_t:
+                matched_sub = "pedals_fw"
+            elif "lights" in base_t:
+                matched_sub = "lights_fw"
+
+            packets = []
+            try:
+                with open(t_path, "r", encoding="utf-8") as f:
+                    first_ts = None
+                    for line in f:
+                        if not line.strip():
+                            continue
+                        item = json.loads(line)
+                        ts = item.get("timestamp", 0.0)
+                        if first_ts is None:
+                            first_ts = ts
+                        rel_t = round(ts - first_ts, 2)
+                        packets.append({
+                            "t": rel_t,
+                            "id": item.get("id", "0x000"),
+                            "name": item.get("name", "UNKNOWN"),
+                            "dlc": item.get("dlc", 0),
+                            "raw": item.get("data", ""),
+                            "decoded": item.get("decoded", "Raw Payload")
                         })
-        except Exception as e:
-            print(f"[-] Error reading {r_path}: {e}")
+            except Exception as e:
+                print(f"[-] Error reading CAN trace {t_path}: {e}")
+
+            if matched_sub:
+                subsystem_can_traces[matched_sub].extend(packets)
+            else:
+                # Fallback to all discovered subsystems if trace name is generic
+                for s in (subsystems_tested or ["pedals_fw"]):
+                    subsystem_can_traces[s].extend(packets)
+
+    # Limit traces per subsystem
+    for s in subsystem_can_traces:
+        if len(subsystem_can_traces[s]) > 30:
+            subsystem_can_traces[s] = subsystem_can_traces[s][:30]
 
     # Derive accurate pass/total counts from parsed test assertions
     if all_tests:
@@ -88,38 +150,6 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
     # Fallback if no sub-reports found (e.g. direct invocation)
     if not subsystems_tested:
         subsystems_tested = ["pedals_fw"]
-
-    # Ingest CAN traces
-    can_packets = []
-    trace_pattern = os.path.join(repo_root, "**", "*can_trace*.jsonl")
-    for t_path in glob.glob(trace_pattern, recursive=True):
-        if "web" in t_path:
-            continue
-        try:
-            with open(t_path, "r", encoding="utf-8") as f:
-                first_ts = None
-                for line in f:
-                    if not line.strip():
-                        continue
-                    item = json.loads(line)
-                    ts = item.get("timestamp", 0.0)
-                    if first_ts is None:
-                        first_ts = ts
-                    rel_t = round(ts - first_ts, 2)
-                    can_packets.append({
-                        "t": rel_t,
-                        "id": item.get("id", "0x000"),
-                        "name": item.get("name", "UNKNOWN"),
-                        "dlc": item.get("dlc", 0),
-                        "raw": item.get("data", ""),
-                        "decoded": item.get("decoded", "Raw Payload")
-                    })
-        except Exception as e:
-            print(f"[-] Error reading CAN trace {t_path}: {e}")
-
-    # Deduplicate can_packets
-    if len(can_packets) > 30:
-        can_packets = can_packets[:30]
 
     # Static analysis
     static_status = "passed"
@@ -179,10 +209,12 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
         sub_pass = sum(1 for t in sub_tests if t.get("status") == "PASS")
         sub_total = len(sub_tests)
         
-        # Record all physical CAN packets captured during this on-target test window
-        sub_can = list(can_packets)
+        # Record isolated physical CAN packets for this specific subsystem
+        sub_can = list(subsystem_can_traces.get(sub_name, []))
 
-        sub_status = "passed" if (sub_pass == sub_total and sub_total > 0 and static_status == "passed") else "failed"
+        sub_data = sub_reports.get(sub_name, {})
+        suite_passed = sub_data.get("passed", False)
+        sub_status = "passed" if (suite_passed and sub_pass == sub_total and sub_total > 0 and static_status == "passed") else "failed"
 
         sub_failed_test = next((t for t in sub_tests if t.get("status") == "FAIL"), None)
         sub_failure_type = None

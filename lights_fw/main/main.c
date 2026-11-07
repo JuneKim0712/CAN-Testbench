@@ -1,30 +1,29 @@
 // ==============================================================================
-// BRAKELIGHTS ESP32 (FULL SYSTEM FIRMWARE WITH VERBOSE LOGGING)
-// Reads I2C power, Bonus Pot ADC, transmits CAN, and receives Pedal CAN data.
+// BRAKELIGHTS ESP32 (DUAL I2C, CAN RX/TX, AND TRANSITION STATE MACHINE)
+// Implements an explicit state machine with non-blocking cooperative checks.
 // ==============================================================================
 
-
 #include <stdio.h>
-#include <stdlib.h> 
+#include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
-#include "driver/i2c_master.h"   
 #include "driver/ledc.h"         
+#include "driver/i2c_master.h"   
 #include "esp_adc/adc_oneshot.h" 
 #include "CAN.h"                 
-#include "led_strip.h" 
+#include "led_strip.h"          
 
 static const char *TAG = "Brakelights_ESP32";
 
 // --- PIN & BUS DEFINITIONS ---
 #define PIN_BUTTON              GPIO_NUM_8  
-#define PIN_ACTIVE_LED          3             
-#define PIN_HAZARDS_LED         GPIO_NUM_42 
+#define PIN_HAZARDS_LED         GPIO_NUM_36 
 #define PIN_PEDALS_LED          GPIO_NUM_35 
-#define PIN_POT_LED             GPIO_NUM_47 
+#define PIN_POT_LED             GPIO_NUM_37 
 #define PIN_POT_ADC             ADC_CHANNEL_3 
+#define PIN_ACTIVE_LED          3           
 
 #define I2C_MASTER_SCL_IO       GPIO_NUM_14 
 #define I2C_MASTER_SDA_IO       GPIO_NUM_13 
@@ -47,12 +46,6 @@ i2c_master_bus_handle_t bus_handle;
 i2c_master_dev_handle_t ltc_handle;
 adc_oneshot_unit_handle_t adc1_handle;
 static led_strip_handle_t led_strip;
-
-TaskHandle_t can_rx_handle = NULL;
-TaskHandle_t can_tx_handle = NULL;
-TaskHandle_t hazards_handle = NULL;
-TaskHandle_t power_monitor_handle = NULL;
-TaskHandle_t bonus_pot_handle = NULL;
 
 
 // --- I2C HELPER FUNCTIONS ---
@@ -108,16 +101,22 @@ void setup_pwm_led(gpio_num_t pin, ledc_channel_t channel)
 // --- I2C POWER MONITOR TASK ---
 void power_monitor_task(void *arg)
 {
+    i2c_master_dev_handle_t ltc_dev_handle = (i2c_master_dev_handle_t)arg;
     uint8_t data[2];
 
     while (1) {
-        esp_err_t ret = ltc4151_register_read(ltc_handle, 0x02, data, 2);
+        if (current_state != STATE_ACTIVE) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
+        esp_err_t ret = ltc4151_register_read(ltc_dev_handle, 0x02, data, 2);
 
         if (ret == ESP_OK) {
             uint16_t raw_adc = (data[0] << 4) | (data[1] >> 4);
-            float voltage = raw_adc * 0.025;
+            float voltage = raw_adc * 0.025f;
             
-            global_power_payload = (uint8_t)(voltage * 10.0);
+            global_power_payload = (uint8_t)(voltage * 10.0f);
             ESP_LOGI(TAG, "I2C Read SUCCESS! Local Voltage: %.2f V | Payload Byte: %d", voltage, global_power_payload);
         } else {
             // FAILSAFE: Default to 0 if the sensor read fails
@@ -135,17 +134,22 @@ void bonus_pot_task(void *arg)
     uint8_t last_logged_brightness = 0;
 
     while (1) {
+        if (current_state != STATE_ACTIVE) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
         ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, PIN_POT_ADC, &raw_adc));
         uint8_t brightness = (uint8_t)(raw_adc >> 4); 
         
-        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, brightness); 
+        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, brightness);
         ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1);
-        
-        if (abs(brightness - last_logged_brightness) > 2 || 
+
+        if (abs((int)brightness - (int)last_logged_brightness) > 2 || 
            (brightness == 0 && last_logged_brightness != 0) || 
            (brightness == 255 && last_logged_brightness != 255)) {
             
-            ESP_LOGI(TAG, "LOCAL ADC: Bonus Pot | Scaled (0-255): %d | Dimming GPIO 47", brightness);
+            ESP_LOGI(TAG, "Bonus Potentiometer Value: %d | Setting GPIO 37 PWM Duty", brightness);
             last_logged_brightness = brightness;
         }
 
@@ -158,27 +162,40 @@ void bonus_pot_task(void *arg)
 void can_tx_task(void *arg) 
 {
     uint8_t loop_count = 0; 
+    TickType_t last_wake_time = xTaskGetTickCount();
 
     while (1) {
+        if (current_state != STATE_ACTIVE) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            last_wake_time = xTaskGetTickCount();
+            continue;
+        }
+
         CAN_message_t hb_msg = {0};
         hb_msg.id = 0x02;
         hb_msg.dlc = 1;
         hb_msg.data[0] = 0x00;
-        CAN_send(&hb_msg, 50);
+        esp_err_t ret1 = CAN_send(&hb_msg, 50);
+        if (ret1 != ESP_OK) {
+            ESP_LOGW(TAG, "CAN_send 0x02 heartbeat failed: %s", esp_err_to_name(ret1));
+        }
         
         CAN_message_t pwr_msg = {0};
         pwr_msg.id = 0x21;
         pwr_msg.dlc = 1;
         pwr_msg.data[0] = global_power_payload; 
-        CAN_send(&pwr_msg, 50);
+        esp_err_t ret2 = CAN_send(&pwr_msg, 50);
+        if (ret2 != ESP_OK) {
+            ESP_LOGW(TAG, "CAN_send 0x21 power failed: %s", esp_err_to_name(ret2));
+        }
 
         loop_count++;
         if (loop_count >= 10) { 
-            ESP_LOGI(TAG, "TX [0x02] Heartbeat Sent | TX [0x21] Power Sent: %d (%.1f V)", global_power_payload, global_power_payload / 10.0);
+            ESP_LOGI(TAG, "TX [0x02] Heartbeat Sent | TX [0x21] Power Sent: %d (%.1f V)", global_power_payload, global_power_payload / 10.0f);
             loop_count = 0;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(100)); 
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(100)); 
     }
 }
 
@@ -188,35 +205,50 @@ void can_rx_task(void *arg)
     uint8_t last_logged_pedal = 0;
 
     while (1) {
+        if (current_state != STATE_ACTIVE) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
         CAN_message_t rx_msg;
         esp_err_t ret = CAN_receive(&rx_msg, 100);
         
         if (ret == ESP_OK) {
+            if (rx_msg.rtr || rx_msg.extended) {
+                continue;
+            }
+
             switch (rx_msg.id) {
                 case 0x01: 
-                    ESP_LOGI(TAG, "RX [0x01] Pedals Status Received! Power Byte: %d (%.1f V)", rx_msg.data[1], rx_msg.data[1] / 10.0);
+                    if (rx_msg.dlc >= 2) {
+                        ESP_LOGI(TAG, "RX [0x01] Pedals Status Received! Power Byte: %d (%.1f V)", rx_msg.data[1], rx_msg.data[1] / 10.0f);
+                    }
                     break;
                 
                 case 0x11: 
-                    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, rx_msg.data[0]); 
-                    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
-                    
-                    if (abs(rx_msg.data[0] - last_logged_pedal) > 2 || 
-                       (rx_msg.data[0] == 0 && last_logged_pedal != 0) || 
-                       (rx_msg.data[0] == 255 && last_logged_pedal != 255)) {
+                    if (rx_msg.dlc >= 1) {
+                        ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, rx_msg.data[0]); 
+                        ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
                         
-                        ESP_LOGI(TAG, "RX [0x11] Pedal Position: %d | Dimming GPIO 35", rx_msg.data[0]);
-                        last_logged_pedal = rx_msg.data[0];
+                        if (abs((int)rx_msg.data[0] - (int)last_logged_pedal) > 2 || 
+                           (rx_msg.data[0] == 0 && last_logged_pedal != 0) || 
+                           (rx_msg.data[0] == 255 && last_logged_pedal != 255)) {
+                            
+                            ESP_LOGI(TAG, "RX [0x11] Pedal Position: %d | Dimming GPIO 35", rx_msg.data[0]);
+                            last_logged_pedal = rx_msg.data[0];
+                        }
                     }
                     break;
                 
                 case 0x12: 
-                    hazards_enabled = (rx_msg.data[0] == 0x01);
-                    ESP_LOGW(TAG, "RX [0x12] Hazards Toggle Received! | State: %s", hazards_enabled ? "ON" : "OFF");
+                    if (rx_msg.dlc >= 1) {
+                        hazards_enabled = (rx_msg.data[0] == 0x01);
+                        ESP_LOGW(TAG, "RX [0x12] Hazards Toggle Received! | State: %s", hazards_enabled ? "ON" : "OFF");
+                    }
                     break;
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(10)); 
+        // Direct queue sleep in CAN_receive controls loop timing
     }
 }
 
@@ -225,6 +257,13 @@ void hazards_task(void *arg)
 {
     bool led_state = false;
     while (1) {
+        if (current_state != STATE_ACTIVE) {
+            gpio_set_level(PIN_HAZARDS_LED, 0);
+            led_state = false;
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
         if (hazards_enabled) {
             led_state = !led_state;
             gpio_set_level(PIN_HAZARDS_LED, led_state);
@@ -256,22 +295,9 @@ void startup_btn_task(void *arg)
                     
                     led_strip_set_pixel(led_strip, 0, 0, 255, 0); 
                     led_strip_refresh(led_strip);
-                    
-                    if (can_rx_handle) vTaskResume(can_rx_handle);
-                    if (can_tx_handle) vTaskResume(can_tx_handle);
-                    if (hazards_handle) vTaskResume(hazards_handle);
-                    if (power_monitor_handle) vTaskResume(power_monitor_handle);
-                    if (bonus_pot_handle) vTaskResume(bonus_pot_handle);
-                    
                 } else {
                     current_state = STATE_IDLE;
                     ESP_LOGW(TAG, "=== STATE CHANGE: Brakelights Transitioning to IDLE ===");
-                    
-                    if (can_rx_handle) vTaskSuspend(can_rx_handle);
-                    if (can_tx_handle) vTaskSuspend(can_tx_handle);
-                    if (hazards_handle) vTaskSuspend(hazards_handle);
-                    if (power_monitor_handle) vTaskSuspend(power_monitor_handle);
-                    if (bonus_pot_handle) vTaskSuspend(bonus_pot_handle);
                     
                     gpio_set_level(PIN_HAZARDS_LED, 0);
                     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); 
@@ -353,22 +379,28 @@ void app_main(void)
     ESP_ERROR_CHECK(CAN_init());
     ESP_LOGI(TAG, "Drivers Initialized. Starting pinned tasks...");
 
-    // 5. Start Pinned Tasks
-    xTaskCreatePinnedToCore(startup_btn_task, "startup_btn", 4096, NULL, 5, NULL, 1);
-    xTaskCreatePinnedToCore(idle_led_task, "idle_led", 2048, NULL, 1, NULL, 1);
+    // 5. Start Pinned Tasks with return status validation
+    BaseType_t ret;
+    ret = xTaskCreatePinnedToCore(startup_btn_task, "startup_btn", 4096, NULL, 5, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
+
+    ret = xTaskCreatePinnedToCore(idle_led_task, "idle_led", 2048, NULL, 1, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
     
-    xTaskCreatePinnedToCore(can_tx_task, "can_tx", 4096, NULL, 3, &can_tx_handle, 1); 
-    xTaskCreatePinnedToCore(power_monitor_task, "power_monitor", 4096, (void *)ltc_handle, 2, &power_monitor_handle, 1);
-    xTaskCreatePinnedToCore(can_rx_task, "can_rx", 4096, NULL, 4, &can_rx_handle, 1);
-    xTaskCreatePinnedToCore(hazards_task, "hazards", 2048, NULL, 2, &hazards_handle, 1);
-    xTaskCreatePinnedToCore(bonus_pot_task, "bonus_pot", 4096, NULL, 2, &bonus_pot_handle, 1);
-    
-    // Suspend worker tasks instantly for IDLE mode
-    vTaskSuspend(can_tx_handle);
-    vTaskSuspend(can_rx_handle);
-    vTaskSuspend(hazards_handle);
-    vTaskSuspend(power_monitor_handle);
-    vTaskSuspend(bonus_pot_handle);
+    ret = xTaskCreatePinnedToCore(can_tx_task, "can_tx", 4096, NULL, 3, NULL, 1); 
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
+
+    ret = xTaskCreatePinnedToCore(power_monitor_task, "power_monitor", 4096, (void *)ltc_handle, 2, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
+
+    ret = xTaskCreatePinnedToCore(can_rx_task, "can_rx", 4096, NULL, 4, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
+
+    ret = xTaskCreatePinnedToCore(hazards_task, "hazards", 2048, NULL, 2, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
+
+    ret = xTaskCreatePinnedToCore(bonus_pot_task, "bonus_pot", 4096, NULL, 2, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
 
     // 6. Keep app_main alive 
     while (1) {

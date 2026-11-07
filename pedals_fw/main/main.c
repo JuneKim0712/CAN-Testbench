@@ -3,7 +3,6 @@
 // Reads physical inputs, I2C power, sends CAN data, and monitors Brakelights.
 // ==============================================================================
 
-
 #include <stdio.h>
 #include <stdlib.h> 
 #include "freertos/FreeRTOS.h"
@@ -14,7 +13,7 @@
 #include "esp_adc/adc_oneshot.h" 
 #include "CAN.h"                 
 #include "led_strip.h" 
-
+#include "pedal_logic.h"
 
 static const char *TAG = "Pedals_ESP32";
 
@@ -79,8 +78,8 @@ void power_monitor_task(void *arg)
 
         if (ret == ESP_OK) {
             uint16_t raw_adc = (data[0] << 4) | (data[1] >> 4);
-            float voltage = raw_adc * 0.025;
-            global_power_payload = (uint8_t)(voltage * 10.0);
+            float voltage = raw_adc * 0.025f;
+            global_power_payload = (uint8_t)(voltage * 10.0f);
             ESP_LOGI(TAG, "I2C Read SUCCESS! Local Voltage: %.2f V | Payload Byte: %d", voltage, global_power_payload);
         } else {
             // FAILSAFE: Default to 0 if the sensor read fails
@@ -95,6 +94,7 @@ void power_monitor_task(void *arg)
 // --- TRANSMIT TASKS ---
 
 void pedals_status_task(void *arg) {
+    TickType_t last_wake_time = xTaskGetTickCount();
     while (1) {
         CAN_message_t tx_msg = {0}; 
         tx_msg.id = 0x01; 
@@ -102,37 +102,43 @@ void pedals_status_task(void *arg) {
         tx_msg.data[0] = 0x00; 
         tx_msg.data[1] = global_power_payload; 
         
-        CAN_send(&tx_msg, 100); 
-        ESP_LOGI(TAG, "TX [0x01] Pedals Status | Heartbeat: 0x00 | Power: %d (%.1f V)", tx_msg.data[1], tx_msg.data[1] / 10.0);
+        esp_err_t ret = CAN_send(&tx_msg, 50); 
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "CAN_send 0x01 pedals status failed: %s", esp_err_to_name(ret));
+        } else {
+            ESP_LOGI(TAG, "TX [0x01] Pedals Status | Heartbeat: 0x00 | Power: %d (%.1f V)", tx_msg.data[1], tx_msg.data[1] / 10.0);
+        }
         
-        vTaskDelay(pdMS_TO_TICKS(1000)); 
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(1000)); 
     }
 }
 
 void pedal_position_task(void *arg) {
     int raw_adc;
     uint8_t last_logged_position = 0; 
+    TickType_t last_wake_time = xTaskGetTickCount();
 
     while (1) {
         ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, PIN_PEDAL_POT, &raw_adc));
-        uint8_t position = (uint8_t)(raw_adc >> 4); 
+        uint8_t position = pedal_calculate_throttle(raw_adc);
+        bool plausible = pedal_is_plausible(position, false);
+        uint8_t effective_position = plausible ? position : 0;
 
-        CAN_message_t tx_msg = {0};
-        tx_msg.id = 0x11; 
-        tx_msg.dlc = 1;   
-        tx_msg.data[0] = position; 
-        
-        CAN_send(&tx_msg, 100);
-
-        if (abs(position - last_logged_position) > 2 || 
-           (position == 0 && last_logged_position != 0) || 
-           (position == 255 && last_logged_position != 255)) {
-            
-            ESP_LOGI(TAG, "TX [0x11] Pedal Position | Scaled (0-255): %d", position);
-            last_logged_position = position;
+        CAN_message_t tx_msg = pedal_build_throttle_msg(effective_position);
+        esp_err_t ret = CAN_send(&tx_msg, 50);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "CAN_send 0x11 throttle failed: %s", esp_err_to_name(ret));
         }
 
-        vTaskDelay(pdMS_TO_TICKS(50)); 
+        if (abs((int)effective_position - (int)last_logged_position) > 2 || 
+           (effective_position == 0 && last_logged_position != 0) || 
+           (effective_position == 100 && last_logged_position != 100)) {
+            
+            ESP_LOGI(TAG, "TX [0x11] Pedal Position | Scaled (0-100%%): %d%%", effective_position);
+            last_logged_position = effective_position;
+        }
+
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(50)); 
     }
 }
 
@@ -149,13 +155,13 @@ void hazards_btn_task(void *arg) {
             if (gpio_get_level(PIN_HAZARDS_BTN) == false) { 
                 hazards_on = !hazards_on; 
                 
-                CAN_message_t tx_msg = {0};
-                tx_msg.id = 0x12; 
-                tx_msg.dlc = 1;   
-                tx_msg.data[0] = hazards_on ? 0x01 : 0x00; 
-                
-                CAN_send(&tx_msg, 100);
-                ESP_LOGW(TAG, "TX [0x12] Hazards Toggled! | Sent: %s (0x%02X)", hazards_on ? "ON" : "OFF", tx_msg.data[0]);
+                CAN_message_t tx_msg = pedal_build_hazards_msg(hazards_on);
+                esp_err_t ret = CAN_send(&tx_msg, 50);
+                if (ret != ESP_OK) {
+                    ESP_LOGW(TAG, "CAN_send 0x12 hazards failed: %s", esp_err_to_name(ret));
+                } else {
+                    ESP_LOGW(TAG, "TX [0x12] Hazards Toggled! | Sent: %s (0x%02X)", hazards_on ? "ON" : "OFF", tx_msg.data[0]);
+                }
             }
         }
         last_btn_state = current_btn_state;
@@ -174,10 +180,13 @@ void can_rx_task(void *arg) {
         esp_err_t ret = CAN_receive(&rx_msg, 100);
         
         if (ret == ESP_OK) {
-            if (rx_msg.id == 0x02) {
+            if (rx_msg.rtr || rx_msg.extended) {
+                continue;
+            }
+            if (rx_msg.id == 0x02 && rx_msg.dlc >= 1) {
                 last_heartbeat_tick = xTaskGetTickCount();
             } 
-            else if (rx_msg.id == 0x21) {
+            else if (rx_msg.id == 0x21 && rx_msg.dlc >= 1) {
                 last_power_value = rx_msg.data[0];
                 
                 // Only log once every 10 received messages (approx 1 second)
@@ -188,7 +197,7 @@ void can_rx_task(void *arg) {
                 }
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(10)); 
+        // Direct queue sleep in CAN_receive controls loop timing
     }
 }
 
@@ -294,15 +303,28 @@ void app_main(void) {
     ESP_ERROR_CHECK(CAN_init());
     ESP_LOGI(TAG, "Drivers Initialized. Starting pinned tasks...");
 
-    // 5. Start Pinned Tasks
-    xTaskCreatePinnedToCore(power_monitor_task, "power_monitor", 4096, (void *)ltc_handle, 2, NULL, 1);
-    xTaskCreatePinnedToCore(pedals_status_task, "pedals_status", 4096, NULL, 2, NULL, 1);
-    xTaskCreatePinnedToCore(pedal_position_task, "pedal_pos", 4096, NULL, 2, NULL, 1);
-    xTaskCreatePinnedToCore(hazards_btn_task, "hazards_btn", 4096, NULL, 3, NULL, 1);
+    // 5. Start Pinned Tasks with return status validation
+    BaseType_t ret;
+    ret = xTaskCreatePinnedToCore(power_monitor_task, "power_monitor", 4096, (void *)ltc_handle, 2, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
+
+    ret = xTaskCreatePinnedToCore(pedals_status_task, "pedals_status", 4096, NULL, 2, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
+
+    ret = xTaskCreatePinnedToCore(pedal_position_task, "pedal_pos", 4096, NULL, 2, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
+
+    ret = xTaskCreatePinnedToCore(hazards_btn_task, "hazards_btn", 4096, NULL, 3, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
     
-    xTaskCreatePinnedToCore(can_rx_task, "can_rx", 4096, NULL, 4, NULL, 1);
-    xTaskCreatePinnedToCore(indicator_led_task, "indicator_led", 2048, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(rgb_status_led_task, "rgb_led", 2048, NULL, 1, NULL, 1);
+    ret = xTaskCreatePinnedToCore(can_rx_task, "can_rx", 4096, NULL, 4, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
+
+    ret = xTaskCreatePinnedToCore(indicator_led_task, "indicator_led", 2048, NULL, 1, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
+
+    ret = xTaskCreatePinnedToCore(rgb_status_led_task, "rgb_led", 2048, NULL, 1, NULL, 1);
+    ESP_ERROR_CHECK(ret == pdPASS ? ESP_OK : ESP_FAIL);
 
     // 6. Keep app_main alive
     while (1) {

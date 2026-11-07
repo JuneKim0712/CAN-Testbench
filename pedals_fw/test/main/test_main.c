@@ -4,41 +4,21 @@
 #include "unity.h"
 #include "esp_log.h"
 #include "CAN.h"
+#include "pedal_logic.h"
 
 static const char *TAG = "PEDALS_TEST";
-
-// Subsystem Logic Under Test: Throttle Calculation from ADC
-static uint8_t calculate_throttle_percent(int raw_adc)
-{
-    // Deadzone below 500
-    if (raw_adc <= 500) return 0;
-    // Saturation above 3500
-    if (raw_adc >= 3500) return 100;
-
-    return (uint8_t)(((raw_adc - 500) * 100) / 3000);
-}
-
-// Subsystem Logic Under Test: Plausibility Check (Brake Over Travel / Cutoff)
-static bool is_throttle_plausible(uint8_t throttle_percent, bool brake_engaged)
-{
-    // FSAE/CalSol Rule: Throttle > 25% while brake is active must trigger cutoff
-    if (brake_engaged && throttle_percent > 25) {
-        return false;
-    }
-    return true;
-}
 
 // -----------------------------------------------------------------------------
 // Test 1: Throttle calculation, deadzone, and saturation limits
 // -----------------------------------------------------------------------------
 static void test_throttle_calculation_and_deadzone(void)
 {
-    TEST_ASSERT_EQUAL_UINT8(0, calculate_throttle_percent(0));
-    TEST_ASSERT_EQUAL_UINT8(0, calculate_throttle_percent(499));
-    TEST_ASSERT_EQUAL_UINT8(0, calculate_throttle_percent(500));
-    TEST_ASSERT_EQUAL_UINT8(50, calculate_throttle_percent(2000));
-    TEST_ASSERT_EQUAL_UINT8(100, calculate_throttle_percent(3500));
-    TEST_ASSERT_EQUAL_UINT8(100, calculate_throttle_percent(4095));
+    TEST_ASSERT_EQUAL_UINT8(0, pedal_calculate_throttle(0));
+    TEST_ASSERT_EQUAL_UINT8(0, pedal_calculate_throttle(499));
+    TEST_ASSERT_EQUAL_UINT8(0, pedal_calculate_throttle(500));
+    TEST_ASSERT_EQUAL_UINT8(50, pedal_calculate_throttle(2000));
+    TEST_ASSERT_EQUAL_UINT8(100, pedal_calculate_throttle(3500));
+    TEST_ASSERT_EQUAL_UINT8(100, pedal_calculate_throttle(4095));
 }
 
 // -----------------------------------------------------------------------------
@@ -47,16 +27,16 @@ static void test_throttle_calculation_and_deadzone(void)
 static void test_brake_plausibility_safety_interlock(void)
 {
     // Brake not engaged: any throttle valid
-    TEST_ASSERT_TRUE(is_throttle_plausible(50, false));
-    TEST_ASSERT_TRUE(is_throttle_plausible(100, false));
+    TEST_ASSERT_TRUE(pedal_is_plausible(50, false));
+    TEST_ASSERT_TRUE(pedal_is_plausible(100, false));
 
     // Brake engaged with low throttle (<=25%): valid
-    TEST_ASSERT_TRUE(is_throttle_plausible(20, true));
-    TEST_ASSERT_TRUE(is_throttle_plausible(25, true));
+    TEST_ASSERT_TRUE(pedal_is_plausible(20, true));
+    TEST_ASSERT_TRUE(pedal_is_plausible(25, true));
 
     // Brake engaged with high throttle (>25%): PLAUSIBILITY CUTOFF
-    TEST_ASSERT_FALSE(is_throttle_plausible(26, true));
-    TEST_ASSERT_FALSE(is_throttle_plausible(100, true));
+    TEST_ASSERT_FALSE(pedal_is_plausible(26, true));
+    TEST_ASSERT_FALSE(pedal_is_plausible(100, true));
 }
 
 // -----------------------------------------------------------------------------
@@ -64,7 +44,8 @@ static void test_brake_plausibility_safety_interlock(void)
 // -----------------------------------------------------------------------------
 static void test_can_packet_builder_clamping_and_zeroing(void)
 {
-    uint8_t sample_data[4] = {0xAA, 0xBB, 0xCC, 0xDD};
+    // Fix: Supply 8-byte buffer to avoid stack overread when dlc clamps/defaults to 8
+    uint8_t sample_data[8] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22};
     CAN_message_t msg = build_packet_no_ext(0x11, sample_data, 4);
 
     TEST_ASSERT_EQUAL_HEX32(0x11, msg.id);
@@ -79,7 +60,7 @@ static void test_can_packet_builder_clamping_and_zeroing(void)
     TEST_ASSERT_EQUAL_HEX8(0x00, msg.data[4]);
     TEST_ASSERT_EQUAL_HEX8(0x00, msg.data[7]);
 
-    // Clamping test: dlc > 8 must clamp to 8
+    // Clamping test: dlc > 8 must clamp to 8 without overreading buffer
     CAN_message_t clamped = build_packet_no_ext(0x22, sample_data, 12);
     TEST_ASSERT_EQUAL_UINT8(8, clamped.dlc);
 
@@ -128,6 +109,9 @@ static void test_can_driver_uninitialized_safety(void)
     // Send while deinitialized must return ESP_ERR_INVALID_STATE
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, CAN_send(&msg, 10));
 
+    // Send with NULL pointer must return ESP_ERR_INVALID_ARG
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, CAN_send(NULL, 10));
+
     // Receive while deinitialized must return ESP_ERR_INVALID_STATE
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, CAN_receive(&msg, 10));
 
@@ -158,7 +142,7 @@ static void test_can_receive_timeout(void)
 }
 
 // -----------------------------------------------------------------------------
-// Test 7: Pedal CAN frame transmission
+// Test 7: Pedal CAN frame transmission & Direct Message Injection
 // -----------------------------------------------------------------------------
 static void test_pedal_can_transmission(void)
 {
@@ -166,18 +150,23 @@ static void test_pedal_can_transmission(void)
     TEST_ASSERT_EQUAL(ESP_OK, CAN_init());
 
     // Compute throttle at 2000 ADC (50%)
-    uint8_t throttle = calculate_throttle_percent(2000);
+    uint8_t throttle = pedal_calculate_throttle(2000);
     TEST_ASSERT_EQUAL_UINT8(50, throttle);
 
-    CAN_message_t pedal_msg = build_packet_no_ext(0x11, &throttle, 1);
+    CAN_message_t pedal_msg = pedal_build_throttle_msg(throttle);
     TEST_ASSERT_EQUAL_HEX32(0x11, pedal_msg.id);
     TEST_ASSERT_EQUAL_UINT8(1, pedal_msg.dlc);
     TEST_ASSERT_EQUAL_UINT8(50, pedal_msg.data[0]);
 
+    // Test direct CAN_message_t decoding
+    uint8_t decoded_val = 0;
+    TEST_ASSERT_TRUE(pedal_decode_throttle_msg(&pedal_msg, &decoded_val));
+    TEST_ASSERT_EQUAL_UINT8(50, decoded_val);
+
     // Transmit pedal frames representing driver throttle input sweep
     for (int i = 0; i < 10; i++) {
         uint8_t sweep_throttle = (uint8_t)(10 * (i + 1)); // 10%, 20%, ... 100%
-        CAN_message_t sweep_msg = build_packet_no_ext(0x11, &sweep_throttle, 1);
+        CAN_message_t sweep_msg = pedal_build_throttle_msg(sweep_throttle);
         esp_err_t err = CAN_send(&sweep_msg, 50);
         TEST_ASSERT_EQUAL(ESP_OK, err);
         vTaskDelay(pdMS_TO_TICKS(50));

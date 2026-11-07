@@ -301,6 +301,7 @@ class CANBridgeDaemon:
         frame_obj = {
             "event": "frame",
             "direction": "rx",
+            "source": "physical_bus",
             "time": time_str,
             "timestamp": round(now, 4),
             "iface": self.port,
@@ -309,6 +310,7 @@ class CANBridgeDaemon:
             "name": msg_name,
             "dlc": dlc,
             "raw": raw_hex,
+            "data": "".join(f"{b:02X}" for b in payload),
             "decoded": signal_desc
         }
 

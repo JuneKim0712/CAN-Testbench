@@ -5,6 +5,18 @@
 //private
 static twai_node_handle_t s_node = NULL;
 static QueueHandle_t s_rx_queue = NULL;
+static volatile uint32_t s_rx_queue_overflows = 0;
+static volatile uint32_t s_tx_errors = 0;
+
+uint32_t CAN_get_rx_overflow_count(void)
+{
+    return s_rx_queue_overflows;
+}
+
+uint32_t CAN_get_tx_error_count(void)
+{
+    return s_tx_errors;
+}
 
 //ISR-context RX callback
 static bool IRAM_ATTR CAN_rx_cb(twai_node_handle_t handle,
@@ -40,7 +52,10 @@ static bool IRAM_ATTR CAN_rx_cb(twai_node_handle_t handle,
     }
 
     BaseType_t hp_task_woken = pdFALSE;
-    (void)xQueueSendFromISR(s_rx_queue, &msg, &hp_task_woken);
+    BaseType_t send_res = xQueueSendFromISR(s_rx_queue, &msg, &hp_task_woken);
+    if (send_res != pdPASS) {
+        s_rx_queue_overflows++;
+    }
 
     if (hp_task_woken == pdTRUE) {
         portYIELD_FROM_ISR();
@@ -57,7 +72,7 @@ esp_err_t CAN_init(void)
     s_rx_queue = xQueueCreate(16, sizeof(CAN_message_t));
     if (s_rx_queue == NULL) return ESP_ERR_NO_MEM;
 
-    // Create on-chip TWAI engine at 1M bitrate 
+    // Create on-chip TWAI engine at 500k bitrate
     twai_onchip_node_config_t node_config = {
         .io_cfg.tx = CAN_TX,
         .io_cfg.rx = CAN_RX,
@@ -126,7 +141,19 @@ esp_err_t CAN_deinit(void)
 
 esp_err_t CAN_send(const CAN_message_t *frame, uint32_t timeout_ms)
 {
+    if (frame == NULL) return ESP_ERR_INVALID_ARG;
     if (s_node == NULL) return ESP_ERR_INVALID_STATE;
+
+    // Validate ID and DLC bounds
+    if (!frame->extended && frame->id > 0x7FF) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (frame->extended && frame->id > 0x1FFFFFFF) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (frame->dlc > 8) {
+        return ESP_ERR_INVALID_ARG;
+    }
 
     uint8_t buf[8] = {0};
     size_t len = frame->dlc;
@@ -155,13 +182,20 @@ esp_err_t CAN_send(const CAN_message_t *frame, uint32_t timeout_ms)
         hex_buf[i * 2 + 1] = hex_chars[buf[i] & 0x0F];
     }
     hex_buf[len * 2] = '\0';
-    ESP_LOGI("CAN", "[CAN_FRAME] ID:0x%03lX DLC:%zu DATA:%s", (unsigned long)frame->id, len, hex_buf);
+    ESP_LOGD("CAN", "[CAN_FRAME] ID:0x%03lX DLC:%zu DATA:%s", (unsigned long)frame->id, len, hex_buf);
 
     // Node API timeouts are in milliseconds 
     esp_err_t ret = twai_node_transmit(s_node, &tx, (int)timeout_ms);
-    if (ret != ESP_OK) return ret;
+    if (ret != ESP_OK) {
+        s_tx_errors++;
+        return ret;
+    }
     //Ensure local buffer is no longer needed before returning 
-    return twai_node_transmit_wait_all_done(s_node, (int)timeout_ms);
+    ret = twai_node_transmit_wait_all_done(s_node, (int)timeout_ms);
+    if (ret != ESP_OK) {
+        s_tx_errors++;
+    }
+    return ret;
 }
 
 esp_err_t CAN_receive(CAN_message_t *frame, uint32_t timeout_ms)

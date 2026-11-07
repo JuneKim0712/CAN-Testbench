@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "main.c"
+        "pedal_logic.c"
     INCLUDE_DIRS
         "."
     REQUIRES

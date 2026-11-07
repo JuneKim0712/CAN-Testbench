@@ -121,10 +121,16 @@ class LiveCANMonitor(threading.Thread):
                             try:
                                 ev = json.loads(line)
                                 if ev.get("event") == "frame":
-                                    can_id = int(ev.get("id", 0))
-                                    data = bytes.fromhex(ev.get("data", ""))
+                                    cid_val = ev.get("id_int", ev.get("id", 0))
+                                    if isinstance(cid_val, str):
+                                        can_id = int(cid_val, 16 if cid_val.lower().startswith("0x") else 10)
+                                    else:
+                                        can_id = int(cid_val)
+                                    data_hex = ev.get("data") or ev.get("raw", "").replace(" ", "")
+                                    data = bytes.fromhex(data_hex) if data_hex else b""
                                     dlc = int(ev.get("dlc", len(data)))
-                                    self._record_frame(can_id, dlc, data)
+                                    src = ev.get("source", "physical_bus")
+                                    self._record_frame(can_id, dlc, data, source=src)
                             except Exception:
                                 pass
                     except socket.timeout:
@@ -170,28 +176,29 @@ class LiveCANMonitor(threading.Thread):
             except Exception as e:
                 print(f"[-] LiveCANMonitor serial open error on {self.can_port}: {e}", file=sys.stderr)
 
-    def record_external_frame(self, can_id: int, dlc: int, data: bytes):
+    def record_external_frame(self, can_id: int, dlc: int, data: bytes, source: str = "dut_serial_tx"):
         now = time.time()
         hex_str = data.hex().upper()
         with self._lock:
             for cid, hstr, ts in self._recent_keys:
-                if cid == can_id and hstr == hex_str and (now - ts) < 0.1:
+                if cid == can_id and hstr == hex_str and (now - ts) < 0.2:
                     return
             self._recent_keys.append((can_id, hex_str, now))
-            self._record_frame_locked(can_id, dlc, data, now)
+            self._record_frame_locked(can_id, dlc, data, now, source=source)
 
-    def _record_frame(self, can_id: int, dlc: int, data: bytes):
+    def _record_frame(self, can_id: int, dlc: int, data: bytes, source: str = "physical_bus"):
         now = time.time()
         with self._lock:
-            self._record_frame_locked(can_id, dlc, data, now)
+            self._record_frame_locked(can_id, dlc, data, now, source=source)
 
-    def _record_frame_locked(self, can_id: int, dlc: int, data: bytes, now: float):
+    def _record_frame_locked(self, can_id: int, dlc: int, data: bytes, now: float, source: str = "physical_bus"):
         t_rel = now - self.start_time
         msg_name, signal_desc = format_raw_payload(can_id, data)
         hex_str = data.hex().upper()
         frame_obj = {
             "rel_time": f"+{t_rel:.3f}s",
             "timestamp": round(now, 4),
+            "source": source,
             "id": f"0x{can_id:03X}",
             "id_int": can_id,
             "name": msg_name,
@@ -200,7 +207,7 @@ class LiveCANMonitor(threading.Thread):
             "decoded": signal_desc
         }
         self.frames.append(frame_obj)
-        print(f"    [CAN LIVE] {frame_obj['id']} ({msg_name}) DLC:{dlc} [{hex_str}] -> {signal_desc}")
+        print(f"    [CAN LIVE] [{source}] {frame_obj['id']} ({msg_name}) DLC:{dlc} [{hex_str}] -> {signal_desc}")
 
     def stop(self):
         self.running = False
@@ -277,7 +284,13 @@ def parse_unity_stream(port: str, baud: int = 115200, timeout: float = 12.0, ver
                 print(f"    [IGNORE] {test_name}")
             elif "Tests" in line and "Failures" in line:
                 summary = line
-                if "0 Failures" in line:
+                m_summary = re.search(r"(\d+)\s+Tests\s+(\d+)\s+Failures", line)
+                if m_summary:
+                    total_cnt = int(m_summary.group(1))
+                    fail_cnt = int(m_summary.group(2))
+                    if fail_cnt == 0 and total_cnt > 0:
+                        passed = True
+                elif "0 Failures" in line and not re.search(r"\d0 Failures", line):
                     passed = True
                 break
     finally:
