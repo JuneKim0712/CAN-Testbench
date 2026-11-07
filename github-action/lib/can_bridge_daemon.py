@@ -78,57 +78,15 @@ def unpack_frame(raw: bytes) -> tuple[int, int, bytes] | None:
 # ─── CAN Payload Decoder ──────────────────────────────────────────────────────
 
 def decode_can_payload(can_id: int, payload: bytes) -> tuple[str, str]:
-    """Accurately decodes standard vehicle packets without synthetic assumptions."""
-    if can_id == 0x001:
-        name = "SYS_HEARTBEAT"
-        if len(payload) >= 2:
-            node_id = payload[0]
-            token = payload[1]
-            desc = f"Node {node_id} OK • Watchdog Token: 0x{token:02X}"
-        elif len(payload) == 1:
-            desc = f"Heartbeat Watchdog Token: 0x{payload[0]:02X}"
-        else:
-            desc = "Heartbeat Frame"
-        return name, desc
-
-    if can_id == 0x011:
-        name = "PEDAL_THROTTLE"
-        if len(payload) >= 1:
-            throttle = payload[0]
-            desc = f"Throttle: {throttle}% [Travel Clamped Nominal]"
-            if len(payload) >= 2:
-                brake = payload[1]
-                desc += f" • Brake: {brake}%"
-        else:
-            desc = "Pedal Telemetry Frame"
-        return name, desc
-
-    if can_id == 0x021:
-        name = "LIGHT_COMMAND"
-        if len(payload) >= 1:
-            flags = payload[0]
-            parts = []
-            if flags & 0x01: parts.append("Left Turn")
-            if flags & 0x02: parts.append("Right Turn")
-            if flags & 0x04: parts.append("Hazards")
-            if flags & 0x08: parts.append("Brake Lights")
-            if flags & 0x10: parts.append("Headlights")
-            if flags & 0x20: parts.append("Tail Lights")
-            desc = " • ".join(parts) if parts else "All Lights Off"
-        else:
-            desc = "Lighting Command Frame"
-        return name, desc
-
-    # Arbitrary / Unknown CAN Frame (Accurate hex representation)
-    name = f"FRAME_0x{can_id:03X}"
+    """Pure, assumption-free decoding of CAN frame wire contents."""
+    msg_name = f"FRAME_0x{can_id:03X}"
     if not payload:
-        desc = "Empty Payload (DLC 0)"
-    elif len(payload) == 1:
-        desc = f"0x{payload.hex().upper()} (Dec: {payload[0]})"
-    else:
-        dec_list = list(payload)
-        desc = f"0x{payload.hex().upper()} (Dec: {dec_list})"
-    return name, desc
+        return msg_name, "Empty Payload (DLC 0)"
+    hex_str = payload.hex().upper()
+    dec_list = list(payload)
+    if len(payload) == 1:
+        return msg_name, f"0x{hex_str} (Dec: {dec_list[0]})"
+    return msg_name, f"0x{hex_str} (Dec: {dec_list})"
 
 
 # ─── WebSocket & SSE Protocol Helpers ─────────────────────────────────────────

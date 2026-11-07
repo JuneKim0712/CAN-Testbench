@@ -179,13 +179,8 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
         sub_pass = sum(1 for t in sub_tests if t.get("status") == "PASS")
         sub_total = len(sub_tests)
         
-        # Subsystem-specific CAN packets
-        if sub_name == "lights_fw":
-            sub_can = [p for p in can_packets if p.get("id") in ["0x021", "0x001"]]
-        else:
-            sub_can = [p for p in can_packets if p.get("id") in ["0x011", "0x001"]]
-            if not sub_can:
-                sub_can = can_packets
+        # Record all physical CAN packets captured during this on-target test window
+        sub_can = list(can_packets)
 
         sub_status = "passed" if (sub_pass == sub_total and sub_total > 0 and static_status == "passed") else "failed"
 
