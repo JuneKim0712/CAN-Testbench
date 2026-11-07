@@ -93,6 +93,24 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
                                 "status": t.get("status", "PASS"),
                                 "details": t.get("details", "")
                             })
+
+                    # Ingest CAN traffic recorded directly in test results JSON
+                    can_traffic_list = data.get("can_traffic", [])
+                    if can_traffic_list and sub_name:
+                        first_ts = None
+                        for item in can_traffic_list:
+                            ts = item.get("timestamp", 0.0)
+                            if first_ts is None:
+                                first_ts = ts
+                            rel_t = round(ts - first_ts, 2)
+                            subsystem_can_traces[sub_name].append({
+                                "t": rel_t,
+                                "id": item.get("id", "0x000"),
+                                "name": item.get("name", "UNKNOWN"),
+                                "dlc": item.get("dlc", 0),
+                                "raw": item.get("data", item.get("raw", "")),
+                                "decoded": item.get("decoded", "Raw Payload")
+                            })
             except Exception as e:
                 print(f"[-] Error reading {r_path}: {e}")
 
@@ -139,8 +157,8 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None):
 
     # Limit traces per subsystem
     for s in subsystem_can_traces:
-        if len(subsystem_can_traces[s]) > 30:
-            subsystem_can_traces[s] = subsystem_can_traces[s][:30]
+        if len(subsystem_can_traces[s]) > 100:
+            subsystem_can_traces[s] = subsystem_can_traces[s][:100]
 
     # Derive accurate pass/total counts from parsed test assertions
     if all_tests:

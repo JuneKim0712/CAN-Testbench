@@ -125,7 +125,7 @@ class CANBridgeDaemon:
     def __init__(self, port: str = "/dev/esp32_ahmed", baud: int = 115200,
                  unix_socket: str = "/tmp/calsol_can.sock", tcp_port: int = 5555,
                  ws_port: int = 8765, log_path: str = "can_trace.jsonl",
-                 json_out: str = None, virtual: bool = False):
+                 json_out: str = None, virtual: bool = False, max_frames: int = 2000):
         self.port = port
         self.baud = baud
         self.unix_socket_path = unix_socket
@@ -148,7 +148,8 @@ class CANBridgeDaemon:
         self.http_pending: dict[socket.socket, bytearray] = {}
 
         # Rolling real-frame buffer
-        self.recent_frames = collections.deque(maxlen=250)
+        self.max_frames = max_frames
+        self.recent_frames = collections.deque(maxlen=max_frames)
         self.total_rx_count = 0
         self.last_json_flush = 0.0
 
@@ -646,13 +647,14 @@ def main():
     parser.add_argument("--ws-port", type=int, default=8765, help="Web streaming port for WebSocket & SSE (default 8765)")
     parser.add_argument("--log-file", default="/tmp/can_trace.jsonl", help="Rolling trace log file")
     parser.add_argument("--json-out", default="web/data/live_stream.json", help="Path to atomically update rolling live frames JSON")
+    parser.add_argument("--max-frames", type=int, default=2000, help="Maximum in-memory rolling frame history (default 2000)")
     parser.add_argument("--virtual", action="store_true", help="Run in pure software virtual loopback mode")
     args = parser.parse_args()
 
     daemon = CANBridgeDaemon(
         port=args.port, baud=args.baud, unix_socket=args.unix_socket,
         tcp_port=args.tcp_port, ws_port=args.ws_port, log_path=args.log_file,
-        json_out=args.json_out, virtual=args.virtual
+        json_out=args.json_out, virtual=args.virtual, max_frames=args.max_frames
     )
 
     def handle_sig(sig, frame):

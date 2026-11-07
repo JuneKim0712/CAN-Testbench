@@ -1,0 +1,8 @@
+{
+  "name": "example_fw",
+  "target": "example_fw/test",
+  "port": "/dev/esp32_johnathan",
+  "baud": 921600,
+  "timeout": 15,
+  "description": "CAN message handler and optional physical injection tests"
+}

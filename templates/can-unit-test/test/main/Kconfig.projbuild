@@ -1,0 +1,5 @@
+menu "CAN message test options"
+config CAN_TEST_PHYSICAL_RX
+    bool "Run physical CAN request/reply test (requires host responder)"
+    default n
+endmenu

@@ -430,7 +430,7 @@
           </div>
         </div>
 
-        <div class="border border-neutral-800 overflow-x-auto max-h-[500px]">
+        <div class="border border-neutral-800 overflow-x-auto max-h-[500px]" id="consoleScrollContainer">
           <table class="w-full text-left font-mono text-[11px]">
             <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 uppercase text-[10px] tracking-wider sticky top-0 z-10">
               <tr>
@@ -883,6 +883,9 @@
     let streamPaused = false;
     let streamFilterId = 'all';
     let streamPackets = [];
+    let streamDisplayLimit = 50;
+    const STREAM_PAGE_SIZE = 50;
+    const MAX_STREAM_HISTORY = 2000;
     let streamSocket = null;
     let streamPollTimer = null;
     let streamReconnectTimer = null;
@@ -973,9 +976,31 @@
 
     function initContinuousStream() {
       streamPackets = [];
+      streamDisplayLimit = 50;
       renderStreamTables();
+      setupStreamInfiniteScroll();
       connectBridgeWebSocket();
       startPollingLiveStream();
+    }
+
+    function setupStreamInfiniteScroll() {
+      ['streamScrollContainer', 'consoleScrollContainer'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el || el.__infiniteScrollAttached) return;
+        el.__infiniteScrollAttached = true;
+        el.addEventListener('scroll', () => {
+          if (el.scrollTop + el.clientHeight >= el.scrollHeight - 60) {
+            const filteredCount = streamPackets.filter(p => {
+              if (streamFilterId === 'all') return true;
+              return p.id.toLowerCase() === streamFilterId.toLowerCase();
+            }).length;
+            if (streamDisplayLimit < filteredCount) {
+              streamDisplayLimit += STREAM_PAGE_SIZE;
+              renderStreamTables();
+            }
+          }
+        });
+      });
     }
 
     function promptBridgeUrl() {
@@ -1079,7 +1104,7 @@
                   changed = true;
                 }
               });
-              if (streamPackets.length > 300) streamPackets.length = 300;
+              if (streamPackets.length > MAX_STREAM_HISTORY) streamPackets.length = MAX_STREAM_HISTORY;
               if (changed) renderStreamTables();
             }
           }
@@ -1105,7 +1130,7 @@
     function ingestRealFrame(f) {
       const packet = formatRealPacket(f);
       streamPackets.unshift(packet);
-      if (streamPackets.length > 300) streamPackets.pop();
+      if (streamPackets.length > MAX_STREAM_HISTORY) streamPackets.pop();
       renderStreamTables();
     }
 
@@ -1126,11 +1151,13 @@
 
     function clearStreamLog() {
       streamPackets = [];
+      streamDisplayLimit = 50;
       renderStreamTables();
     }
 
     function applyStreamIdFilter(filterVal) {
       streamFilterId = filterVal;
+      streamDisplayLimit = 50;
       if (dom.streamIdFilter) dom.streamIdFilter.value = filterVal;
       if (dom.consoleIdFilter) dom.consoleIdFilter.value = filterVal;
       renderStreamTables();
@@ -1146,25 +1173,39 @@
       if (dom.streamTotalCount) dom.streamTotalCount.innerText = totalMsg;
       if (dom.consoleTotalCount) dom.consoleTotalCount.innerText = totalMsg;
 
-      const html = filtered.length === 0
-        ? '<tr><td colspan="7" class="py-6 text-center text-neutral-500 uppercase tracking-wider font-mono">Listening on /dev/esp32_ahmed (500 kbps)... Bus is silent / Awaiting physical CAN frames.</td></tr>'
-        : filtered.map((p, idx) => {
-            const col = getCanIdColor(p.id);
-            const isNewest = (idx === 0);
-            const rowClass = isNewest ? 'bg-neutral-800/80 border-l-2 border-pastel-green' : 'hover:bg-neutral-900';
+      let html = '';
+      if (filtered.length === 0) {
+        html = '<tr><td colspan="7" class="py-6 text-center text-neutral-500 uppercase tracking-wider font-mono">Listening on /dev/esp32_ahmed (500 kbps)... Bus is silent / Awaiting physical CAN frames.</td></tr>';
+      } else {
+        const visible = filtered.slice(0, streamDisplayLimit);
+        html = visible.map((p, idx) => {
+          const col = getCanIdColor(p.id);
+          const isNewest = (idx === 0);
+          const rowClass = isNewest ? 'bg-neutral-800/80 border-l-2 border-pastel-green' : 'hover:bg-neutral-900';
 
-            return `
-              <tr class="${rowClass} transition font-mono text-[11px]">
-                <td class="py-1.5 px-3 text-neutral-300 font-bold">${p.time}</td>
-                <td class="py-1.5 px-3 text-neutral-500">${p.iface}</td>
-                <td class="py-1.5 px-3 font-bold" style="color: ${col}">${p.id}</td>
-                <td class="py-1.5 px-3 text-white uppercase">${p.name}</td>
-                <td class="py-1.5 px-3 text-neutral-400">${p.dlc} B</td>
-                <td class="py-1.5 px-3 text-neutral-200 font-mono">${p.raw || '-'}</td>
-                <td class="py-1.5 px-3 text-pastel-green font-medium">${p.decoded}</td>
-              </tr>
-            `;
-          }).join('');
+          return `
+            <tr class="${rowClass} transition font-mono text-[11px]">
+              <td class="py-1.5 px-3 text-neutral-300 font-bold">${p.time}</td>
+              <td class="py-1.5 px-3 text-neutral-500">${p.iface}</td>
+              <td class="py-1.5 px-3 font-bold" style="color: ${col}">${p.id}</td>
+              <td class="py-1.5 px-3 text-white uppercase">${p.name}</td>
+              <td class="py-1.5 px-3 text-neutral-400">${p.dlc} B</td>
+              <td class="py-1.5 px-3 text-neutral-200 font-mono">${p.raw || '-'}</td>
+              <td class="py-1.5 px-3 text-pastel-green font-medium">${p.decoded}</td>
+            </tr>
+          `;
+        }).join('');
+
+        if (visible.length < filtered.length) {
+          html += `
+            <tr class="text-neutral-500 font-mono text-[10px] bg-neutral-950 border-t border-neutral-800">
+              <td colspan="7" class="py-2.5 text-center text-neutral-400">
+                Showing ${visible.length} of ${filtered.length} frames &bull; Scroll down to load more past traffic
+              </td>
+            </tr>
+          `;
+        }
+      }
 
       if (dom.streamTableBody) dom.streamTableBody.innerHTML = html;
       if (dom.consoleTableBody) dom.consoleTableBody.innerHTML = html;
