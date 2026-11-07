@@ -347,7 +347,7 @@
       <div class="flex items-center justify-between text-[10px] font-mono text-neutral-500 pt-1">
         <span>Hardware Mutex Scope: <span class="text-neutral-300">flock -x /var/lock/calsol_hil.lock</span></span>
         <button onclick="setActiveTab('runs')" class="text-white hover:underline uppercase font-bold">
-          Open Detailed Test Runs Tab →
+          Open Test Runs Deep Dive (Waveform &amp; Assertions) →
         </button>
       </div>
     </section>
@@ -452,53 +452,286 @@
   </main>
 
   <!-- ========================================================================= -->
-  <!-- TAB 3: COMPLETE TEST RUNS HISTORY & ASSERTIONS                            -->
+  <!-- TAB 3: TEST RUNS (FULL PREVIOUS FORMAT: CONTROLLER, WAVEFORM & ASSERTIONS)-->
   <!-- ========================================================================= -->
-  <div id="viewRuns" class="hidden max-w-7xl mx-auto p-4 sm:p-6 space-y-5">
-    
-    <!-- RUN CONTROLLER & ASSERTIONS BREAKDOWN -->
-    <section class="border border-neutral-800 bg-neutral-950 p-4 space-y-4">
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
-        <div>
-          <h2 class="text-xs font-bold text-white uppercase tracking-wider font-mono">
-            [TEST RUNS &amp; ASSERTIONS] Hardware Silicon Verification Logs
-          </h2>
-          <p class="text-[11px] text-neutral-500 uppercase mt-0.5 font-mono">
-            Unity assertions executed on-target on physical ESP32-S3 silicon
-          </p>
+  <main id="viewRuns" class="hidden max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
+
+    <!-- RUN CONTROLLER BAR -->
+    <section class="border border-neutral-800 bg-neutral-950 p-3 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+      <div class="flex flex-col gap-2">
+        <!-- Subsystem Quick Filter Pills -->
+        <div class="flex flex-wrap items-center gap-1">
+          <span class="text-[10px] uppercase text-neutral-500 tracking-wider mr-1">Target ECU:</span>
+          <button id="btnSubAll" onclick="setSubsystemFilter('all')" class="px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-[10px] border border-neutral-700">ALL RUNS</button>
+          <button id="btnSubPedals" onclick="setSubsystemFilter('pedals_fw')" class="px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700">PEDALS_FW (BRAKE)</button>
+          <button id="btnSubLights" onclick="setSubsystemFilter('lights_fw')" class="px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700">LIGHTS_FW (LIGHT)</button>
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
           <div>
-            <label class="block text-[10px] uppercase text-neutral-500 mb-0.5 tracking-wider font-mono">Select Run</label>
-            <select id="runSelect" onchange="switchRun(this.value)" class="bg-black border border-neutral-700 text-neutral-100 text-xs px-2.5 py-1 focus:outline-none focus:border-white font-mono">
+            <label class="block text-[10px] uppercase text-neutral-500 mb-1 tracking-wider">Select Test Run</label>
+            <select id="runSelect" onchange="switchRun(this.value)" class="bg-black border border-neutral-700 text-neutral-100 text-xs px-2.5 py-1.5 focus:outline-none focus:border-white">
             </select>
           </div>
-          <div class="border-l border-neutral-800 pl-3">
-            <span class="text-[10px] uppercase text-neutral-500 block tracking-wider font-mono">Commit</span>
-            <a id="runCommitLink" href="#" target="_blank" rel="noopener noreferrer" class="font-bold text-white hover:underline uppercase block font-mono text-xs">
-              -
-            </a>
-          </div>
-          <div class="border-l border-neutral-800 pl-3">
-            <span class="text-[10px] uppercase text-neutral-500 block tracking-wider font-mono">Duration</span>
-            <span class="font-bold text-white uppercase block font-mono text-xs" id="runDuration">-</span>
-          </div>
-          <div class="border-l border-neutral-800 pl-3">
-            <span class="text-[10px] uppercase text-neutral-500 block tracking-wider font-mono">Status</span>
-            <span id="runStatusBadge" class="border px-2 py-0.5 font-bold uppercase tracking-wide text-[10px] block text-center font-mono">
-              -
-            </span>
+
+          <div>
+            <label class="block text-[10px] uppercase text-neutral-500 mb-1 tracking-wider">Active Subsystem</label>
+            <div class="flex items-center gap-1.5" id="subsystemList">
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Test Assertions Table -->
-      <div class="space-y-2">
+      <div class="flex flex-wrap items-center gap-4 text-xs border-t lg:border-t-0 border-neutral-800 pt-2 lg:pt-0">
+        <div>
+          <span class="text-[10px] uppercase text-neutral-500 block tracking-wider">Commit</span>
+          <a id="runCommitLink" href="#" target="_blank" rel="noopener noreferrer" class="font-bold text-white hover:underline uppercase tracking-wider block font-mono" title="Inspect Commit on GitHub">
+            -
+          </a>
+        </div>
+        <div class="border-l border-neutral-800 pl-4">
+          <span class="text-[10px] uppercase text-neutral-500 block tracking-wider">Duration</span>
+          <span class="font-bold text-white uppercase" id="runDuration">-</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-4">
+          <span class="text-[10px] uppercase text-neutral-500 block tracking-wider">Lock Wait</span>
+          <span class="font-bold text-white uppercase" id="runLockTime">-</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-4">
+          <span class="text-[10px] uppercase text-neutral-500 block tracking-wider">GitHub Action Run</span>
+          <a id="runActionLink" href="#" target="_blank" rel="noopener noreferrer" class="font-bold text-pastel-cyan hover:underline font-mono uppercase tracking-wider block" title="Open GitHub Action Workflow Run">
+            -
+          </a>
+        </div>
+        <div class="border-l border-neutral-800 pl-4">
+          <span class="text-[10px] uppercase text-neutral-500 block tracking-wider">Verification Status</span>
+          <span id="runStatusBadge" class="border px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center">
+            -
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- IN-PROGRESS LIVE EXECUTION MONITOR BOX (Conditional) -->
+    <section id="inProgressBox" class="hidden border border-pastel-cyanBorder/60 bg-pastel-cyanBg/20 p-4 space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-pastel-cyanBorder/40 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="border border-pastel-cyanBorder bg-pastel-cyan text-black font-bold uppercase px-2 py-0.5 text-[10px] animate-pulse">
+            [EXECUTION IN PROGRESS]
+          </span>
+          <span class="font-bold text-pastel-cyan uppercase tracking-wide text-xs">
+            Hardware Verification Running on Target Silicon
+          </span>
+        </div>
+        <div class="text-[11px] text-neutral-300 font-mono">
+          Target Node: <span class="text-white font-bold" id="inProgressNode">stolerpi (ARM64 HIL)</span> • Mutex: <span class="text-pastel-yellow font-bold">LOCKED</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div class="space-y-1.5">
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Active Verification Phase:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-pastel-cyan font-mono" id="inProgressPhase">
+            Silicon Flashing &amp; Unity Suite Execution
+          </div>
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Currently Executing Assertion:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-white font-mono" id="inProgressActiveTest">
+            test_can_packet_builder_clamping_and_zeroing
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Bench Hardware Status:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-pastel-yellow font-mono" id="inProgressPort">
+            Port: /dev/esp32_johnathan • Serial Baud: 115200 • CAN: 500 kbps
+          </div>
+          <p class="text-[10px] text-neutral-400 leading-normal" id="inProgressSummary">
+            Firmware compiled and flashed to ESP32-S3 silicon. Unity test runner is streaming serial assertions over /dev/esp32_johnathan.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAILURE ROOT CAUSE & DEBUGGING TRIAGE BOX (Conditional) -->
+    <section id="failureTriageBox" class="hidden border border-pastel-redBorder/60 bg-pastel-redBg/20 p-4 space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-pastel-redBorder/40 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="border border-pastel-redBorder bg-pastel-red text-black font-bold uppercase px-2 py-0.5 text-[10px]" id="failBadge">
+            [FAILURE TRIAGE]
+          </span>
+          <span class="font-bold text-pastel-red uppercase tracking-wide text-xs" id="failTitle">
+            Silicon Unit Test Assertion Failure Detected
+          </span>
+        </div>
+        <div class="text-[11px] text-neutral-300 font-mono">
+          Exit Code: <span class="text-pastel-red font-bold" id="failExitCode">1 (Hardware Verification Failed)</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div class="space-y-1.5">
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider" id="failLocationLabel">Failed Location / Component:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-white font-mono break-all" id="failLocation">-</div>
+
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider" id="failDiffLabel">Failure Diff / Error Trace:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-pastel-red font-mono whitespace-pre-wrap break-all" id="failDiff">-</div>
+        </div>
+
+        <div class="space-y-1.5">
+          <div class="text-[10px] uppercase text-neutral-400 tracking-wider">Local Bench Reproduction Command:</div>
+          <div class="bg-black border border-neutral-800 p-2 text-pastel-yellow font-mono select-all leading-relaxed break-all" id="failReproCmd">
+            ./github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan
+          </div>
+          <p class="text-[10px] text-neutral-400 leading-normal" id="failSummary">
+            Flashing and executing this isolated test will acquire the bench mutex and stream serial assertions directly to your terminal.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- METRICS STRIP -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="border border-neutral-800 bg-neutral-950 p-3">
+        <div class="text-[10px] uppercase text-neutral-500 tracking-wider">Unit Tests Passed</div>
+        <div class="text-xl font-bold mt-1 text-white flex items-baseline gap-2">
+          <span id="statTestsPass">0</span>
+          <span class="text-xs text-neutral-500">/ <span id="statTestsTotal">0</span></span>
+        </div>
+        <div class="w-full bg-neutral-900 h-1 mt-2">
+          <div id="statTestBar" class="h-full bg-pastel-green" style="width: 100%;"></div>
+        </div>
+      </div>
+
+      <div class="border border-neutral-800 bg-neutral-950 p-3">
+        <div class="text-[10px] uppercase text-neutral-500 tracking-wider">Captured CAN Frames</div>
+        <div class="text-xl font-bold mt-1 text-white font-mono" id="statCanFrames">0</div>
+        <div class="text-[10px] text-neutral-500 uppercase mt-1 tracking-wider">Rate: 500 kbps (120Ω Split)</div>
+      </div>
+
+      <div class="border border-neutral-800 bg-neutral-950 p-3">
+        <div class="text-[10px] uppercase text-neutral-500 tracking-wider">Static Quality Gate</div>
+        <div class="text-xl font-bold mt-1 text-pastel-green uppercase" id="statStaticGate">
+          [PASS: 0 DEFECTS]
+        </div>
+        <div class="text-[10px] text-neutral-500 uppercase mt-1 tracking-wider">Cppcheck Memory &amp; Safety</div>
+      </div>
+
+      <div class="border border-neutral-800 bg-neutral-950 p-3">
+        <div class="text-[10px] uppercase text-neutral-500 tracking-wider">Critical Section Scope</div>
+        <div class="text-xl font-bold mt-1 text-white font-mono" id="statLockScope">14.8s</div>
+        <div class="text-[10px] text-neutral-500 uppercase mt-1 tracking-wider">flock -x 200 (Flash + Run Only)</div>
+      </div>
+    </section>
+
+    <!-- CAN BUS TELEMETRY PACKET ARRIVAL & TIMING (WAVEFORM & SCRUBBER) -->
+    <section class="border border-neutral-800 bg-neutral-950 p-4 space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
+        <div>
+          <h2 class="text-xs font-bold text-white uppercase tracking-wider">
+            [TELEMETRY] Physical CAN Bus Activity &amp; Packet Arrival Timeline
+          </h2>
+          <p class="text-[11px] text-neutral-500 uppercase mt-0.5 tracking-wide">
+            Real-time physical frame arrival sequence, inter-packet timing, and decoded payloads captured from hardware transceiver
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2 text-[10px] font-mono text-neutral-400 bg-black border border-neutral-800 px-2.5 py-1 uppercase tracking-wider">
+          <span class="w-1.5 h-1.5 bg-pastel-green inline-block"></span>
+          <span>Timeline View • All Packets Displayed • Scrub via Slider</span>
+        </div>
+      </div>
+
+      <!-- LIVE DIGITAL HEADS-UP DISPLAY (HUD) -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 border border-neutral-800 bg-black p-2.5 text-[11px]">
+        <div>
+          <span class="text-[10px] uppercase text-neutral-500 block">Relative Time</span>
+          <span class="font-bold text-white font-mono" id="hudTime">t = +0.00s</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-2">
+          <span class="text-[10px] uppercase text-neutral-400 block">Active CAN ID</span>
+          <span class="font-bold text-pastel-yellow font-mono truncate block" id="hudMessage">BUS STANDBY</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-2">
+          <span class="text-[10px] uppercase text-neutral-400 block">Inter-Packet Delta (Δt)</span>
+          <span class="font-bold text-white font-mono" id="hudDelta">-</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-2">
+          <span class="text-[10px] uppercase text-neutral-400 block">Payload (Hex)</span>
+          <span class="font-bold text-neutral-300 font-mono" id="hudPayload">-</span>
+        </div>
+        <div class="border-l border-neutral-800 pl-2 col-span-2 sm:col-span-1">
+          <span class="text-[10px] uppercase text-neutral-500 block">Payload (Dec / Value)</span>
+          <span class="font-bold text-pastel-green font-mono truncate block" id="hudDecoded">No frames at playhead</span>
+        </div>
+      </div>
+
+      <!-- PACKET TIMING DIAGRAM -->
+      <div class="space-y-1.5">
+        <div class="flex flex-wrap items-center justify-between text-[10px] uppercase text-neutral-400 gap-2">
+          <div class="flex flex-wrap items-center gap-2" id="timelineLegend">
+            <!-- Dynamically populated ID pills -->
+          </div>
+          <div class="font-mono text-neutral-500">
+            Click / Scrub Timeline to Inspect Exact Packet
+          </div>
+        </div>
+
+        <div class="relative bg-black border border-neutral-800 h-48 overflow-hidden cursor-crosshair" id="canvasContainer" onclick="handleCanvasClick(event)" onmousemove="handleCanvasHover(event)" onmouseleave="handleCanvasLeave()">
+          <canvas id="waveformCanvas" class="w-full h-full block"></canvas>
+          <div id="playhead" class="absolute top-0 bottom-0 w-[1px] bg-white pointer-events-none" style="left: 0%;"></div>
+          <div id="hoverCursor" class="hidden absolute top-0 bottom-0 w-[1px] border-l border-dashed border-neutral-400 pointer-events-none"></div>
+          <div id="hoverTooltip" class="hidden absolute top-2 bg-neutral-900 border border-neutral-700 text-white text-[10px] px-2 py-1 pointer-events-none font-mono"></div>
+        </div>
+
+        <!-- Scrubber Slider with dynamic Time Labels -->
+        <div class="flex items-center gap-3 pt-1">
+          <span class="text-[10px] uppercase font-mono text-neutral-500 shrink-0">Scrubber (+0.00s)</span>
+          <input type="range" id="timeScrubber" min="0" max="100" value="100" oninput="scrub(this.value)" class="w-full accent-white bg-neutral-900 h-1 cursor-pointer" title="Scrub to inspect any point on timeline">
+          <span class="text-[10px] uppercase font-mono text-neutral-400 shrink-0" id="scrubberMaxLabel">+0.00s</span>
+        </div>
+      </div>
+
+      <!-- Filterable Real-Time Packet Stream -->
+      <div class="space-y-2 pt-2 border-t border-neutral-800">
         <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold text-white uppercase tracking-wider">Decoded Bus Transactions</span>
           <div class="flex items-center gap-2">
-            <span class="text-[11px] font-bold text-white uppercase tracking-wider font-mono">Silicon Assertions (Unity)</span>
-            <div class="flex items-center bg-black border border-neutral-800 p-0.5 text-[10px] font-mono">
+            <span class="text-[10px] uppercase text-neutral-500">Filter By ID:</span>
+            <select id="idFilter" onchange="renderPacketsTable()" class="bg-black border border-neutral-800 px-2 py-1 text-white text-[11px] focus:outline-none focus:border-neutral-600">
+              <!-- Dynamically populated from actual run CAN IDs -->
+            </select>
+          </div>
+        </div>
+
+        <div class="border border-neutral-800 overflow-x-auto max-h-52">
+          <table class="w-full text-left font-mono text-[11px]">
+            <thead class="bg-neutral-900 text-neutral-400 border-b border-neutral-800 uppercase text-[10px] tracking-wider sticky top-0">
+              <tr>
+                <th class="py-1.5 px-3">Arrival Time</th>
+                <th class="py-1.5 px-3">Delta (Δt)</th>
+                <th class="py-1.5 px-3">CAN ID</th>
+                <th class="py-1.5 px-3">Message Identifier</th>
+                <th class="py-1.5 px-3">DLC</th>
+                <th class="py-1.5 px-3">Payload (Hex)</th>
+                <th class="py-1.5 px-3">Payload (Dec / Value)</th>
+              </tr>
+            </thead>
+            <tbody id="packetTableBody" class="divide-y divide-neutral-900 bg-black text-neutral-200">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- UNIT TEST ASSERTIONS BREAKDOWN & DEPLOYMENT FLASHING -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      
+      <!-- Test Table (2 cols) -->
+      <div class="lg:col-span-2 border border-neutral-800 bg-neutral-950 p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-neutral-800 pb-2">
+          <div class="flex items-center gap-2">
+            <h2 class="text-xs font-bold text-white uppercase tracking-wider">
+              [ASSERTIONS] Silicon On-Target Unit Tests (Unity)
+            </h2>
+            <div class="flex items-center bg-black border border-neutral-800 p-0.5 text-[10px]">
               <button id="btnFilterAll" onclick="setTestFilter('all')" class="px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase">All Tests</button>
               <button id="btnFilterFail" onclick="setTestFilter('fail')" class="px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase">Failed Only</button>
             </div>
@@ -525,16 +758,46 @@
         </div>
       </div>
 
-      <!-- Trackside Flash Command -->
-      <div class="bg-black border border-neutral-800 p-3 space-y-1 font-mono text-[11px]">
-        <div class="text-[10px] uppercase text-neutral-500">Trackside Silicon Deployment Command:</div>
-        <div class="text-white select-all break-all leading-relaxed" id="flashCmd">
-          python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 pedals_fw.bin
+      <!-- Trackside Flash Command (1 col) -->
+      <div class="border border-neutral-800 bg-neutral-950 p-4 space-y-3">
+        <div class="border-b border-neutral-800 pb-2">
+          <h2 class="text-xs font-bold text-white uppercase tracking-wider">
+            [DEPLOYMENT] Trackside Bench Flashing
+          </h2>
+          <p class="text-[11px] text-neutral-500 uppercase mt-0.5">
+            Single-command silicon deployment for track or lab bench
+          </p>
+        </div>
+
+        <div class="bg-black border border-neutral-800 p-2.5 space-y-1">
+          <div class="text-[10px] uppercase text-neutral-500">Terminal Flash Command:</div>
+          <div class="text-white text-[11px] font-mono select-all break-all leading-relaxed" id="flashCmd">
+            python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 pedals_fw.bin
+          </div>
+        </div>
+
+        <div class="space-y-1.5 pt-1">
+          <div class="text-[10px] uppercase text-neutral-500">Verified CI Build Artifacts:</div>
+          <div class="space-y-1">
+            <div class="p-2 border border-neutral-800 bg-black flex items-center justify-between text-[11px]">
+              <span class="text-white font-mono uppercase">pedals_fw.bin</span>
+              <span class="text-neutral-500 uppercase">Flash Image</span>
+            </div>
+            <div class="p-2 border border-neutral-800 bg-black flex items-center justify-between text-[11px]">
+              <span class="text-white font-mono uppercase">pedals_fw.elf</span>
+              <span class="text-neutral-500 uppercase">Debug Symbols</span>
+            </div>
+            <div class="p-2 border border-neutral-800 bg-black flex items-center justify-between text-[11px]">
+              <span class="text-white font-mono uppercase">can_trace.jsonl</span>
+              <span class="text-neutral-500 uppercase">Bus Log</span>
+            </div>
+          </div>
         </div>
       </div>
+
     </section>
 
-    <!-- COMPLETE RUN HISTORY ARCHIVE -->
+    <!-- COMPLETE RUN HISTORY ARCHIVE TABLE -->
     <section class="border border-neutral-800 bg-neutral-950 p-4 space-y-3">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
         <div>
@@ -575,7 +838,7 @@
       </div>
     </section>
 
-  </div>
+  </main>
 
   <!-- FOOTER -->
   <footer class="border-t border-neutral-800 bg-neutral-950 px-4 py-3 mt-8">
@@ -606,19 +869,33 @@
     let activeTabId = 'overview';      // 'overview' | 'telemetry' | 'runs'
     let historyState = { runs: [] };
     let currentRun = null;
+    let playbackTime = 0.0;
+    let maxPlaybackTime = 6.0;
     let testFilterMode = 'all';        // 'all' | 'fail'
+    let currentSubsystemFilter = 'all';// 'all' | 'pedals_fw' | 'lights_fw'
     let historyStatusFilter = 'all';   // 'all' | 'passed' | 'failed'
     let overviewRunsFilter = 'all';    // 'all' | 'passed' | 'failed'
-    
+    let hoverRaf = null;
+
     // 24/7 Continuous CAN Debugger Stream State
     let streamPaused = false;
     let streamFilterId = 'all';
-    let streamPackets = [];            // Continuous flat buffer of all sniffed messages
+    let streamPackets = [];
     let streamInterval = null;
     let streamThrottleVal = 32;
     let streamWatchdogToken = 123;
 
-    const CAN_COLORS = {
+    const CAN_COLORS_LIST = [
+      '#fde047', // Pastel Yellow
+      '#7dd3fc', // Pastel Cyan
+      '#86efac', // Pastel Green
+      '#fca5a5', // Pastel Red
+      '#c084fc', // Pastel Purple
+      '#fdba74', // Pastel Orange
+      '#f9a8d4'  // Pastel Pink
+    ];
+
+    const CAN_COLORS_MAP = {
       '0x001': '#86efac', // Pastel Green (Heartbeat)
       '0x011': '#fde047', // Pastel Yellow (Throttle)
       '0x021': '#7dd3fc', // Pastel Cyan (Lighting)
@@ -655,6 +932,11 @@
           }
         }
       });
+
+      // Redraw waveform if switching into test runs
+      if (tabId === 'runs') {
+        requestAnimationFrame(() => updateUI());
+      }
     }
 
     // ─── 24/7 CONTINUOUS STREAM GENERATOR & LOGGER ──────────────────────────
@@ -668,7 +950,6 @@
     }
 
     function initContinuousStream(initialPackets) {
-      // Seed with initial baseline packets from history
       const now = new Date();
       streamPackets = (initialPackets || []).map((p, idx) => {
         const offsetSec = (initialPackets.length - idx) * 0.4;
@@ -690,7 +971,6 @@
 
       renderStreamTables();
 
-      // Start 24/7 continuous incoming frame listener
       if (streamInterval) clearInterval(streamInterval);
       streamInterval = setInterval(streamTick, 850);
     }
@@ -698,13 +978,11 @@
     function streamTick() {
       if (streamPaused) return;
 
-      // Rotate simulated vehicular telemetry frames across /dev/esp32_ahmed
       const types = ['throttle', 'throttle', 'heartbeat', 'lighting'];
       const pick = types[Math.floor(Math.random() * types.length)];
       let newPacket = null;
 
       if (pick === 'throttle') {
-        // Vary pedal travel realistically
         const delta = (Math.random() - 0.48) * 8;
         streamThrottleVal = Math.max(0, Math.min(100, Math.round(streamThrottleVal + delta)));
         const hex = streamThrottleVal.toString(16).padStart(2, '0').toUpperCase();
@@ -748,7 +1026,6 @@
         };
       }
 
-      // Add to front of continuous buffer
       streamPackets.unshift(newPacket);
       if (streamPackets.length > 250) streamPackets.pop();
 
@@ -793,7 +1070,7 @@
       const html = filtered.length === 0
         ? '<tr><td colspan="7" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">Listening on /dev/esp32_ahmed (500 kbps)... Awaiting matching frames.</td></tr>'
         : filtered.map((p, idx) => {
-            const col = CAN_COLORS[p.id] || CAN_COLORS.default;
+            const col = CAN_COLORS_MAP[p.id] || CAN_COLORS_MAP.default;
             const isNewest = (idx === 0);
             const rowClass = isNewest ? 'bg-neutral-800/80 border-l-2 border-pastel-green' : 'hover:bg-neutral-900';
 
@@ -895,7 +1172,7 @@
         };
       }
 
-      // Collect all recorded frames across all historical runs into unified baseline
+      // Seed 24/7 continuous stream buffer with baseline frames
       let seedPackets = [];
       historyState.runs.forEach(r => {
         if (r.can_packets && r.can_packets.length > 0) {
@@ -904,14 +1181,21 @@
       });
       initContinuousStream(seedPackets);
 
+      // Check URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const requestedSub = urlParams.get('subsystem');
+      if (requestedSub && ['pedals_fw', 'lights_fw'].includes(requestedSub)) {
+        currentSubsystemFilter = requestedSub;
+        updateSubsystemFilterButtons();
+      }
       populateRunSelector();
 
-      const urlParams = new URLSearchParams(window.location.search);
       const requestedRun = urlParams.get('run');
       if (requestedRun && historyState.runs.some(r => r.id === requestedRun)) {
         switchRun(requestedRun);
-      } else if (historyState.runs.length > 0) {
-        switchRun(historyState.runs[0].id);
+      } else {
+        const filtered = getFilteredRuns();
+        switchRun(filtered.length > 0 ? filtered[0].id : historyState.runs[0].id);
       }
 
       // Render Homepage Runs and Complete Runs Archive
@@ -988,7 +1272,7 @@
             <td class="py-2 px-3 text-neutral-400 font-mono">${lockDuration}</td>
             <td class="py-2 px-3">
               <button onclick="switchRun('${r.id}'); setActiveTab('runs');" class="text-pastel-cyan hover:underline uppercase font-bold text-[10px]">
-                Inspect Assertions →
+                Inspect Run &amp; Waveform →
               </button>
             </td>
           </tr>
@@ -996,18 +1280,684 @@
       }).join('');
     }
 
-    // ─── COMPLETE TEST RUNS HISTORY TABLE (TAB 3) ───────────────────────────
+    // ─── SUBSYSTEM FILTERING (FOR TEST RUNS TAB) ────────────────────────────
+    function updateSubsystemFilterButtons() {
+      const sub = currentSubsystemFilter;
+      const activeClass = 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-[10px] border border-neutral-700';
+      const inactiveClass = 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700';
+
+      if (dom.btnSubAll) dom.btnSubAll.className = (sub === 'all') ? activeClass : inactiveClass;
+      if (dom.btnSubPedals) dom.btnSubPedals.className = (sub === 'pedals_fw') ? activeClass : inactiveClass;
+      if (dom.btnSubLights) dom.btnSubLights.className = (sub === 'lights_fw') ? activeClass : inactiveClass;
+    }
+
+    function setSubsystemFilter(sub) {
+      currentSubsystemFilter = sub;
+      updateSubsystemFilterButtons();
+
+      const url = new URL(window.location);
+      if (sub === 'all') {
+        url.searchParams.delete('subsystem');
+      } else {
+        url.searchParams.set('subsystem', sub);
+      }
+      window.history.replaceState(null, '', url);
+
+      populateRunSelector();
+      const filtered = getFilteredRuns();
+      if (filtered.length > 0) {
+        switchRun(filtered[0].id);
+      }
+    }
+
+    function getFilteredRuns() {
+      if (currentSubsystemFilter === 'all') return historyState.runs;
+      return historyState.runs.filter(r => (r.subsystem === currentSubsystemFilter || (r.subsystems && r.subsystems.includes(currentSubsystemFilter))));
+    }
+
+    function populateRunSelector() {
+      const select = dom.runSelect;
+      if (!select) return;
+      const runs = getFilteredRuns();
+      select.innerHTML = runs.map(r => {
+        let tag = '[PASS]';
+        if (r.status === 'in_progress') tag = '[IN PROGRESS]';
+        else if (r.status === 'failed') {
+          if (r.failure_type === 'build_failure') tag = '[FAIL: BUILD]';
+          else if (r.failure_type === 'lock_timeout') tag = '[FAIL: TIMEOUT]';
+          else if (r.failure_type === 'static_analysis_failure') tag = '[FAIL: STATIC CHECK]';
+          else tag = '[FAIL: ASSERTION]';
+        }
+        const sub = r.subsystem || (r.subsystems ? r.subsystems[0] : 'ECU');
+        const subLabel = sub === 'pedals_fw' ? 'pedals_fw (Brake)' : (sub === 'lights_fw' ? 'lights_fw (Light)' : sub);
+        return `<option value="${r.id}">RUN #${r.id} • ${subLabel} • ${r.commit} ${tag}</option>`;
+      }).join('');
+    }
+
+    // ─── RUN SWITCHING & METADATA BINDING (TEST RUNS TAB) ───────────────────
+    function switchRun(runId) {
+      currentRun = historyState.runs.find(r => r.id === runId) || historyState.runs[0];
+      if (!currentRun) return;
+
+      delete currentRun._distinctIds;
+
+      const url = new URL(window.location);
+      url.searchParams.set('run', currentRun.id);
+      window.history.replaceState(null, '', url);
+
+      if (dom.runSelect) dom.runSelect.value = currentRun.id;
+
+      if (dom.runCommitLink) {
+        dom.runCommitLink.innerText = currentRun.commit + ' ↗';
+        dom.runCommitLink.href = `https://github.com/JuneKim0712/CAN-Testbench/commit/${currentRun.commit}`;
+      }
+
+      const parentId = currentRun.parent_run_id || (currentRun.id.includes('-') ? currentRun.id.split('-')[0] : currentRun.id);
+      if (dom.runActionLink) {
+        dom.runActionLink.innerText = `#${parentId} ↗`;
+        dom.runActionLink.href = `https://github.com/JuneKim0712/CAN-Testbench/actions/runs/${parentId}`;
+      }
+
+      if (dom.runDuration) dom.runDuration.innerText = currentRun.duration || '0.0s';
+      if (dom.runLockTime) dom.runLockTime.innerText = `${currentRun.lock_duration_sec || 0}s`;
+      if (dom.statLockScope) dom.statLockScope.innerText = `${currentRun.lock_duration_sec || 0}s`;
+
+      const badge = dom.runStatusBadge;
+      const triageBox = dom.failureTriageBox;
+      const inProgressBox = dom.inProgressBox;
+      const navMutex = dom.navMutexStatus;
+      const cardPiMutex = dom.cardPiMutex;
+
+      if (currentRun.status === 'passed') {
+        if (badge) {
+          badge.innerText = '[STATUS: ALL PASSED]';
+          badge.className = 'border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center';
+        }
+        if (triageBox) triageBox.classList.add('hidden');
+        if (inProgressBox) inProgressBox.classList.add('hidden');
+        if (navMutex) navMutex.innerHTML = '<span class="text-white font-semibold uppercase">Unlocked (Ready)</span>';
+        if (cardPiMutex) cardPiMutex.innerText = '/var/lock/calsol_hil.lock (Ready)';
+      } else if (currentRun.status === 'in_progress') {
+        if (badge) {
+          badge.innerText = '[STATUS: IN PROGRESS]';
+          badge.className = 'border border-pastel-cyanBorder/40 bg-pastel-cyanBg/30 text-pastel-cyan px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center animate-pulse';
+        }
+        if (triageBox) triageBox.classList.add('hidden');
+        if (inProgressBox) inProgressBox.classList.remove('hidden');
+        if (navMutex) navMutex.innerHTML = '<span class="text-pastel-yellow font-bold uppercase">Locked (Active Run)</span>';
+        if (cardPiMutex) cardPiMutex.innerText = '/var/lock/calsol_hil.lock (LOCKED)';
+
+        const ip = currentRun.in_progress_details || {};
+        if (dom.inProgressPhase) dom.inProgressPhase.innerText = ip.current_phase || 'Silicon Flashing & Unity Suite Execution';
+        if (dom.inProgressActiveTest) dom.inProgressActiveTest.innerText = ip.active_test || 'test_can_packet_builder_clamping_and_zeroing';
+        if (dom.inProgressNode) dom.inProgressNode.innerText = ip.target_node || 'stolerpi (ARM64 HIL)';
+        if (dom.inProgressPort) dom.inProgressPort.innerText = `Port: ${ip.active_port || '/dev/esp32_johnathan'} • Serial Baud: 115200 • CAN: 500 kbps`;
+        if (dom.inProgressSummary) dom.inProgressSummary.innerText = ip.summary || 'Hardware execution underway on bench.';
+      } else {
+        if (inProgressBox) inProgressBox.classList.add('hidden');
+        if (triageBox) triageBox.classList.remove('hidden');
+        if (navMutex) navMutex.innerHTML = '<span class="text-white font-semibold uppercase">Unlocked (Ready)</span>';
+        if (cardPiMutex) cardPiMutex.innerText = '/var/lock/calsol_hil.lock (Ready)';
+
+        const fType = currentRun.failure_type || 'assertion_failure';
+        const fd = currentRun.failure_details || {};
+        const firstFail = currentRun.tests ? currentRun.tests.find(t => t.status === 'FAIL') : null;
+
+        if (badge) {
+          if (fType === 'build_failure') badge.innerText = '[STATUS: COMPILATION FAILED]';
+          else if (fType === 'lock_timeout') badge.innerText = '[STATUS: BENCH TIMEOUT]';
+          else if (fType === 'static_analysis_failure') badge.innerText = '[STATUS: STATIC CHECK FAILED]';
+          else badge.innerText = '[STATUS: ASSERTION FAILED]';
+          badge.className = 'border border-pastel-redBorder/40 bg-pastel-redBg/30 text-pastel-red px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center';
+        }
+
+        if (dom.failTitle) dom.failTitle.innerText = fd.title || 'Hardware Verification Failure Detected';
+        if (dom.failExitCode) dom.failExitCode.innerText = fd.exit_code || '1 (Hardware Verification Failed)';
+        if (dom.failLocation) dom.failLocation.innerText = fd.location || (firstFail ? `${firstFail.subsystem} -> ${firstFail.file}:${firstFail.line} (${firstFail.name})` : 'Unknown');
+        if (dom.failDiff) dom.failDiff.innerText = fd.diff || (firstFail ? firstFail.details : 'No error trace provided');
+        if (dom.failReproCmd) dom.failReproCmd.innerText = fd.repro || './github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan';
+        if (dom.failSummary) dom.failSummary.innerText = fd.summary || 'Execute the command above to reproduce locally.';
+      }
+
+      // Compute Adaptive Time Window for Run Waveform
+      const packets = currentRun.can_packets || [];
+      const maxT = packets.length > 0 ? Math.max(...packets.map(p => p.t)) : 0;
+      maxPlaybackTime = Math.max(0.6, Math.ceil(maxT * 1.25 * 10) / 10);
+
+      // Assertions count & bar
+      const passCount = currentRun.tests && currentRun.tests.length > 0
+        ? currentRun.tests.filter(t => t.status === 'PASS').length
+        : (currentRun.tests_pass || 0);
+      const totalCount = currentRun.tests && currentRun.tests.length > 0
+        ? currentRun.tests.length
+        : (currentRun.tests_total || 0);
+
+      if (dom.statTestsPass) dom.statTestsPass.innerText = passCount;
+      if (dom.statTestsTotal) dom.statTestsTotal.innerText = totalCount;
+      if (dom.statCanFrames) dom.statCanFrames.innerText = packets.length;
+
+      const pct = totalCount > 0 ? (passCount / totalCount) * 100 : (currentRun.status === 'passed' ? 100 : 0);
+      if (dom.statTestBar) {
+        dom.statTestBar.style.width = `${pct}%`;
+        dom.statTestBar.className = currentRun.status === 'passed' ? 'h-full bg-pastel-green' : (currentRun.status === 'in_progress' ? 'h-full bg-pastel-cyan' : 'h-full bg-pastel-red');
+      }
+
+      populateIdFilter();
+      updateTimelineLegend();
+
+      const sub = currentRun.subsystem || (currentRun.subsystems ? currentRun.subsystems[0] : 'ECU');
+      const subBadgeLabel = sub === 'pedals_fw' ? 'PEDALS_FW (BRAKE / THROTTLE)' : (sub === 'lights_fw' ? 'LIGHTS_FW (LIGHTING SYSTEM)' : sub.toUpperCase());
+      if (dom.subsystemList) dom.subsystemList.innerHTML = `<span class="border border-neutral-700 bg-neutral-900 px-2 py-1 text-white font-mono uppercase text-[10px] font-semibold">${subBadgeLabel}</span>`;
+      if (dom.cardDutFw) dom.cardDutFw.innerText = sub;
+
+      if (dom.flashCmd) {
+        dom.flashCmd.innerText = `python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 ${sub}.bin`;
+      }
+
+      if (dom.testRatioLabel) dom.testRatioLabel.innerText = `${passCount} / ${totalCount} PASSED`;
+      renderTestTable();
+
+      playbackTime = maxPlaybackTime;
+      if (dom.timeScrubber) dom.timeScrubber.value = 100;
+      if (dom.scrubberMaxLabel) dom.scrubberMaxLabel.innerText = `+${maxPlaybackTime.toFixed(2)}s`;
+
+      updateUI();
+    }
+
+    // ─── TEST TABLE FILTERING ───────────────────────────────────────────────
+    function setTestFilter(mode) {
+      testFilterMode = mode;
+      if (dom.btnFilterAll) {
+        dom.btnFilterAll.className = (mode === 'all')
+          ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase'
+          : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      }
+      if (dom.btnFilterFail) {
+        dom.btnFilterFail.className = (mode === 'fail')
+          ? 'px-2 py-0.5 bg-pastel-redBg text-pastel-red font-bold uppercase border border-pastel-redBorder/40'
+          : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      }
+      renderTestTable();
+    }
+
+    function renderTestTable() {
+      const testBody = dom.testTableBody;
+      if (!testBody) return;
+
+      const tests = (currentRun ? (currentRun.tests || []) : []).filter(t => testFilterMode === 'all' || t.status === 'FAIL');
+
+      if (tests.length === 0) {
+        let msg = 'No failing assertions present in this run.';
+        if (currentRun && currentRun.failure_type === 'build_failure') {
+          msg = '[BUILD FAILED] Firmware compilation failed prior to test suite execution. See Failure Triage box above.';
+        } else if (currentRun && currentRun.failure_type === 'lock_timeout') {
+          msg = '[BENCH TIMEOUT] Hardware mutex lock timed out. Execution could not reach testbench silicon.';
+        } else if (currentRun && currentRun.failure_type === 'static_analysis_failure') {
+          msg = '[STATIC CHECK DEFECT] Cloud static analysis quality gate stopped execution before testbench dispatch.';
+        } else if (!currentRun || !currentRun.tests || currentRun.tests.length === 0) {
+          msg = 'No unit test assertions recorded for this run.';
+        }
+        testBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">${msg}</td></tr>`;
+        return;
+      }
+
+      testBody.innerHTML = tests.map(t => {
+        let statusBadge = '';
+        let rowClass = 'hover:bg-neutral-900';
+        if (t.status === 'PASS') {
+          statusBadge = `<span class="border border-pastel-greenBorder/30 bg-pastel-greenBg/20 text-pastel-green px-1.5 py-0.5 font-bold uppercase text-[10px]">[PASS]</span>`;
+        } else if (t.status === 'RUNNING') {
+          statusBadge = `<span class="border border-pastel-cyanBorder/40 bg-pastel-cyanBg/30 text-pastel-cyan px-1.5 py-0.5 font-bold uppercase text-[10px] animate-pulse">[RUNNING]</span>`;
+          rowClass = 'bg-pastel-cyanBg/15 hover:bg-pastel-cyanBg/25 border-l-2 border-pastel-cyan';
+        } else if (t.status === 'QUEUED') {
+          statusBadge = `<span class="border border-neutral-700 bg-neutral-800 text-neutral-400 px-1.5 py-0.5 font-bold uppercase text-[10px]">[QUEUED]</span>`;
+          rowClass = 'opacity-60 hover:opacity-100 hover:bg-neutral-900';
+        } else {
+          statusBadge = `<span class="border border-pastel-redBorder/50 bg-pastel-redBg/40 text-pastel-red px-1.5 py-0.5 font-bold uppercase text-[10px]">[FAIL]</span>`;
+          rowClass = 'bg-pastel-redBg/15 hover:bg-pastel-redBg/25 border-l-2 border-pastel-red';
+        }
+        return `
+          <tr class="${rowClass} transition">
+            <td class="py-2 px-3">${statusBadge}</td>
+            <td class="py-2 px-3 text-neutral-400 uppercase font-semibold">${t.subsystem}</td>
+            <td class="py-2 px-3 text-white font-bold">${t.name}</td>
+            <td class="py-2 px-3 text-neutral-500">${t.file}:${t.line}</td>
+            <td class="py-2 px-3 ${t.status === 'FAIL' ? 'text-pastel-red font-bold' : (t.status === 'RUNNING' ? 'text-pastel-cyan font-bold' : 'text-neutral-400')}">${t.details}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ─── CAN BUS UTILITIES & MEMOIZATION (TEST RUNS WAVEFORM) ───────────────
+    function getDistinctIds() {
+      if (!currentRun || !currentRun.can_packets) return [];
+      if (!currentRun._distinctIds) {
+        currentRun._distinctIds = Array.from(new Set(currentRun.can_packets.map(p => p.id)));
+      }
+      return currentRun._distinctIds;
+    }
+
+    function getColorForId(canId, distinctIds) {
+      const idx = distinctIds.indexOf(canId);
+      return idx >= 0 ? CAN_COLORS_LIST[idx % CAN_COLORS_LIST.length] : '#ffffff';
+    }
+
+    function populateIdFilter() {
+      const select = dom.idFilter;
+      if (!select) return;
+      const distinct = getDistinctIds();
+      if (distinct.length === 0) {
+        select.innerHTML = '<option value="all">NO TRAFFIC (0 FRAMES)</option>';
+        return;
+      }
+      let html = `<option value="all">ALL IDS (${currentRun.can_packets.length} FRAMES)</option>`;
+      distinct.forEach(id => {
+        const count = currentRun.can_packets.filter(p => p.id === id).length;
+        const name = currentRun.can_packets.find(p => p.id === id)?.name || id;
+        html += `<option value="${id}">${id} • ${name} (${count} frames)</option>`;
+      });
+      select.innerHTML = html;
+    }
+
+    function updateTimelineLegend() {
+      const legend = dom.timelineLegend;
+      if (!legend) return;
+      const distinct = getDistinctIds();
+      if (distinct.length === 0) {
+        legend.innerHTML = '<span class="text-neutral-500 font-mono text-[10px]">[IN-MEMORY TEST • NO BUS BROADCASTS]</span>';
+        return;
+      }
+      legend.innerHTML = distinct.map(id => {
+        const col = getColorForId(id, distinct);
+        const name = currentRun.can_packets.find(p => p.id === id)?.name || id;
+        const count = currentRun.can_packets.filter(p => p.id === id).length;
+        return `
+          <span class="flex items-center gap-1.5 border border-neutral-800 bg-neutral-900 px-2 py-0.5 font-mono text-[10px]">
+            <span class="w-2 h-2 inline-block" style="background-color: ${col}"></span>
+            <span class="text-white font-bold">${id}</span>
+            <span class="text-neutral-400">${name} (${count})</span>
+          </span>
+        `;
+      }).join('');
+    }
+
+    function seekToPacket(t) {
+      playbackTime = t;
+      updateUI();
+    }
+
+    // ─── PACKET TABLE RENDERER (TEST RUNS TAB) ──────────────────────────────
+    function renderPacketsTable() {
+      const filter = dom.idFilter ? dom.idFilter.value : 'all';
+      const tbody = dom.packetTableBody;
+      if (!tbody) return;
+      const packets = currentRun ? (currentRun.can_packets || []) : [];
+
+      if (packets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No physical bus frames captured for this run.</td></tr>';
+        return;
+      }
+
+      const distinct = getDistinctIds();
+      let activeIdx = -1;
+      for (let i = packets.length - 1; i >= 0; i--) {
+        if (packets[i].t <= playbackTime) {
+          activeIdx = i;
+          break;
+        }
+      }
+      const activePacket = activeIdx >= 0 ? packets[activeIdx] : packets[0];
+
+      let rows = '';
+      for (let i = 0; i < packets.length; i++) {
+        const p = packets[i];
+        if (filter !== 'all' && p.id.toLowerCase() !== filter.toLowerCase()) continue;
+
+        const prevP = i > 0 ? packets[i - 1] : null;
+        const deltaMs = prevP ? '+' + ((p.t - prevP.t) * 1000).toFixed(1) + ' ms' : 'Initial';
+        const color = getColorForId(p.id, distinct);
+        const isLatest = (p === activePacket);
+        const isPastPlayhead = p.t > playbackTime;
+        const rowClass = isLatest ? 'bg-neutral-800 border-l-2 border-white' : (isPastPlayhead ? 'opacity-40 hover:opacity-100 hover:bg-neutral-900' : 'hover:bg-neutral-900');
+
+        rows += `
+          <tr class="${rowClass} transition font-mono text-[11px] cursor-pointer" onclick="seekToPacket(${p.t})" title="Click to inspect this frame on timeline">
+            <td class="py-1.5 px-3 text-neutral-300 font-bold">+${p.t.toFixed(2)}s</td>
+            <td class="py-1.5 px-3 text-neutral-500">${deltaMs}</td>
+            <td class="py-1.5 px-3 font-bold" style="color: ${color}">${p.id}</td>
+            <td class="py-1.5 px-3 text-white uppercase">${p.name}</td>
+            <td class="py-1.5 px-3 text-neutral-400">${p.dlc}</td>
+            <td class="py-1.5 px-3 text-neutral-200 font-mono">${p.raw}</td>
+            <td class="py-1.5 px-3 text-pastel-green font-medium">${p.decoded}</td>
+          </tr>
+        `;
+      }
+
+      tbody.innerHTML = rows || `<tr><td colspan="7" class="py-4 text-center text-neutral-600 uppercase tracking-wider font-mono">No packets matching filter ${filter}</td></tr>`;
+    }
+
+    // ─── HARDWARE-ACCELERATED WAVEFORM RENDERER (TEST RUNS TAB) ─────────────
+    function syncCanvasResolution(canvas, ctx) {
+      const dpr = window.devicePixelRatio || 1;
+      const targetW = Math.round(canvas.clientWidth * dpr);
+      const targetH = Math.round(canvas.clientHeight * dpr);
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+        ctx.scale(dpr, dpr);
+        return true;
+      }
+      return false;
+    }
+
+    function drawWaveform() {
+      const canvas = dom.waveformCanvas;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      syncCanvasResolution(canvas, ctx);
+
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      ctx.clearRect(0, 0, w, h);
+
+      const marginL = 75;
+      const marginR = 15;
+      const plotW = w - marginL - marginR;
+
+      const packets = currentRun ? (currentRun.can_packets || []) : [];
+      const distinct = getDistinctIds();
+
+      if (packets.length === 0) {
+        ctx.strokeStyle = '#1e1e1e';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(marginL, 20, plotW, h - 45);
+
+        let mainMsg = '[PURE LOGIC UNIT TEST • NO PHYSICAL CAN FRAMES BROADCAST]';
+        let subMsg = 'All test assertions executed in-memory on physical silicon without external bus activity.';
+
+        if (currentRun && currentRun.status === 'in_progress') {
+          mainMsg = '[BUS CAPTURE IN PROGRESS • LISTENING ON /dev/esp32_ahmed...]';
+          subMsg = 'Differential transceiver is actively sampling bus transitions during execution.';
+        } else if (currentRun && currentRun.failure_type === 'build_failure') {
+          mainMsg = '[BUILD FAILED • EXECUTION HALTED PRIOR TO FLASHING SILICON]';
+          subMsg = 'Firmware compilation failed; no transceiver packets were generated.';
+        } else if (currentRun && currentRun.failure_type === 'lock_timeout') {
+          mainMsg = '[BENCH MUTEX TIMEOUT • HARDWARE ACCESS BLOCKED]';
+          subMsg = 'Execution timed out waiting for hardware mutex (/var/lock/calsol_hil.lock).';
+        } else if (currentRun && currentRun.failure_type === 'static_analysis_failure') {
+          mainMsg = '[STATIC ANALYSIS DEFECT • HARDWARE DISPATCH BLOCKED]';
+          subMsg = 'Cloud static analysis gate failed; tests were not dispatched to physical silicon.';
+        }
+
+        ctx.fillStyle = (currentRun && currentRun.status === 'in_progress') ? '#7dd3fc' : '#737373';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(mainMsg, marginL + plotW / 2, h / 2 - 8);
+        ctx.font = '9px monospace';
+        ctx.fillStyle = '#525252';
+        ctx.fillText(subMsg, marginL + plotW / 2, h / 2 + 12);
+        ctx.textAlign = 'left';
+        updateHUD();
+        return;
+      }
+
+      // Vertical Time Grid & Axes
+      ctx.strokeStyle = '#1e1e1e';
+      ctx.lineWidth = 1;
+
+      let timeStep = 1.0;
+      if (maxPlaybackTime <= 0.8) timeStep = 0.1;
+      else if (maxPlaybackTime <= 1.5) timeStep = 0.2;
+      else if (maxPlaybackTime <= 3.5) timeStep = 0.5;
+      else timeStep = 1.0;
+
+      for (let sec = 0; sec <= maxPlaybackTime + 0.001; sec += timeStep) {
+        const x = marginL + (sec / maxPlaybackTime) * plotW;
+        ctx.beginPath();
+        ctx.moveTo(x, 10);
+        ctx.lineTo(x, h - 20);
+        ctx.stroke();
+
+        ctx.fillStyle = '#666666';
+        ctx.font = '9px monospace';
+        const label = timeStep < 1.0 ? `+${sec.toFixed(2)}s` : `+${sec.toFixed(0)}s`;
+        ctx.fillText(label, x - 14, h - 6);
+      }
+
+      // Distinct CAN ID Channels
+      const numLanes = distinct.length;
+      const availableH = h - 55;
+      const laneH = Math.min(36, availableH / Math.max(1, numLanes));
+
+      distinct.forEach((id, laneIdx) => {
+        const laneY = 22 + laneIdx * laneH + laneH / 2;
+        const color = getColorForId(id, distinct);
+        const sample = packets.find(p => p.id === id);
+        const name = sample ? sample.name : id;
+
+        // Lane Baseline
+        ctx.strokeStyle = '#262626';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(marginL, laneY);
+        ctx.lineTo(marginL + plotW, laneY);
+        ctx.stroke();
+
+        // Lane Label on Left Margin
+        ctx.fillStyle = color;
+        ctx.font = 'bold 9px monospace';
+        ctx.fillText(id, 8, laneY - 2);
+        ctx.fillStyle = '#737373';
+        ctx.font = '8px monospace';
+        const shortName = name.length > 9 ? name.substring(0, 8) + '…' : name;
+        ctx.fillText(shortName, 8, laneY + 9);
+
+        // Packet Arrival Pulses
+        const lanePackets = packets.filter(p => p.id === id);
+        let latestArrived = null;
+
+        lanePackets.forEach(p => {
+          const x = marginL + (p.t / maxPlaybackTime) * plotW;
+          const isArrived = p.t <= playbackTime;
+          if (isArrived) latestArrived = p;
+
+          ctx.strokeStyle = isArrived ? color : '#333333';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x, laneY + 6);
+          ctx.lineTo(x, laneY - 10);
+          ctx.stroke();
+
+          ctx.fillStyle = isArrived ? color : '#404040';
+          ctx.fillRect(x - 2.5, laneY - 12.5, 5, 5);
+        });
+
+        if (latestArrived) {
+          const x = marginL + (latestArrived.t / maxPlaybackTime) * plotW;
+          ctx.fillStyle = color;
+          ctx.font = '8px monospace';
+          const tag = latestArrived.raw.length > 5 ? latestArrived.raw.substring(0, 5) : latestArrived.raw;
+          ctx.fillText(tag, x - 6, laneY - 15);
+        }
+      });
+
+      // Aggregate Bus Activity Lane (Bottom Raster)
+      const rasterTop = h - 42;
+      const rasterH = 14;
+      ctx.fillStyle = '#0f0f0f';
+      ctx.fillRect(marginL, rasterTop, plotW, rasterH);
+      ctx.strokeStyle = '#262626';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(marginL, rasterTop, plotW, rasterH);
+
+      ctx.fillStyle = '#666666';
+      ctx.font = '8px monospace';
+      ctx.fillText('ALL FRAMES', 8, rasterTop + 10);
+
+      packets.forEach(p => {
+        const x = marginL + (p.t / maxPlaybackTime) * plotW;
+        const color = getColorForId(p.id, distinct);
+        const isArrived = p.t <= playbackTime;
+        ctx.fillStyle = isArrived ? color : '#333333';
+        ctx.fillRect(x - 1, rasterTop + 2, 2, rasterH - 4);
+      });
+
+      updateHUD();
+    }
+
+    // ─── HUD TELEMETRY UPDATE (TEST RUNS TAB) ────────────────────────────────
+    function updateHUD() {
+      if (!dom.hudTime) return;
+      dom.hudTime.innerText = `t = +${playbackTime.toFixed(2)}s`;
+
+      const packets = currentRun ? (currentRun.can_packets || []) : [];
+      if (packets.length === 0) {
+        if (dom.hudMessage) dom.hudMessage.innerText = 'NO BUS TRAFFIC';
+        if (dom.hudDelta) dom.hudDelta.innerText = '—';
+        if (dom.hudPayload) dom.hudPayload.innerText = '—';
+        if (dom.hudDecoded) dom.hudDecoded.innerText = 'In-memory unit assertions only';
+        return;
+      }
+
+      let activeIdx = -1;
+      for (let i = packets.length - 1; i >= 0; i--) {
+        if (packets[i].t <= playbackTime) {
+          activeIdx = i;
+          break;
+        }
+      }
+      const active = activeIdx >= 0 ? packets[activeIdx] : packets[0];
+
+      if (active) {
+        if (dom.hudMessage) dom.hudMessage.innerText = `${active.id} • ${active.name}`;
+        if (dom.hudDelta) {
+          if (activeIdx > 0) {
+            const prev = packets[activeIdx - 1];
+            const dtMs = ((active.t - prev.t) * 1000).toFixed(1);
+            dom.hudDelta.innerText = `+${dtMs} ms`;
+          } else {
+            dom.hudDelta.innerText = 'Initial Frame';
+          }
+        }
+        if (dom.hudPayload) dom.hudPayload.innerText = `0x${active.raw} (${active.dlc}B)`;
+        if (dom.hudDecoded) dom.hudDecoded.innerText = active.decoded || 'Raw Frame';
+      } else {
+        if (dom.hudMessage) dom.hudMessage.innerText = 'BUS STANDBY';
+        if (dom.hudDelta) dom.hudDelta.innerText = '—';
+        if (dom.hudPayload) dom.hudPayload.innerText = '—';
+        if (dom.hudDecoded) dom.hudDecoded.innerText = 'Awaiting packet';
+      }
+    }
+
+    // ─── PLAYHEAD & SCRUBBING (TEST RUNS TAB) ────────────────────────────────
+    function scrub(val) {
+      playbackTime = (val / 100) * maxPlaybackTime;
+      updateUI();
+    }
+
+    function updateUI() {
+      const pct = maxPlaybackTime > 0 ? (playbackTime / maxPlaybackTime) * 100 : 100;
+      if (dom.timeScrubber) dom.timeScrubber.value = pct;
+
+      const canvas = dom.waveformCanvas;
+      if (!canvas) return;
+      const marginL = 75;
+      const marginR = 15;
+      const plotW = canvas.clientWidth - marginL - marginR;
+      const xPixel = marginL + (maxPlaybackTime > 0 ? (playbackTime / maxPlaybackTime) * plotW : plotW);
+
+      if (dom.playhead) dom.playhead.style.left = `${(xPixel / canvas.clientWidth) * 100}%`;
+      drawWaveform();
+      renderPacketsTable();
+    }
+
+    // ─── CANVAS INTERACTIVITY (CLICK & HOVER) ───────────────────────────────
+    function handleCanvasClick(e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const marginL = 75;
+      const marginR = 15;
+      const plotW = rect.width - marginL - marginR;
+
+      if (clickX >= marginL && clickX <= marginL + plotW) {
+        const fraction = (clickX - marginL) / plotW;
+        playbackTime = Math.max(0, Math.min(maxPlaybackTime, fraction * maxPlaybackTime));
+        updateUI();
+      }
+    }
+
+    function handleCanvasHover(e) {
+      if (hoverRaf) return;
+      const clientX = e.clientX;
+      hoverRaf = requestAnimationFrame(() => {
+        hoverRaf = null;
+        const container = dom.canvasContainer;
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        const hoverX = clientX - rect.left;
+        const marginL = 75;
+        const marginR = 15;
+        const plotW = rect.width - marginL - marginR;
+
+        const cursor = dom.hoverCursor;
+        const tooltip = dom.hoverTooltip;
+
+        if (hoverX >= marginL && hoverX <= marginL + plotW) {
+          if (cursor) cursor.classList.remove('hidden');
+          if (tooltip) tooltip.classList.remove('hidden');
+          if (cursor) cursor.style.left = `${hoverX}px`;
+
+          const fraction = (hoverX - marginL) / plotW;
+          const hoverT = fraction * maxPlaybackTime;
+
+          const packets = currentRun ? (currentRun.can_packets || []) : [];
+          let nearest = null;
+          let minDiff = 999;
+          for (let i = 0; i < packets.length; i++) {
+            const diff = Math.abs(packets[i].t - hoverT);
+            if (diff < minDiff && diff < 0.25) {
+              minDiff = diff;
+              nearest = packets[i];
+            }
+          }
+
+          if (tooltip) {
+            tooltip.style.left = `${Math.min(rect.width - 160, hoverX + 8)}px`;
+            if (nearest) {
+              tooltip.innerText = `t = +${nearest.t.toFixed(2)}s | ${nearest.id} ${nearest.name} | ${nearest.raw}`;
+            } else {
+              tooltip.innerText = `t = +${hoverT.toFixed(2)}s`;
+            }
+          }
+        } else {
+          handleCanvasLeave();
+        }
+      });
+    }
+
+    function handleCanvasLeave() {
+      if (dom.hoverCursor) dom.hoverCursor.classList.add('hidden');
+      if (dom.hoverTooltip) dom.hoverTooltip.classList.add('hidden');
+    }
+
+    // ─── COMPLETE TEST RUNS HISTORY TABLE ───────────────────────────────────
     function setHistoryStatusFilter(filter) {
       historyStatusFilter = filter;
-      dom.btnHistAll.className = (filter === 'all')
-        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase'
-        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
-      dom.btnHistPassed.className = (filter === 'passed')
-        ? 'px-2 py-0.5 bg-pastel-greenBg text-pastel-green font-bold uppercase border border-pastel-greenBorder/40'
-        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
-      dom.btnHistFailed.className = (filter === 'failed')
-        ? 'px-2 py-0.5 bg-pastel-redBg text-pastel-red font-bold uppercase border border-pastel-redBorder/40'
-        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      if (dom.btnHistAll) {
+        dom.btnHistAll.className = (filter === 'all')
+          ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase'
+          : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      }
+      if (dom.btnHistPassed) {
+        dom.btnHistPassed.className = (filter === 'passed')
+          ? 'px-2 py-0.5 bg-pastel-greenBg text-pastel-green font-bold uppercase border border-pastel-greenBorder/40'
+          : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      }
+      if (dom.btnHistFailed) {
+        dom.btnHistFailed.className = (filter === 'failed')
+          ? 'px-2 py-0.5 bg-pastel-redBg text-pastel-red font-bold uppercase border border-pastel-redBorder/40'
+          : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
+      }
       renderHistoryTable();
     }
 
@@ -1066,109 +2016,8 @@
       }).join('');
     }
 
-    function populateRunSelector() {
-      const select = dom.runSelect;
-      if (!select) return;
-      select.innerHTML = historyState.runs.map(r => {
-        let tag = '[PASS]';
-        if (r.status === 'in_progress') tag = '[IN PROGRESS]';
-        else if (r.status === 'failed') tag = '[FAIL]';
-        const sub = r.subsystem || (r.subsystems ? r.subsystems[0] : 'ECU');
-        return `<option value="${r.id}">RUN #${r.id} • ${sub} • ${r.commit} ${tag}</option>`;
-      }).join('');
-    }
-
-    // ─── RUN SWITCHING & TEST ASSERTIONS BINDING ────────────────────────────
-    function switchRun(runId) {
-      currentRun = historyState.runs.find(r => r.id === runId) || historyState.runs[0];
-      if (!currentRun) return;
-
-      if (dom.runSelect) dom.runSelect.value = currentRun.id;
-
-      if (dom.runCommitLink) {
-        dom.runCommitLink.innerText = currentRun.commit + ' ↗';
-        dom.runCommitLink.href = `https://github.com/JuneKim0712/CAN-Testbench/commit/${currentRun.commit}`;
-      }
-
-      if (dom.runDuration) dom.runDuration.innerText = currentRun.duration || '0.0s';
-
-      const badge = dom.runStatusBadge;
-      if (badge) {
-        if (currentRun.status === 'passed') {
-          badge.innerText = '[ALL PASSED]';
-          badge.className = 'border border-pastel-greenBorder/40 bg-pastel-greenBg/30 text-pastel-green px-2 py-0.5 font-bold uppercase tracking-wide text-[10px] block text-center font-mono';
-        } else if (currentRun.status === 'in_progress') {
-          badge.innerText = '[IN PROGRESS]';
-          badge.className = 'border border-pastel-cyanBorder/40 bg-pastel-cyanBg/30 text-pastel-cyan px-2 py-0.5 font-bold uppercase tracking-wide text-[10px] block text-center animate-pulse font-mono';
-        } else {
-          badge.innerText = '[FAIL]';
-          badge.className = 'border border-pastel-redBorder/40 bg-pastel-redBg/30 text-pastel-red px-2 py-0.5 font-bold uppercase tracking-wide text-[10px] block text-center font-mono';
-        }
-      }
-
-      const sub = currentRun.subsystem || (currentRun.subsystems ? currentRun.subsystems[0] : 'ECU');
-      if (dom.cardDutFw) dom.cardDutFw.innerText = sub;
-
-      if (dom.flashCmd) {
-        dom.flashCmd.innerText = `python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 ${sub}.bin`;
-      }
-
-      // Assertions Count & Table
-      const passCount = currentRun.tests && currentRun.tests.length > 0
-        ? currentRun.tests.filter(t => t.status === 'PASS').length
-        : (currentRun.tests_pass || 0);
-      const totalCount = currentRun.tests && currentRun.tests.length > 0
-        ? currentRun.tests.length
-        : (currentRun.tests_total || 0);
-
-      if (dom.testRatioLabel) dom.testRatioLabel.innerText = `${passCount} / ${totalCount} PASSED`;
-      renderTestTable();
-    }
-
-    // ─── TEST TABLE FILTERING ───────────────────────────────────────────────
-    function setTestFilter(mode) {
-      testFilterMode = mode;
-      if (dom.btnFilterAll) {
-        dom.btnFilterAll.className = (mode === 'all')
-          ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase'
-          : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
-      }
-      if (dom.btnFilterFail) {
-        dom.btnFilterFail.className = (mode === 'fail')
-          ? 'px-2 py-0.5 bg-pastel-redBg text-pastel-red font-bold uppercase border border-pastel-redBorder/40'
-          : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
-      }
-      renderTestTable();
-    }
-
-    function renderTestTable() {
-      const testBody = dom.testTableBody;
-      if (!testBody) return;
-
-      const tests = (currentRun ? (currentRun.tests || []) : []).filter(t => testFilterMode === 'all' || t.status === 'FAIL');
-
-      if (tests.length === 0) {
-        testBody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No test assertions recorded for this run.</td></tr>`;
-        return;
-      }
-
-      testBody.innerHTML = tests.map(t => {
-        let statusBadge = (t.status === 'PASS')
-          ? `<span class="border border-pastel-greenBorder/30 bg-pastel-greenBg/20 text-pastel-green px-1.5 py-0.5 font-bold uppercase text-[10px]">[PASS]</span>`
-          : `<span class="border border-pastel-redBorder/50 bg-pastel-redBg/40 text-pastel-red px-1.5 py-0.5 font-bold uppercase text-[10px]">[FAIL]</span>`;
-        return `
-          <tr class="hover:bg-neutral-900 transition">
-            <td class="py-2 px-3">${statusBadge}</td>
-            <td class="py-2 px-3 text-neutral-400 uppercase font-semibold">${t.subsystem}</td>
-            <td class="py-2 px-3 text-white font-bold">${t.name}</td>
-            <td class="py-2 px-3 text-neutral-500">${t.file}:${t.line}</td>
-            <td class="py-2 px-3 ${t.status === 'FAIL' ? 'text-pastel-red font-bold' : 'text-neutral-400'}">${t.details}</td>
-          </tr>
-        `;
-      }).join('');
-    }
-
     // ─── WINDOW LISTENERS ───────────────────────────────────────────────────
+    window.addEventListener('resize', updateUI);
     window.addEventListener('DOMContentLoaded', initData);
     window.addEventListener('hashchange', () => {
       const hash = window.location.hash.replace('#', '');
