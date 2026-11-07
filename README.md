@@ -18,16 +18,18 @@ This platform validates embedded vehicle firmware on physical microcontrollers a
 
 ## Table of Contents
 1. [System Overview & Architecture Topology](#1-system-overview--architecture-topology)
-2. [Complete Setup Guide](#2-complete-setup-guide)
-   - [2.1 Hardware Requirements & Wiring](#21-hardware-requirements--wiring)
-   - [2.2 Host System Configuration (Linux / Raspberry Pi)](#22-host-system-configuration-linux--raspberry-pi)
-   - [2.3 Software Toolchain & Environment](#23-software-toolchain--environment)
+2. [GitHub Actions Setup & CI Integration Guide](#2-github-actions-setup--ci-integration-guide)
+   - [2.1 Reusable CI Workflow Integration (`testbench.yml`)](#21-reusable-ci-workflow-integration-testbenchyml)
+   - [2.2 Subsystem Manifest Configuration (`testbench.json`)](#22-subsystem-manifest-configuration-testbenchjson)
+   - [2.3 Self-Hosted Lab Runner Configuration (`stolerpi`)](#23-self-hosted-lab-runner-configuration-stolerpi)
+   - [2.4 End-to-End Pipeline Execution](#24-end-to-end-pipeline-execution)
 3. [Unit Testing Guide](#3-unit-testing-guide)
    - [3.1 On-Target Execution Architecture](#31-on-target-execution-architecture)
    - [3.2 Running Subsystem Tests Locally](#32-running-subsystem-tests-locally)
    - [3.3 Writing a New Unit Test Suite](#33-writing-a-new-unit-test-suite)
-   - [3.4 Viewing & Interpreting Test Outcomes](#34-viewing--interpreting-test-outcomes)
-4. [Script Debugging Guide](#4-comprehensive-script-debugging-guide)
+   - [3.4 CAN Message Injection & Telemetry Capture](#34-can-message-injection--telemetry-capture)
+   - [3.5 Viewing & Interpreting Test Outcomes](#35-viewing--interpreting-test-outcomes)
+4. [Script Debugging Guide](#4-script-debugging-guide)
    - [4.1 Master Test Runner (`cal-test.sh`)](#41-master-test-runner-cal-testsh)
    - [4.2 Serial & CAN Stream Monitor (`unity_parser.py`)](#42-serial--can-stream-monitor-unity_parserpy)
    - [4.3 High-Speed CAN Bridge Daemon (`can_bridge_daemon.py`)](#43-high-speed-can-bridge-daemon-can_bridge_daemonpy)
@@ -37,8 +39,11 @@ This platform validates embedded vehicle firmware on physical microcontrollers a
    - [4.7 Telemetry Ingestion Engine (`pages_compiler.py`)](#47-telemetry-ingestion-engine-pages_compilerpy)
    - [4.8 Failure Triage & Troubleshooting Matrix](#48-failure-triage--troubleshooting-matrix)
 5. [Repository Layout](#5-repository-layout)
-6. [Continuous Integration Workflow](#6-continuous-integration-workflow)
-7. [Trackside Flashing & Safety Protocols](#7-trackside-flashing--safety-protocols)
+6. [Trackside Flashing & Safety Protocols](#6-trackside-flashing--safety-protocols)
+7. [Complete Host & Hardware Setup Guide](#7-complete-host--hardware-setup-guide)
+   - [7.1 Hardware Requirements & Wiring](#71-hardware-requirements--wiring)
+   - [7.2 Host System Configuration (Linux / Raspberry Pi)](#72-host-system-configuration-linux--raspberry-pi)
+   - [7.3 Software Toolchain & Environment](#73-software-toolchain--environment)
 
 ---
 
@@ -77,93 +82,88 @@ The testbench operates on a dedicated physical host (`stolerpi` (Raspberry Pi 5)
 
 ---
 
-## 2. Complete Setup Guide
+## 2. GitHub Actions Setup & CI Integration Guide
 
-Follow this guide to commission a new engineering laptop or Raspberry Pi lab runner from scratch.
+Follow this guide to connect any CalSol firmware repository (such as `CalSol/Gen11-FW` or an isolated ECU fork) to the automated hardware testbench.
 
-### 2.1 Hardware Requirements & Wiring
+### 2.1 Reusable CI Workflow Integration (`testbench.yml`)
 
-1. **Microcontrollers & Transceivers:**
-   - 2x ESP32-S3 DevKits (ESP32-S3-WROOM-1).
-   - 2x TI TCAN332 (or ISO 11898-2 compatible 3.3V CAN transceivers).
-2. **Pin Assignments (Both Nodes):**
-   - `GPIO 17` $\rightarrow$ Transceiver **TXD**
-   - `GPIO 18` $\rightarrow$ Transceiver **RXD**
-   - `3.3V` & `GND` $\rightarrow$ Transceiver Power
-3. **Differential Bus Wiring:**
-   - Connect Node 1 **CAN_H** to Node 2 **CAN_H**.
-   - Connect Node 1 **CAN_L** to Node 2 **CAN_L**.
-   - Install a $120\,\Omega$, 1/4W resistor across CAN_H and CAN_L at both physical ends of the twisted pair.
-   - **Verification:** Measure resistance between CAN_H and CAN_L with power disconnected. The multimeter must read $60\,\Omega \pm 3\,\Omega$.
+To enable automated Hardware-in-the-Loop testing on every push and pull request without maintaining runner scripts in your repository, add `.github/workflows/testbench.yml`:
 
----
+```yaml
+name: CalSol Hardware CI
 
-### 2.2 Host System Configuration (Linux / Raspberry Pi)
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target subsystem folder to test ("auto", "all", or explicit path)'
+        required: false
+        default: 'auto'
+      port:
+        description: 'Serial port override (optional, e.g. /dev/esp32_johnathan)'
+        required: false
+        default: ''
 
-To ensure persistent device names regardless of USB plug order, configure custom `udev` rules:
+jobs:
+  hardware-verification:
+    name: Execute On-Target Hardware Testbench
+    uses: CalSol/CAN_TestBench/.github/workflows/testbench.yml@main
+    with:
+      target: ${{ inputs.target || 'auto' }}
+      port: ${{ inputs.port || '' }}
+```
 
-1. **Create the udev rule file:**
+### 2.2 Subsystem Manifest Configuration (`testbench.json`)
+
+Auto-discovery detects testable subsystems by searching for `testbench.json` files. Add this file to the root of each ECU subsystem folder you want tested:
+
+```json
+{
+  "name": "pedals_fw",
+  "target": "pedals_fw/test",
+  "port": "/dev/esp32_johnathan",
+  "baud": 921600,
+  "timeout": 15,
+  "description": "Accelerator & Brake Plausibility Unit Tests"
+}
+```
+
+#### Manifest Fields:
+- `name`: Identifier for the ECU subsystem, displayed across CI job matrices and web dashboards.
+- `target`: Path to the ESP-IDF test project containing `CMakeLists.txt` and `main/`.
+- `port`: The designated symlink of the microcontroller on the bench. Omit or set to `""` for automatic port detection.
+- `baud`: Silicon flashing speed. Defaults to `921600` baud ($< 3.5\,\text{s}$ flashing).
+- `timeout`: Maximum test duration in seconds before timing out (defaults to `15`).
+- `description`: Human-readable summary of subsystem assertions.
+
+### 2.3 Self-Hosted Lab Runner Configuration (`stolerpi`)
+
+The physical testbench runner runs on `stolerpi` (Raspberry Pi 5) as an isolated GitHub Actions Runner service:
+
+1. **Runner Tags:** The runner is configured with the labels `self-hosted`, `linux`, `ARM64`, and `stolerpi`.
+2. **Service Persistence:** Installed via `systemd` user lingering to ensure the runner stays online across reboots without an interactive login session:
    ```bash
-   sudo nano /etc/udev/rules.d/99-calsol-hil.rules
+   sudo loginctl enable-linger $USER
+   ~/actions-runner/svc.sh install
+   ~/actions-runner/svc.sh start
    ```
+3. **Repository Permissions:** In GitHub Repository Settings $\rightarrow$ Actions $\rightarrow$ General $\rightarrow$ Workflow permissions:
+   - Select **Read and write permissions** (allows posting PR status comments and writing Step Summaries).
+   - Check **Allow GitHub Actions to create and approve pull requests**.
 
-2. **Add the persistent symlinks (matched by USB vendor/product IDs or serials):**
-   ```udev
-   # Node 1: CAN Bus Debugger (/dev/esp32_ahmed)
-   SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", ATTRS{serial}=="AHMED_*", SYMLINK+="esp32_ahmed", MODE="0666"
+### 2.4 End-to-End Pipeline Execution
 
-   # Node 2: Device Under Test (/dev/esp32_johnathan)
-   SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", ATTRS{serial}=="JOHNATHAN_*", SYMLINK+="esp32_johnathan", MODE="0666"
-   ```
+When a developer pushes or opens a pull request, GitHub Actions runs through four stages:
 
-3. **Reload rules and add your user to the serial groups:**
-   ```bash
-   sudo udevadm control --reload-rules
-   sudo udevadm trigger
-   sudo usermod -a -G dialout,plugdev $USER
-   ```
-   *(Log out and log back in for group permissions to take effect)*.
-
-4. **Verify device detection:**
-   ```bash
-   ls -la /dev/esp32_*
-   # Expected output:
-   # lrwxrwxrwx 1 root root /dev/esp32_ahmed -> ttyACM0
-   # lrwxrwxrwx 1 root root /dev/esp32_johnathan -> ttyACM1
-   ```
-
----
-
-### 2.3 Software Toolchain & Environment
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/CalSol/CAN_TestBench.git
-   cd CAN_TestBench
-   ```
-
-2. **Install system utilities:**
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y git python3 python3-pip python3-venv ccache cppcheck
-   ```
-
-3. **Install Python host dependencies:**
-   ```bash
-   pip3 install --user pyserial
-   ```
-
-4. **Install and Source ESP-IDF (v5.1+ or v5.3+ recommended):**
-   ```bash
-   # If ESP-IDF is not yet installed:
-   mkdir -p ~/esp && cd ~/esp
-   git clone --recursive https://github.com/espressif/esp-idf.git -b v5.3.1
-   cd esp-idf && ./install.sh esp32s3
-
-   # Export environment to current shell:
-   . ~/esp/esp-idf/export.sh
-   ```
-   *(Verify installation by typing `idf.py --version`)*.
+1. **Pre-Hardware Quality Gate (`static-analysis`):** Runs `cppcheck` in the cloud in $< 15\,\text{s}$. If memory leaks, null dereferences, or bounds violations are detected, CI fails before flashing silicon.
+2. **Subsystem Auto-Discovery (`discover`):** Inspects Git change deltas. If only `pedals_fw` was modified, only `pedals_fw` is tested. Shared dependency changes (such as `components/can_driver/`) trigger tests across all registered subsystems.
+3. **Hardware Execution (`testbench`):** Dispatches matrix jobs to `stolerpi`. Acquires hardware mutex lock `/tmp/calsol_locks/<board>.lock`, builds firmware with `ccache`, flashes silicon at 921,600 baud, reads serial Unity assertions, decodes crash backtraces if panics occur, and releases the mutex.
+4. **Consolidated Dashboard & Step Summary (`report`):** Aggregates test outcomes into a table directly inside GitHub Actions `$GITHUB_STEP_SUMMARY` and posts a sticky comment on the PR.
 
 ---
 
@@ -186,7 +186,7 @@ Unlike host-simulated unit tests, CalSol executes tests **directly on the physic
 
 ### 3.2 Running Subsystem Tests Locally
 
-Execute unit tests directly from the repository root:
+Execute unit tests directly from the repository root on `stolerpi` or a configured lab laptop:
 
 ```bash
 # 1. Execute pedals_fw unit tests (Accelerator, Deadzones, Plausibility interlock)
@@ -282,7 +282,32 @@ To add a new test suite to an existing subsystem or create a new ECU subsystem:
 
 ---
 
-### 3.4 Viewing & Interpreting Test Outcomes
+### 3.4 CAN Message Injection & Telemetry Capture
+
+The testbench supports live physical CAN message injection while unit tests run on the DUT.
+
+#### How It Works:
+1. `calsol_inject.py` sends `{"cmd": "inject", "id": <ID>, "data": "<HEX>"}` to `/tmp/calsol_can.sock`.
+2. `can_bridge_daemon.py` packs the frame, encodes it via COBS, and streams it over serial to Node 1 (`/dev/esp32_ahmed`).
+3. Node 1's TWAI peripheral drives the frame onto the physical differential bus.
+4. Node 2 (DUT) detects the frame via its transceiver, generates an RX interrupt, and copies the packet to `s_rx_queue`.
+5. The unit test calls `CAN_receive(&rx_msg, timeout_ms)` to evaluate the received packet.
+
+#### CLI Injection Commands:
+```bash
+# Inject single BMS heartbeat frame (0x301):
+python3 github-action/lib/calsol_inject.py --id 0x301 --data 02010058
+
+# Inject periodic motor frames at 10 Hz:
+python3 github-action/lib/calsol_inject.py --id 0x401 --data 000005DC --rate 10 --count 50
+
+# Run full software vehicle simulation in parallel:
+python3 sim/virtual_ecus/car_runner.py --duration 15
+```
+
+---
+
+### 3.5 Viewing & Interpreting Test Outcomes
 
 1. **Terminal Console Output:**
    Passes appear in green; failed assertions immediately display the exact C source file and line number:
@@ -301,7 +326,7 @@ To add a new test suite to an existing subsystem or create a new ECU subsystem:
 
 ### 4.1 Master Test Runner (`cal-test.sh`)
 
-`cal-test.sh` is the central orchestrator that coordinates build compilation, hardware locks, binary flashing, and test ingestion.
+`cal-test.sh` coordinates build compilation, hardware mutex locking, binary flashing, and test ingestion.
 
 #### Common Failure Scenarios & Fixes:
 
@@ -349,7 +374,7 @@ To add a new test suite to an existing subsystem or create a new ECU subsystem:
       --verbose
   ```
 * **Baud Rate Mismatch:**
-  If the serial output appears as garbled junk (``), the board is logging at a non-standard baud rate. Verify that `sdkconfig.defaults` specifies `CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200`.
+  If the serial output appears as garbled junk, the board is logging at a non-standard baud rate. Verify that `sdkconfig.defaults` specifies `CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200`.
 
 ---
 
@@ -527,24 +552,7 @@ CAN_TestBench/
 
 ---
 
-## 6. Continuous Integration Workflow
-
-On every pull request and push to `main`, GitHub Actions executes:
-
-1. **Pre-Hardware Quality Gate (`static-analysis`):** Cppcheck scans all C/C++ sources for critical defects.
-2. **Matrix Discovery (`discover`):** Inspects Git change deltas. Only subsystems with modified files are scheduled.
-3. **Hardware Execution (`testbench`):** Dispatches matrix jobs in parallel to physical silicon on `stolerpi`. Each job:
-   - Compiles firmware using `ccache` acceleration.
-   - Acquires the hardware mutex lock.
-   - Flashes the target microcontroller.
-   - Streams serial output and decodes live CAN bus traffic via `/dev/esp32_ahmed`.
-   - Captures any Guru Meditation crash dumps and resolves stack addresses to line numbers.
-4. **Consolidated Dashboard (`report`):** Aggregates unit test tables and failure diagnostics into the GitHub Actions Step Summary.
-5. **Interactive Telemetry Portal Deployment (`deploy-pages`):** Recompiles historical runs into `web/data/history.json` and deploys to GitHub Pages.
-
----
-
-## 7. Trackside Flashing & Safety Protocols
+## 6. Trackside Flashing & Safety Protocols
 
 Precompiled firmware binaries (`.bin`, `.elf`, `bootloader.bin`) are automatically archived in GitHub Run Artifacts on every build.
 
@@ -557,3 +565,93 @@ python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 
 1. **DC Voltage Check:** Ensure the high-voltage traction pack is isolated and interlocks are disengaged before touching ECU transceivers.
 2. **Split Termination Verification:** Never operate the vehicle bus without both $120\,\Omega$ termination resistors installed (equivalent resistance must be $60\,\Omega$).
 3. **Signal Ground:** Always ensure a common ground reference between the host testbench and the ECU ground plane to prevent ground loop damage to transceiver chips.
+
+---
+
+## 7. Complete Host & Hardware Setup Guide
+
+Follow this guide to commission a new engineering laptop or Raspberry Pi lab runner from scratch.
+
+### 7.1 Hardware Requirements & Wiring
+
+1. **Microcontrollers & Transceivers:**
+   - 2x ESP32-S3 DevKits (ESP32-S3-WROOM-1).
+   - 2x TI TCAN332 (or ISO 11898-2 compatible 3.3V CAN transceivers).
+2. **Pin Assignments (Both Nodes):**
+   - `GPIO 17` $\rightarrow$ Transceiver **TXD**
+   - `GPIO 18` $\rightarrow$ Transceiver **RXD**
+   - `3.3V` & `GND` $\rightarrow$ Transceiver Power
+3. **Differential Bus Wiring:**
+   - Connect Node 1 **CAN_H** to Node 2 **CAN_H**.
+   - Connect Node 1 **CAN_L** to Node 2 **CAN_L**.
+   - Install a $120\,\Omega$, 1/4W resistor across CAN_H and CAN_L at both physical ends of the twisted pair.
+   - **Verification:** Measure resistance between CAN_H and CAN_L with power disconnected. The multimeter must read $60\,\Omega \pm 3\,\Omega$.
+
+---
+
+### 7.2 Host System Configuration (Linux / Raspberry Pi)
+
+To ensure persistent device names regardless of USB plug order, configure custom `udev` rules:
+
+1. **Create the udev rule file:**
+   ```bash
+   sudo nano /etc/udev/rules.d/99-calsol-hil.rules
+   ```
+
+2. **Add the persistent symlinks (matched by USB vendor/product IDs or serials):**
+   ```udev
+   # Node 1: CAN Bus Debugger (/dev/esp32_ahmed)
+   SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", ATTRS{serial}=="AHMED_*", SYMLINK+="esp32_ahmed", MODE="0666"
+
+   # Node 2: Device Under Test (/dev/esp32_johnathan)
+   SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", ATTRS{serial}=="JOHNATHAN_*", SYMLINK+="esp32_johnathan", MODE="0666"
+   ```
+
+3. **Reload rules and add your user to the serial groups:**
+   ```bash
+   sudo udevadm control --reload-rules
+   sudo udevadm trigger
+   sudo usermod -a -G dialout,plugdev $USER
+   ```
+   *(Log out and log back in for group permissions to take effect)*.
+
+4. **Verify device detection:**
+   ```bash
+   ls -la /dev/esp32_*
+   # Expected output:
+   # lrwxrwxrwx 1 root root /dev/esp32_ahmed -> ttyACM0
+   # lrwxrwxrwx 1 root root /dev/esp32_johnathan -> ttyACM1
+   ```
+
+---
+
+### 7.3 Software Toolchain & Environment
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/CalSol/CAN_TestBench.git
+   cd CAN_TestBench
+   ```
+
+2. **Install system utilities:**
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y git python3 python3-pip python3-venv ccache cppcheck
+   ```
+
+3. **Install Python host dependencies:**
+   ```bash
+   pip3 install --user pyserial
+   ```
+
+4. **Install and Source ESP-IDF (v5.1+ or v5.3+ recommended):**
+   ```bash
+   # If ESP-IDF is not yet installed:
+   mkdir -p ~/esp && cd ~/esp
+   git clone --recursive https://github.com/espressif/esp-idf.git -b v5.3.1
+   cd esp-idf && ./install.sh esp32s3
+
+   # Export environment to current shell:
+   . ~/esp/esp-idf/export.sh
+   ```
+   *(Verify installation by typing `idf.py --version`)*.
