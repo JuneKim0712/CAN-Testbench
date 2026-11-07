@@ -13,6 +13,29 @@ def read_url(url):
         return json.load(response)
 
 
+def dut_usage(lock_dir="/tmp/calsol_locks"):
+    """Observe runner ownership without changing lock files or taking ownership."""
+    try:
+        import fcntl
+        directory = Path(lock_dir)
+        if not directory.is_dir():
+            return "unknown"
+        files = list(directory.glob("hw*.lock")) + [directory / "bus.lock", directory / "esp32_johnathan.lock"]
+        for path in files:
+            try:
+                with path.open("r") as handle:
+                    try:
+                        fcntl.flock(handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        return "in_use"
+                    fcntl.flock(handle, fcntl.LOCK_UN)
+            except FileNotFoundError:
+                continue
+        return "idle"
+    except (OSError, ImportError):
+        return "unknown"
+
+
 def snapshot():
     now = datetime.now(timezone.utc).isoformat()
     try:
@@ -21,11 +44,11 @@ def snapshot():
         frames = [{k: f[k] for k in ("event", "session_id", "sequence", "timestamp", "time", "id", "id_int", "id_hex", "dlc", "raw", "data", "source", "direction") if k in f}
                   for f in data.get("frames", [])[-100:]
                   if f.get("source") == "physical_bus" and f.get("direction") == "rx"]
-        return {"updated_at": now, "feed_type": "public_snapshot", "bridge_available": True,
+        return {"updated_at": now, "feed_type": "public_snapshot", "dut_usage": dut_usage(), "bridge_available": True,
                 "serial_connected": bool(health.get("serial_connected")), "mode": health.get("mode"),
                 "last_rx_at": health.get("last_rx_at"), "total_rx": health.get("total_rx", 0), "frames": frames}
     except (OSError, ValueError):
-        return {"updated_at": now, "feed_type": "public_snapshot", "bridge_available": False,
+        return {"updated_at": now, "feed_type": "public_snapshot", "dut_usage": dut_usage(), "bridge_available": False,
                 "serial_connected": False, "frames": []}
 
 
