@@ -147,6 +147,9 @@ static void test_can_receive_timeout(void)
     TEST_ASSERT_EQUAL(ESP_OK, CAN_init());
 
     CAN_message_t rx_msg = {0};
+    // Drain any pending frames from previous test executions before asserting timeout
+    while (CAN_receive(&rx_msg, 5) == ESP_OK) {}
+
     // Expect timeout after 50ms when bus has no inbound frames
     esp_err_t err = CAN_receive(&rx_msg, 50);
     TEST_ASSERT_EQUAL(ESP_ERR_TIMEOUT, err);
@@ -171,10 +174,16 @@ static void test_pedal_can_transmission(void)
     TEST_ASSERT_EQUAL_UINT8(1, pedal_msg.dlc);
     TEST_ASSERT_EQUAL_UINT8(50, pedal_msg.data[0]);
 
-    // Transmit frame over physical bus
-    esp_err_t err = CAN_send(&pedal_msg, 100);
-    TEST_ASSERT_EQUAL(ESP_OK, err);
+    // Transmit pedal frames representing driver throttle input sweep
+    for (int i = 0; i < 10; i++) {
+        uint8_t sweep_throttle = (uint8_t)(10 * (i + 1)); // 10%, 20%, ... 100%
+        CAN_message_t sweep_msg = build_packet_no_ext(0x11, &sweep_throttle, 1);
+        esp_err_t err = CAN_send(&sweep_msg, 50);
+        TEST_ASSERT_EQUAL(ESP_OK, err);
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 
+    vTaskDelay(pdMS_TO_TICKS(100));
     CAN_deinit();
 }
 

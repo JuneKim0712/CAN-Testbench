@@ -22,7 +22,7 @@ Whether you are a new firmware developer writing your first driver or a test eng
 ## 1. System Overview & Philosophy
 
 ### The Engineering Challenge
-Developing solar vehicle firmware is notoriously difficult because engineers cannot carry a physical car into their dorm rooms or lab desks. In traditional workflows:
+Developing solar vehicle firmware is difficult without access to a physical car or lab desk. In traditional workflows:
 - Firmware is written on personal laptops without physical verification.
 - Code breaks when flashed to real microcontrollers because silicon timing and register behavior differ from laptop CPUs.
 - Missing vehicle subsystems (such as the Battery Management System or Motor Controller) prevent standalone testing of individual nodes like the pedal or lights board.
@@ -30,7 +30,7 @@ Developing solar vehicle firmware is notoriously difficult because engineers can
 ### The Solution: The CalSol Testbench
 The **CalSol CAN Testbench** bridges this gap. Hosted on a dedicated Raspberry Pi 5 (`stolerpi`), it creates an automotive proving ground combining:
 1. **Real Hardware:** Physical ESP32-S3 microcontrollers connected to real differential CAN transceivers.
-2. **Remote Access:** Seamless firmware flashing and terminal monitoring over the secure Tailscale mesh network.
+2. **Remote Access:** Firmware flashing and terminal monitoring over the secure Tailscale mesh network.
 3. **Dedicated Bus Debugger:** Real-time hardware snooping and injection running [ESP32_CAN_BUS_Debugger](https://github.com/CalSol/ESP32_CAN_BUS_Debugger).
 4. **Software Vehicle Simulation:** Realistic virtual vehicle models (Virtual BMS, Virtual Motor, Virtual Steering) that fill in for missing car hardware.
 5. **Continuous Verification:** Automated on-target compilation, device flashing, and Unity test verification on every GitHub Pull Request.

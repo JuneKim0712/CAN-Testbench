@@ -6,13 +6,13 @@ This platform validates embedded vehicle firmware on physical microcontrollers a
 
 ---
 
-### 🌐 Quick Links & Interactive Dashboards
-* 🚀 **Interactive Web Telemetry Portal:** [https://junekim0712.github.io/CAN-Testbench/](https://junekim0712.github.io/CAN-Testbench/)
-* 🏎️ **Pedals / Brake Nominal Run (7/7 Passed):** [View `pedals_fw` Run](https://junekim0712.github.io/CAN-Testbench/?subsystem=pedals_fw&run=42325039593-pedals)
-* 💡 **Lights Nominal Run (3/3 Passed):** [View `lights_fw` Run](https://junekim0712.github.io/CAN-Testbench/?subsystem=lights_fw&run=42325039593-lights)
-* ⚙️ **GitHub Actions CI Dashboard:** [https://github.com/JuneKim0712/CAN-Testbench/actions](https://github.com/JuneKim0712/CAN-Testbench/actions)
-* 📘 **Technical Architecture Manual:** [`docs/CODE_DOCUMENTATION.md`](docs/CODE_DOCUMENTATION.md)
-* 🛠️ **Bench Operational Manual:** [`docs/CAN_TESTBENCH_STAGE_GUIDE.md`](docs/CAN_TESTBENCH_STAGE_GUIDE.md)
+### Quick Links & Interactive Dashboards
+* **Interactive Web Telemetry Portal:** [https://junekim0712.github.io/CAN-Testbench/](https://junekim0712.github.io/CAN-Testbench/)
+* **Pedals / Brake Nominal Run (7/7 Passed):** [View `pedals_fw` Run](https://junekim0712.github.io/CAN-Testbench/?subsystem=pedals_fw&run=42325039593-pedals)
+* **Lights Nominal Run (3/3 Passed):** [View `lights_fw` Run](https://junekim0712.github.io/CAN-Testbench/?subsystem=lights_fw&run=42325039593-lights)
+* **GitHub Actions CI Dashboard:** [https://github.com/JuneKim0712/CAN-Testbench/actions](https://github.com/JuneKim0712/CAN-Testbench/actions)
+* **Technical Architecture Manual:** [`docs/CODE_DOCUMENTATION.md`](docs/CODE_DOCUMENTATION.md)
+* **Bench Operational Manual:** [`docs/CAN_TESTBENCH_STAGE_GUIDE.md`](docs/CAN_TESTBENCH_STAGE_GUIDE.md)
 
 ---
 
@@ -27,7 +27,7 @@ This platform validates embedded vehicle firmware on physical microcontrollers a
    - [3.2 Running Subsystem Tests Locally](#32-running-subsystem-tests-locally)
    - [3.3 Writing a New Unit Test Suite](#33-writing-a-new-unit-test-suite)
    - [3.4 Viewing & Interpreting Test Outcomes](#34-viewing--interpreting-test-outcomes)
-4. [Comprehensive Script Debugging Guide](#4-comprehensive-script-debugging-guide)
+4. [Script Debugging Guide](#4-comprehensive-script-debugging-guide)
    - [4.1 Master Test Runner (`cal-test.sh`)](#41-master-test-runner-cal-testsh)
    - [4.2 Serial & CAN Stream Monitor (`unity_parser.py`)](#42-serial--can-stream-monitor-unity_parserpy)
    - [4.3 High-Speed CAN Bridge Daemon (`can_bridge_daemon.py`)](#43-high-speed-can-bridge-daemon-can_bridge_daemonpy)
@@ -44,7 +44,7 @@ This platform validates embedded vehicle firmware on physical microcontrollers a
 
 ## 1. System Overview & Architecture Topology
 
-The testbench operates on a dedicated physical host (`stolerpi` — Raspberry Pi 5) directly wired to dual ESP32-S3 microcontroller nodes sharing a physical, differential 500 kbps CAN 2.0B bus:
+The testbench operates on a dedicated physical host (`stolerpi` (Raspberry Pi 5)) directly wired to dual ESP32-S3 microcontroller nodes sharing a physical, differential 500 kbps CAN 2.0B bus:
 
 ```text
  ┌────────────────────────────────────────────────────────────────────────┐
@@ -297,7 +297,7 @@ To add a new test suite to an existing subsystem or create a new ECU subsystem:
 
 ---
 
-## 4. Comprehensive Script Debugging Guide
+## 4. Script Debugging Guide
 
 ### 4.1 Master Test Runner (`cal-test.sh`)
 

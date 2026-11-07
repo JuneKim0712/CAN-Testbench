@@ -2,12 +2,12 @@
 
 Continuous hardware integration, automated on-target silicon testing, software-defined vehicle simulation, and CAN bus telemetry analysis for the UC Berkeley Solar Vehicle Team (**CalSol**).
 
-This document serves as the comprehensive technical reference for the codebase in [`CalSol/CAN_TestBench`](https://github.com/CalSol/CAN_TestBench). It provides an in-depth, code-level explanation of every module, driver, daemon, test suite, and CI automation script in the repository.
+This document is the technical reference for the codebase in [`CalSol/CAN_TestBench`](https://github.com/CalSol/CAN_TestBench). It provides an in-depth, code-level explanation of every module, driver, daemon, test suite, and CI automation script in the repository.
 
 > **Quick Links:**
-> - 🌐 **Interactive Web Telemetry Dashboard:** [https://junekim0712.github.io/CAN-Testbench/](https://junekim0712.github.io/CAN-Testbench/)
-> - 🚀 **Front-Page Setup, Test & Debugging Manual:** [`../README.md`](../README.md)
-> - 🛠️ **Stage-by-Stage Walkthrough:** [`CAN_TESTBENCH_STAGE_GUIDE.md`](CAN_TESTBENCH_STAGE_GUIDE.md)
+> - **Interactive Web Telemetry Dashboard:** [https://junekim0712.github.io/CAN-Testbench/](https://junekim0712.github.io/CAN-Testbench/)
+> - **Front-Page Setup, Test & Debugging Manual:** [`../README.md`](../README.md)
+> - **Stage-by-Stage Walkthrough:** [`CAN_TESTBENCH_STAGE_GUIDE.md`](CAN_TESTBENCH_STAGE_GUIDE.md)
 
 ---
 
@@ -443,7 +443,7 @@ Located at [`github-action/lib/unity_parser.py`](file:///C:/JuneKim0712/CAN_Test
 
 Streams serial output from the target MCU, evaluates Unity test assertions, decodes CAN frame logs, and produces structured test reports:
 
-- **Robust Unity Token Extraction:**
+- **Unity Token Extraction:**
   Unity outputs test results in standard formats:
   - Pass: `<file>:<line>:<test_name>:PASS`
   - Failure: `<file>:<line>:<test_name>:FAIL: Expected <X> Was <Y>`
@@ -487,11 +487,11 @@ Located at [`github-action/lib/pr_reporter.py`](file:///C:/JuneKim0712/CAN_TestB
 Aggregates test results across all parallel matrix jobs and static analysis steps:
 - **Pass/Fail Synthesis:** Evaluates GitHub Actions job conclusions (`hw_jobs`), test JSON reports, and crash logs to guarantee accurate status reporting.
 - **Dashboard Generator:** Renders the **CalSol Hardware Testbench Status Dashboard**:
-  - Verification badges (🟢 `ALL PASSED` / 🔴 `TESTS FAILED`).
+  - Verification badges (`[ALL PASSED]` / `[TESTS FAILED]`).
   - Hardware testbed summary table.
   - Detailed unit test breakdown (with `<details open>` for failed tests).
   - CAN bus telemetry decoded traffic table.
-  - Actionable failure triage diagnostic box.
+  - Failure triage diagnostic box.
 - **PR Sticky Comments:** Updates existing PR comments using GitHub's REST API or creates new sticky comments.
 
 ---

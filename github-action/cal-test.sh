@@ -59,10 +59,10 @@ CONFIG_NAME=""
 
 if [ -n "$CONFIG_FILE" ]; then
     echo "[*] Found subsystem testbench configuration: ${CONFIG_FILE}"
-    eval "$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(f'CONFIG_PORT="{d.get("port","")}"
-CONFIG_TIMEOUT="{d.get("timeout","")}"
-CONFIG_BAUD="{d.get("baud","")}"
-CONFIG_NAME="{d.get("name","")}"')" 2>/dev/null || true)"
+    CONFIG_PORT=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('port',''))" 2>/dev/null || true)
+    CONFIG_TIMEOUT=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('timeout',''))" 2>/dev/null || true)
+    CONFIG_BAUD=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('baud',''))" 2>/dev/null || true)
+    CONFIG_NAME=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('name',''))" 2>/dev/null || true)
 fi
 
 PORT="${CLI_PORT:-$CONFIG_PORT}"
@@ -93,7 +93,7 @@ if [ -z "$PORT" ]; then
     # Dedicated CAN Debugger (/dev/esp32_ahmed / ttyACM0) is permanently reserved.
     # Only probe valid DUT candidate ports:
     for candidate in "/dev/steering" "/dev/esp32_johnathan" "/dev/bms" "/dev/ttyACM1"; do
-        if [ -e "$candidate" ]; then
+        if [ "$candidate" != "$CAN_DEBUGGER_PORT" ] && [ -e "$candidate" ]; then
             PORT="$candidate"
             break
         fi
@@ -110,7 +110,7 @@ LOG_DIR="${SCRIPT_DIR}/.logs"
 mkdir -p "$LOG_DIR"
 
 echo "=================================================="
-echo " 🏎️ CalSol Hardware Testbench: ${SUBSYSTEM_SLUG}"
+echo "CalSol Hardware Testbench: ${SUBSYSTEM_SLUG}"
 echo " DUT Port:     ${PORT} (${BOARD_NAME})"
 echo " Debugger Port: ${CAN_DEBUGGER_PORT}"
 echo " Target Path:  ${TARGET}"
@@ -121,7 +121,7 @@ echo "=================================================="
 # 5. Build Firmware (Host compilation does not require hardware serial lock)
 if [ -d "$TARGET" ]; then
     cd "$TARGET"
-    gh_group "🔨 Building Firmware (${SUBSYSTEM_SLUG})"
+    gh_group "Building Firmware (${SUBSYSTEM_SLUG})"
     export IDF_CCACHE_ENABLE=1
     export CCACHE_DIR="${HOME}/.ccache"
     export CCACHE_BASEDIR="$REPO_ROOT"
@@ -164,7 +164,7 @@ fi
 
 # 7. Flash Silicon
 if [ -d "$TARGET" ]; then
-    gh_group "⚡ Flashing Silicon (${BOARD_NAME} @ ${BAUD} baud)"
+    gh_group "Flashing Silicon (${BOARD_NAME} @ ${BAUD} baud)"
     # Try high-speed app partition flashing first; fallback to full flash if needed
     if idf.py -p "$PORT" -b "$BAUD" app-flash > "$LOG_DIR/flash.log" 2>&1; then
         echo "[+] Fast differential app-flash succeeded."
@@ -178,7 +178,7 @@ if [ -d "$TARGET" ]; then
     fi
     gh_endgroup
 elif [ -f "$TARGET" ]; then
-    gh_group "⚡ Flashing Pre-built Binary (${BOARD_NAME})"
+    gh_group "Flashing Pre-built Binary (${BOARD_NAME})"
     if esptool.py --port "$PORT" --baud "$BAUD" write_flash 0x10000 "$TARGET" > "$LOG_DIR/flash.log" 2>&1; then
         echo "[+] Flash succeeded."
     else
@@ -211,7 +211,7 @@ if [ ! -S "/tmp/calsol_can.sock" ] && [ -e "$CAN_DEBUGGER_PORT" ]; then
     sleep 0.3
 fi
 
-gh_group "🧪 On-Target Silicon Execution & Live CAN Stream (${SUBSYSTEM_SLUG})"
+gh_group "On-Target Silicon Execution & Live CAN Stream (${SUBSYSTEM_SLUG})"
 echo "[*] Monitoring DUT UART output & physical CAN bus traffic..."
 set +e
 python3 "$PARSER" \
@@ -246,7 +246,7 @@ if [ -d "$TARGET" ]; then
 fi
 
 if [ "$TEST_EXIT_CODE" -ne 0 ] && [ -n "$ELF_FILE" ] && [ -f "$SERIAL_LOG" ]; then
-    gh_group "🔬 Post-Mortem Crash Backtrace Decoder"
+    gh_group "Post-Mortem Crash Backtrace Decoder"
     CRASH_JSON="${LOG_DIR}/${SUBSYSTEM_SLUG}_crash_report.json"
     python3 "${SCRIPT_DIR}/lib/crash_decoder.py" \
         --log-file "$SERIAL_LOG" \
