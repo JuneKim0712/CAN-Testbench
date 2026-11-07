@@ -19,7 +19,7 @@
   report job succeeded and uploaded telemetry artifacts. This is a genuine
   hardware acceptance failure, not a green CI run.
 - Bridge and private viewer are deployed independently of the CI checkout under
-  `/opt/calsol/releases/2594822c77c9eb1182aa2722aa15dc1db39d8ca3`.
+  `/opt/calsol/releases/f6ea66637722c8f8d2c8a43b2a4028b565b1d05f`.
   Persistent telemetry is under /var/lib/calsol and rotated logs /var/log/calsol.
 - The loopback viewer was browser-verified through SSH. Tailscale Serve requires
   account access unavailable in this session, so PRIVATE_VIEWER.md provides
@@ -58,6 +58,23 @@ those gates.
 Physical transceiver power/wiring, physical TX/RX delivery, real bus-load/soak,
 and physical bus fault recovery cannot be marked passed while neither node
 receives the other's traffic. They require bench-side correction/confirmation.
+
+## Final CI evidence
+
+Code revision: f6ea66637722c8f8d2c8a43b2a4028b565b1d05f.
+Final run: https://github.com/JuneKim0712/CAN-Testbench/actions/runs/42360396169
+
+- Software regression/static-analysis job: passed (23 tests).
+- Discovery: passed.
+- Lights hardware job: failed; five logic tests passed, required physical
+  heartbeat captures absent. Result physical_expectations_passed=false.
+- Report job: passed. Downloaded test report and telemetry bundle both preserve
+  the failed hardware outcome and empty physical capture, verified independently.
+- Earlier all-subsystem run 42359195024 likewise preserved seven passing pedal
+  logic tests and five passing lights logic tests as failed physical verification.
+- Versioned services are active; ports 5555, 8080 and 8765 bind to 127.0.0.1 only.
+- The private viewer state retains both verified CI runs. No main-branch merge
+  or GitHub Pages production deployment was performed with failed hardware gates.
 
 November 7, 2026. This is an intermediate checkpoint, not release approval.
 
