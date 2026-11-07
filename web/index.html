@@ -287,7 +287,7 @@
     <section class="border border-neutral-800 bg-neutral-950 p-4" aria-live="polite">
       <h2>Public CAN telemetry</h2>
       <p id="publicFeedStatus">Loading the latest bench snapshot automatically…</p>
-      <p>Read-only snapshots update approximately every five minutes. GitHub scheduling and caching can delay updates.</p>
+      <p>Simulated heartbeats are labeled SIMULATED and do not verify physical CAN reception. Read-only snapshots update approximately every five minutes. GitHub scheduling and caching can delay updates.</p>
     </section>
     <!-- SNIFFER CONSOLE HEADER -->
     <section class="border border-neutral-800 bg-neutral-950 p-4 space-y-3">
@@ -1107,7 +1107,7 @@
               const seen = new Set(streamPackets.map(p => p.eventKey));
               const incoming = [];
               for (const f of payload.frames) {
-                if (f.source !== 'physical_bus' || f.direction !== 'rx') continue;
+                if (!((f.source === 'physical_bus' && f.direction === 'rx') || (f.source === 'emulated' && f.event === 'emulated_frame'))) continue;
                 const packet = formatRealPacket(f);
                 if (!seen.has(packet.eventKey)) {
                   incoming.push(packet);
@@ -1144,12 +1144,12 @@
         eventKey: f.session_id && f.sequence !== undefined
           ? `${f.session_id}:${f.sequence}` : `${f.timestamp}:${f.id}:${f.raw}`,
         time: f.time || getNowTimeString(),
-        iface: f.iface || '/dev/esp32_ahmed',
+        iface: f.source === 'emulated' ? 'SIMULATED (Pi)' : (f.iface || '/dev/esp32_ahmed'),
         id: pId,
-        name: pName,
+        name: f.source === 'emulated' ? 'EMULATED HEARTBEAT' : pName,
         dlc: f.dlc !== undefined ? f.dlc : (f.raw ? f.raw.split(' ').length : 0),
         raw: f.raw || (f.data ? f.data.toUpperCase().match(/.{1,2}/g)?.join(' ') : ''),
-        decoded: f.decoded || (f.raw ? `Payload: 0x${f.raw}` : 'Empty')
+        decoded: f.source === 'emulated' ? 'Software heartbeat • 5s interval • not physical CAN' : f.decoded || (f.raw ? `Payload: 0x${f.raw}` : 'Empty')
       };
     }
 
