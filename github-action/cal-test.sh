@@ -118,9 +118,16 @@ echo " Flashing:     ${BAUD} baud"
 echo " Test Timeout: ${TIMEOUT}s"
 echo "=================================================="
 
-# 5. Build Firmware (Host compilation does not require hardware serial lock)
-if [ -d "$TARGET" ]; then
-    cd "$TARGET"
+# 5. Target directory and artifacts normalization
+if [[ "$TARGET" = /* ]]; then
+    TARGET_DIR="$TARGET"
+else
+    TARGET_DIR="${REPO_ROOT}/${TARGET}"
+fi
+ARTIFACTS_DIR="${TARGET_DIR}/build/artifacts"
+
+# Build Firmware (Host compilation does not require hardware serial lock)
+if [ -d "$TARGET_DIR" ]; then
     gh_group "Building Firmware (${SUBSYSTEM_SLUG})"
     export IDF_CCACHE_ENABLE=1
     export CCACHE_DIR="${HOME}/.ccache"
@@ -129,10 +136,10 @@ if [ -d "$TARGET" ]; then
     export CCACHE_SLOPPINESS="time_macros,file_macro,include_file_mtime"
 
     # Fast target resolution: skip redundant set-target if target is already configured
-    if [ ! -f "sdkconfig" ] && [ ! -f "sdkconfig.defaults" ]; then
-        idf.py set-target esp32s3 > "$LOG_DIR/build.log" 2>&1
+    if [ ! -f "${TARGET_DIR}/sdkconfig" ] && [ ! -f "${TARGET_DIR}/sdkconfig.defaults" ]; then
+        idf.py -C "$TARGET_DIR" set-target esp32s3 > "$LOG_DIR/build.log" 2>&1
     fi
-    if idf.py build > "$LOG_DIR/build.log" 2>&1; then
+    if idf.py -C "$TARGET_DIR" build > "$LOG_DIR/build.log" 2>&1; then
         echo "[+] Build completed successfully."
     else
         echo "[-] Build failed!"
@@ -143,13 +150,12 @@ if [ -d "$TARGET" ]; then
     gh_endgroup
 
     # Stage trackside flashable binaries
-    ARTIFACTS_DIR="${TARGET}/build/artifacts"
     mkdir -p "$ARTIFACTS_DIR"
-    cp -f build/*.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
-    cp -f build/*.elf "$ARTIFACTS_DIR/" 2>/dev/null || true
-    cp -f build/bootloader/bootloader.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
-    cp -f build/partition_table/partition-table.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
-    cp -f build/flasher_args.json "$ARTIFACTS_DIR/" 2>/dev/null || true
+    cp -f "${TARGET_DIR}/build"/*.bin "$ARTIFACTS_DIR/" 2>/dev/null || true
+    cp -f "${TARGET_DIR}/build"/*.elf "$ARTIFACTS_DIR/" 2>/dev/null || true
+    cp -f "${TARGET_DIR}/build/bootloader/bootloader.bin" "$ARTIFACTS_DIR/" 2>/dev/null || true
+    cp -f "${TARGET_DIR}/build/partition_table/partition-table.bin" "$ARTIFACTS_DIR/" 2>/dev/null || true
+    cp -f "${TARGET_DIR}/build/flasher_args.json" "$ARTIFACTS_DIR/" 2>/dev/null || true
 fi
 
 # 6. Ensure persistent CAN bridge daemon is listening BEFORE flashing DUT so boot traffic is never lost
@@ -161,13 +167,19 @@ fi
 
 if [ ! -S "/tmp/calsol_can.sock" ] && [ -e "$CAN_DEBUGGER_PORT" ]; then
     echo "[*] Launching permanent CAN Debugger daemon on ${CAN_DEBUGGER_PORT} before DUT boot..."
+    fuser -k 5555/tcp 8765/tcp 2>/dev/null || true
+    pkill -f can_bridge_daemon.py 2>/dev/null || true
+    rm -f "/tmp/calsol_can.sock" 2>/dev/null || true
+    sleep 0.5
     python3 "${SCRIPT_DIR}/lib/can_bridge_daemon.py" \
         --port "$CAN_DEBUGGER_PORT" \
         --unix-socket "/tmp/calsol_can.sock" \
         --tcp-port 5555 \
         --ws-port 8765 \
+        --max-frames 2000 \
+        --log-file "/tmp/can_trace.jsonl" \
         --json-out "${REPO_ROOT}/web/data/live_stream.json" > /tmp/calsol_can_daemon.log 2>&1 &
-    sleep 0.8
+    sleep 1.2
 fi
 
 # 7. Unified Hardware Mutex Lock (Derived from resolved canonical device path)
@@ -184,12 +196,12 @@ if ! flock -w 30 200; then
 fi
 
 # 8. Flash Silicon
-if [ -d "$TARGET" ]; then
+if [ -d "$TARGET_DIR" ]; then
     gh_group "Flashing Silicon (${BOARD_NAME} @ ${BAUD} baud)"
     # Try high-speed app partition flashing first; fallback to full flash if needed
-    if idf.py -p "$PORT" -b "$BAUD" app-flash > "$LOG_DIR/flash.log" 2>&1; then
+    if idf.py -C "$TARGET_DIR" -p "$PORT" -b "$BAUD" app-flash > "$LOG_DIR/flash.log" 2>&1; then
         echo "[+] Fast differential app-flash succeeded."
-    elif idf.py -p "$PORT" -b "$BAUD" flash > "$LOG_DIR/flash.log" 2>&1; then
+    elif idf.py -C "$TARGET_DIR" -p "$PORT" -b "$BAUD" flash > "$LOG_DIR/flash.log" 2>&1; then
         echo "[+] Full partition flash succeeded."
     else
         echo "[-] Flashing failed!"
@@ -198,9 +210,11 @@ if [ -d "$TARGET" ]; then
         exit 1
     fi
     gh_endgroup
-elif [ -f "$TARGET" ]; then
+elif [ -f "$TARGET_DIR" ] || [ -f "$TARGET" ]; then
+    FLASH_BIN="$TARGET"
+    [ -f "$TARGET_DIR" ] && FLASH_BIN="$TARGET_DIR"
     gh_group "Flashing Pre-built Binary (${BOARD_NAME})"
-    if esptool.py --port "$PORT" --baud "$BAUD" write_flash 0x10000 "$TARGET" > "$LOG_DIR/flash.log" 2>&1; then
+    if esptool.py --port "$PORT" --baud "$BAUD" write_flash 0x10000 "$FLASH_BIN" > "$LOG_DIR/flash.log" 2>&1; then
         echo "[+] Flash succeeded."
     else
         echo "[-] Flash failed!"
@@ -232,20 +246,16 @@ TEST_EXIT_CODE=$?
 set -e
 gh_endgroup
 
-# Note: The dedicated CAN bridge daemon (/dev/esp32_ahmed) is kept permanently
-# active across runs to provide continuous 24/7 bus streaming to the web dashboard.
-
 # Stage test results, serial logs, and CAN trace into artifacts
-if [ -d "${TARGET}/build/artifacts" ]; then
-    [ -f "$RESULTS_JSON" ] && cp -f "$RESULTS_JSON" "${TARGET}/build/artifacts/" 2>/dev/null || true
-    [ -f "$SERIAL_LOG" ] && cp -f "$SERIAL_LOG" "${TARGET}/build/artifacts/" 2>/dev/null || true
-    [ -f "$CAN_TRACE_FILE" ] && cp -f "$CAN_TRACE_FILE" "${TARGET}/build/artifacts/" 2>/dev/null || true
-fi
+mkdir -p "$ARTIFACTS_DIR"
+[ -f "$RESULTS_JSON" ] && cp -f "$RESULTS_JSON" "$ARTIFACTS_DIR/" 2>/dev/null || true
+[ -f "$SERIAL_LOG" ] && cp -f "$SERIAL_LOG" "$ARTIFACTS_DIR/" 2>/dev/null || true
+[ -f "$CAN_TRACE_FILE" ] && cp -f "$CAN_TRACE_FILE" "$ARTIFACTS_DIR/" 2>/dev/null || true
 
-# 8. Post-mortem Crash Decoding on Failure
+# Post-mortem Crash Decoding on Failure
 ELF_FILE=""
-if [ -d "$TARGET" ]; then
-    ELF_FILE=$(ls "${TARGET}/build"/*.elf 2>/dev/null | head -n 1 || true)
+if [ -d "$TARGET_DIR" ]; then
+    ELF_FILE=$(ls "${TARGET_DIR}/build"/*.elf 2>/dev/null | head -n 1 || true)
 fi
 
 if [ "$TEST_EXIT_CODE" -ne 0 ] && [ -n "$ELF_FILE" ] && [ -f "$SERIAL_LOG" ]; then
@@ -256,15 +266,10 @@ if [ "$TEST_EXIT_CODE" -ne 0 ] && [ -n "$ELF_FILE" ] && [ -f "$SERIAL_LOG" ]; th
         --elf-file "$ELF_FILE" \
         --output-json "$CRASH_JSON" || true
 
-    if [ -f "$CRASH_JSON" ] && [ -d "${TARGET}/build/artifacts" ]; then
-        cp -f "$CRASH_JSON" "${TARGET}/build/artifacts/" 2>/dev/null || true
+    if [ -f "$CRASH_JSON" ] && [ -d "$ARTIFACTS_DIR" ]; then
+        cp -f "$CRASH_JSON" "$ARTIFACTS_DIR/" 2>/dev/null || true
     fi
     gh_endgroup
-fi
-
-# Copy test result JSON into artifacts
-if [ -f "$RESULTS_JSON" ] && [ -d "${TARGET}/build/artifacts" ]; then
-    cp -f "$RESULTS_JSON" "${TARGET}/build/artifacts/" 2>/dev/null || true
 fi
 
 if [ "$TEST_EXIT_CODE" -ne 0 ]; then

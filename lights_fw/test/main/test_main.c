@@ -5,7 +5,6 @@
 #include "esp_log.h"
 #include "CAN.h"
 
-
 static const char *TAG = "LIGHTS_TEST";
 
 // Subsystem Logic Under Test: Voltage Conversion from LTC4151
@@ -57,6 +56,26 @@ static void test_can_message_format(void)
     TEST_ASSERT_EQUAL_UINT8(125, msg.data[0]);
 }
 
+static void test_can_heartbeat_transmission(void)
+{
+    CAN_deinit();
+    TEST_ASSERT_EQUAL(ESP_OK, CAN_init());
+
+    // Transmit exactly 10 heartbeat frames onto physical CAN bus
+    for (int i = 0; i < 10; i++) {
+        CAN_message_t hb_msg = {0};
+        hb_msg.id = 0x02; // Lights Subsystem Heartbeat ID
+        hb_msg.dlc = 1;
+        hb_msg.data[0] = (uint8_t)(i + 1); // Sequence token 1..10
+        esp_err_t err = CAN_send(&hb_msg, 50);
+        TEST_ASSERT_EQUAL(ESP_OK, err);
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+    CAN_deinit();
+}
+
 void app_main(void)
 {
     vTaskDelay(pdMS_TO_TICKS(1500));
@@ -69,6 +88,7 @@ void app_main(void)
     RUN_TEST(test_voltage_conversion);
     RUN_TEST(test_state_toggle);
     RUN_TEST(test_can_message_format);
+    RUN_TEST(test_can_heartbeat_transmission);
     UNITY_END();
 
     ESP_LOGI(TAG, "Lights FW test run complete.");
