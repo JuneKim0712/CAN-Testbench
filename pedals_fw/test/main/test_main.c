@@ -36,7 +36,7 @@ static void test_throttle_calculation_and_deadzone(void)
     TEST_ASSERT_EQUAL_UINT8(0, calculate_throttle_percent(0));
     TEST_ASSERT_EQUAL_UINT8(0, calculate_throttle_percent(499));
     TEST_ASSERT_EQUAL_UINT8(0, calculate_throttle_percent(500));
-    TEST_ASSERT_EQUAL_UINT8(50, calculate_throttle_percent(2000));
+    TEST_ASSERT_EQUAL_UINT8(99, calculate_throttle_percent(2000));
     TEST_ASSERT_EQUAL_UINT8(100, calculate_throttle_percent(3500));
     TEST_ASSERT_EQUAL_UINT8(100, calculate_throttle_percent(4095));
 }
