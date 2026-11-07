@@ -181,9 +181,10 @@ class CANBridgeDaemon:
         print("[*] CAN Bridge Daemon stopped.")
 
     def broadcast(self, event: dict):
-        line = (json.dumps(event) + "\n").encode("utf-8")
+        text_line = json.dumps(event) + "\n"
         if self.log_file:
-            self.log_file.write(line.decode("utf-8"))
+            self.log_file.write(text_line)
+        line = text_line.encode("utf-8")
         dead = []
         for c in self.clients:
             try:
@@ -227,9 +228,7 @@ class CANBridgeDaemon:
                     continue
                 buf.extend(chunk)
                 while b'\x00' in buf:
-                    idx = buf.index(b'\x00')
-                    raw_cobs = buf[:idx]
-                    buf = buf[idx + 1:]
+                    raw_cobs, _, buf = buf.partition(b'\x00')
                     if not raw_cobs:
                         continue
                     decoded = cobs_decode(raw_cobs)

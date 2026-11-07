@@ -432,15 +432,32 @@
 
   <!-- CONTROLLER SCRIPT -->
   <script>
+    // ─── HIGH-PERFORMANCE DOM ACCESS PROXY ──────────────────────────────────
+    // Caches element lookups on first access for O(1) performance across all UI routines.
+    const dom = new Proxy({}, {
+      get: (target, id) => target[id] || (target[id] = document.getElementById(id))
+    });
+
+    // ─── STATE MANAGEMENT ───────────────────────────────────────────────────
     let historyState = { runs: [] };
     let currentRun = null;
-    let isPlaying = false;
     let playbackTime = 0.0;
     let maxPlaybackTime = 6.0;
-    let animId = null;
-    let lastTime = 0;
-    let testFilterMode = 'all'; // 'all' or 'fail'
+    let testFilterMode = 'all';       // 'all' | 'fail'
+    let currentSubsystemFilter = 'all'; // 'all' | 'pedals_fw' | 'lights_fw'
+    let hoverRaf = null;
 
+    const CAN_COLORS = [
+      '#fde047', // Pastel Yellow
+      '#7dd3fc', // Pastel Cyan
+      '#86efac', // Pastel Green
+      '#fca5a5', // Pastel Red
+      '#c084fc', // Pastel Purple
+      '#fdba74', // Pastel Orange
+      '#f9a8d4'  // Pastel Pink
+    ];
+
+    // ─── DATA INGESTION & FALLBACK ──────────────────────────────────────────
     async function initData() {
       try {
         const res = await fetch('data/history.json');
@@ -521,7 +538,7 @@
         };
       }
 
-      // Support direct linking via URL query parameter (?run=<run_id> or ?subsystem=<subsystem>)
+      // Check URL search parameters
       const urlParams = new URLSearchParams(window.location.search);
       const requestedSub = urlParams.get('subsystem');
       if (requestedSub && ['pedals_fw', 'lights_fw'].includes(requestedSub)) {
@@ -539,24 +556,29 @@
       }
     }
 
-    let currentSubsystemFilter = 'all';
-
+    // ─── SUBSYSTEM FILTERING ────────────────────────────────────────────────
     function updateSubsystemFilterButtons() {
       const sub = currentSubsystemFilter;
-      document.getElementById('btnSubAll').className = sub === 'all'
-        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-[10px] border border-neutral-700'
-        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700';
-      document.getElementById('btnSubPedals').className = sub === 'pedals_fw'
-        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-[10px] border border-neutral-700'
-        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700';
-      document.getElementById('btnSubLights').className = sub === 'lights_fw'
-        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-[10px] border border-neutral-700'
-        : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700';
+      const activeClass = 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-[10px] border border-neutral-700';
+      const inactiveClass = 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-[10px] border border-transparent hover:border-neutral-700';
+
+      dom.btnSubAll.className = (sub === 'all') ? activeClass : inactiveClass;
+      dom.btnSubPedals.className = (sub === 'pedals_fw') ? activeClass : inactiveClass;
+      dom.btnSubLights.className = (sub === 'lights_fw') ? activeClass : inactiveClass;
     }
 
     function setSubsystemFilter(sub) {
       currentSubsystemFilter = sub;
       updateSubsystemFilterButtons();
+
+      const url = new URL(window.location);
+      if (sub === 'all') {
+        url.searchParams.delete('subsystem');
+      } else {
+        url.searchParams.set('subsystem', sub);
+      }
+      window.history.replaceState(null, '', url);
+
       populateRunSelector();
       const filtered = getFilteredRuns();
       if (filtered.length > 0) {
@@ -570,7 +592,7 @@
     }
 
     function populateRunSelector() {
-      const select = document.getElementById('runSelect');
+      const select = dom.runSelect;
       const runs = getFilteredRuns();
       select.innerHTML = runs.map(r => {
         let tag = '[PASS]';
@@ -587,35 +609,38 @@
       }).join('');
     }
 
+    // ─── RUN SWITCHING & METADATA BINDING ───────────────────────────────────
     function switchRun(runId) {
       currentRun = historyState.runs.find(r => r.id === runId) || historyState.runs[0];
-      
-      // Update browser URL query param (?run=...) without full reload
+      if (!currentRun) return;
+
+      // Invalidate memoized IDs
+      delete currentRun._distinctIds;
+
+      // Update URL query parameter
       const url = new URL(window.location);
       url.searchParams.set('run', currentRun.id);
       window.history.replaceState(null, '', url);
 
-      document.getElementById('runSelect').value = currentRun.id;
+      dom.runSelect.value = currentRun.id;
 
-      // Update Commit link
-      const commitLink = document.getElementById('runCommitLink');
-      commitLink.innerText = currentRun.commit + ' ↗';
-      commitLink.href = `https://github.com/JuneKim0712/CAN-Testbench/commit/${currentRun.commit}`;
+      // Links
+      dom.runCommitLink.innerText = currentRun.commit + ' ↗';
+      dom.runCommitLink.href = `https://github.com/JuneKim0712/CAN-Testbench/commit/${currentRun.commit}`;
 
-      // Update GitHub Action Run link (points to parent workflow run)
-      const actionLink = document.getElementById('runActionLink');
       const parentId = currentRun.parent_run_id || (currentRun.id.includes('-') ? currentRun.id.split('-')[0] : currentRun.id);
-      actionLink.innerText = `#${parentId} ↗`;
-      actionLink.href = `https://github.com/JuneKim0712/CAN-Testbench/actions/runs/${parentId}`;
+      dom.runActionLink.innerText = `#${parentId} ↗`;
+      dom.runActionLink.href = `https://github.com/JuneKim0712/CAN-Testbench/actions/runs/${parentId}`;
 
-      document.getElementById('runDuration').innerText = currentRun.duration;
-      document.getElementById('runLockTime').innerText = `${currentRun.lock_duration_sec}s`;
-      document.getElementById('statLockScope').innerText = `${currentRun.lock_duration_sec}s`;
+      dom.runDuration.innerText = currentRun.duration || '0.0s';
+      dom.runLockTime.innerText = `${currentRun.lock_duration_sec || 0}s`;
+      dom.statLockScope.innerText = `${currentRun.lock_duration_sec || 0}s`;
 
-      const badge = document.getElementById('runStatusBadge');
-      const triageBox = document.getElementById('failureTriageBox');
-      const inProgressBox = document.getElementById('inProgressBox');
-      const headerMutex = document.getElementById('headerMutexStatus');
+      // Status Banners
+      const badge = dom.runStatusBadge;
+      const triageBox = dom.failureTriageBox;
+      const inProgressBox = dom.inProgressBox;
+      const headerMutex = dom.headerMutexStatus;
 
       if (currentRun.status === 'passed') {
         badge.innerText = '[STATUS: ALL PASSED]';
@@ -631,13 +656,12 @@
         headerMutex.innerHTML = '<span class="text-pastel-yellow font-bold uppercase">Locked (Active Run)</span>';
 
         const ip = currentRun.in_progress_details || {};
-        document.getElementById('inProgressPhase').innerText = ip.current_phase || 'Silicon Flashing & Unity Suite Execution';
-        document.getElementById('inProgressActiveTest').innerText = ip.active_test || 'test_can_packet_builder_clamping_and_zeroing';
-        document.getElementById('inProgressNode').innerText = ip.target_node || 'stolerpi (ARM64 HIL)';
-        document.getElementById('inProgressPort').innerText = `Port: ${ip.active_port || '/dev/esp32_johnathan'} • Serial Baud: 115200 • CAN: 500 kbps`;
-        document.getElementById('inProgressSummary').innerText = ip.summary || 'Hardware execution underway on bench.';
+        dom.inProgressPhase.innerText = ip.current_phase || 'Silicon Flashing & Unity Suite Execution';
+        dom.inProgressActiveTest.innerText = ip.active_test || 'test_can_packet_builder_clamping_and_zeroing';
+        dom.inProgressNode.innerText = ip.target_node || 'stolerpi (ARM64 HIL)';
+        dom.inProgressPort.innerText = `Port: ${ip.active_port || '/dev/esp32_johnathan'} • Serial Baud: 115200 • CAN: 500 kbps`;
+        dom.inProgressSummary.innerText = ip.summary || 'Hardware execution underway on bench.';
       } else {
-        // Failed Run (Assertion, Build, Timeout, Static Check)
         inProgressBox.classList.add('hidden');
         triageBox.classList.remove('hidden');
         headerMutex.innerHTML = '<span class="text-white font-semibold uppercase">Unlocked (Ready)</span>';
@@ -646,90 +670,81 @@
         const fd = currentRun.failure_details || {};
         const firstFail = currentRun.tests ? currentRun.tests.find(t => t.status === 'FAIL') : null;
 
-        if (fType === 'build_failure') {
-          badge.innerText = '[STATUS: COMPILATION FAILED]';
-        } else if (fType === 'lock_timeout') {
-          badge.innerText = '[STATUS: BENCH TIMEOUT]';
-        } else if (fType === 'static_analysis_failure') {
-          badge.innerText = '[STATUS: STATIC CHECK FAILED]';
-        } else {
-          badge.innerText = '[STATUS: ASSERTION FAILED]';
-        }
-        badge.className = 'border border-pastel-redBorder/40 bg-pastel-redBg/30 text-pastel-red px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center';
+        if (fType === 'build_failure') badge.innerText = '[STATUS: COMPILATION FAILED]';
+        else if (fType === 'lock_timeout') badge.innerText = '[STATUS: BENCH TIMEOUT]';
+        else if (fType === 'static_analysis_failure') badge.innerText = '[STATUS: STATIC CHECK FAILED]';
+        else badge.innerText = '[STATUS: ASSERTION FAILED]';
 
-        document.getElementById('failTitle').innerText = fd.title || 'Hardware Verification Failure Detected';
-        document.getElementById('failExitCode').innerText = fd.exit_code || '1 (Hardware Verification Failed)';
-        document.getElementById('failLocation').innerText = fd.location || (firstFail ? `${firstFail.subsystem} -> ${firstFail.file}:${firstFail.line} (${firstFail.name})` : 'Unknown');
-        document.getElementById('failDiff').innerText = fd.diff || (firstFail ? firstFail.details : 'No error trace provided');
-        document.getElementById('failReproCmd').innerText = fd.repro || './github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan';
-        document.getElementById('failSummary').innerText = fd.summary || 'Execute the command above to reproduce locally.';
+        badge.className = 'border border-pastel-redBorder/40 bg-pastel-redBg/30 text-pastel-red px-2 py-0.5 font-bold uppercase tracking-wide text-[11px] block text-center';
+        dom.failTitle.innerText = fd.title || 'Hardware Verification Failure Detected';
+        dom.failExitCode.innerText = fd.exit_code || '1 (Hardware Verification Failed)';
+        dom.failLocation.innerText = fd.location || (firstFail ? `${firstFail.subsystem} -> ${firstFail.file}:${firstFail.line} (${firstFail.name})` : 'Unknown');
+        dom.failDiff.innerText = fd.diff || (firstFail ? firstFail.details : 'No error trace provided');
+        dom.failReproCmd.innerText = fd.repro || './github-action/cal-test.sh pedals_fw/test /dev/esp32_johnathan';
+        dom.failSummary.innerText = fd.summary || 'Execute the command above to reproduce locally.';
       }
 
-      // Compute adaptive playback time window based on CAN packet timestamps
-      const maxT = currentRun.can_packets && currentRun.can_packets.length > 0 
-        ? Math.max(...currentRun.can_packets.map(p => p.t)) 
-        : 0;
+      // Compute Adaptive Time Window
+      const packets = currentRun.can_packets || [];
+      const maxT = packets.length > 0 ? Math.max(...packets.map(p => p.t)) : 0;
       maxPlaybackTime = Math.max(0.6, Math.ceil(maxT * 1.25 * 10) / 10);
 
-      // Stats - derive defensively from parsed assertions if available
+      // Unit Assertions Stats
       const passCount = currentRun.tests && currentRun.tests.length > 0
-        ? currentRun.tests.filter(t => t.status === 'PASS').length 
-        : currentRun.tests_pass;
-      const totalCount = currentRun.tests && currentRun.tests.length > 0 
-        ? currentRun.tests.length 
-        : currentRun.tests_total;
+        ? currentRun.tests.filter(t => t.status === 'PASS').length
+        : (currentRun.tests_pass || 0);
+      const totalCount = currentRun.tests && currentRun.tests.length > 0
+        ? currentRun.tests.length
+        : (currentRun.tests_total || 0);
 
-      document.getElementById('statTestsPass').innerText = passCount;
-      document.getElementById('statTestsTotal').innerText = totalCount;
-      document.getElementById('statCanFrames').innerText = currentRun.can_packets ? currentRun.can_packets.length : 0;
+      dom.statTestsPass.innerText = passCount;
+      dom.statTestsTotal.innerText = totalCount;
+      dom.statCanFrames.innerText = packets.length;
 
       const pct = totalCount > 0 ? (passCount / totalCount) * 100 : (currentRun.status === 'passed' ? 100 : 0);
-      const bar = document.getElementById('statTestBar');
-      bar.style.width = `${pct}%`;
-      bar.className = currentRun.status === 'passed' ? 'h-full bg-pastel-green' : (currentRun.status === 'in_progress' ? 'h-full bg-pastel-cyan' : 'h-full bg-pastel-red');
+      dom.statTestBar.style.width = `${pct}%`;
+      dom.statTestBar.className = currentRun.status === 'passed' ? 'h-full bg-pastel-green' : (currentRun.status === 'in_progress' ? 'h-full bg-pastel-cyan' : 'h-full bg-pastel-red');
 
-      // Populate ID filter and timeline legend dynamically
+      // Populate ID filter and timeline legend
       populateIdFilter();
       updateTimelineLegend();
 
-      // Subsystem Badges
+      // Subsystem Badge
       const sub = currentRun.subsystem || (currentRun.subsystems ? currentRun.subsystems[0] : 'ECU');
-      const subContainer = document.getElementById('subsystemList');
       const subBadgeLabel = sub === 'pedals_fw' ? 'PEDALS_FW (BRAKE / THROTTLE)' : (sub === 'lights_fw' ? 'LIGHTS_FW (LIGHTING SYSTEM)' : sub.toUpperCase());
-      subContainer.innerHTML = `<span class="border border-neutral-700 bg-neutral-900 px-2 py-1 text-white font-mono uppercase text-[10px] font-semibold">${subBadgeLabel}</span>`;
+      dom.subsystemList.innerHTML = `<span class="border border-neutral-700 bg-neutral-900 px-2 py-1 text-white font-mono uppercase text-[10px] font-semibold">${subBadgeLabel}</span>`;
 
-      // Update Trackside Flash Command for this specific subsystem
-      const flashCmd = document.getElementById('flashCmd');
-      if (flashCmd) {
-        flashCmd.innerText = `python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 ${sub}.bin`;
+      // Trackside Flash Command
+      if (dom.flashCmd) {
+        dom.flashCmd.innerText = `python3 -m esptool --chip esp32s3 -p /dev/esp32_johnathan -b 921600 write_flash 0x10000 ${sub}.bin`;
       }
 
       // Test Table
-      document.getElementById('testRatioLabel').innerText = `${passCount} / ${totalCount} PASSED`;
+      dom.testRatioLabel.innerText = `${passCount} / ${totalCount} PASSED`;
       renderTestTable();
 
-      // Default: Display all packets immediately across timeline and table
+      // Default Playhead
       playbackTime = maxPlaybackTime;
-      document.getElementById('timeScrubber').value = 100;
-      const maxLabel = document.getElementById('scrubberMaxLabel');
-      if (maxLabel) maxLabel.innerText = `+${maxPlaybackTime.toFixed(2)}s`;
+      dom.timeScrubber.value = 100;
+      if (dom.scrubberMaxLabel) dom.scrubberMaxLabel.innerText = `+${maxPlaybackTime.toFixed(2)}s`;
 
       updateUI();
     }
 
+    // ─── TEST TABLE FILTERING ───────────────────────────────────────────────
     function setTestFilter(mode) {
       testFilterMode = mode;
-      document.getElementById('btnFilterAll').className = mode === 'all' 
-        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase' 
+      dom.btnFilterAll.className = (mode === 'all')
+        ? 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase'
         : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
-      document.getElementById('btnFilterFail').className = mode === 'fail' 
-        ? 'px-2 py-0.5 bg-pastel-redBg text-pastel-red font-bold uppercase border border-pastel-redBorder/40' 
+      dom.btnFilterFail.className = (mode === 'fail')
+        ? 'px-2 py-0.5 bg-pastel-redBg text-pastel-red font-bold uppercase border border-pastel-redBorder/40'
         : 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase';
       renderTestTable();
     }
 
     function renderTestTable() {
-      const testBody = document.getElementById('testTableBody');
+      const testBody = dom.testTableBody;
       const tests = (currentRun.tests || []).filter(t => testFilterMode === 'all' || t.status === 'FAIL');
 
       if (tests.length === 0) {
@@ -774,30 +789,22 @@
       }).join('');
     }
 
-    const CAN_COLORS = [
-      '#fde047', // Pastel Yellow
-      '#7dd3fc', // Pastel Cyan
-      '#86efac', // Pastel Green
-      '#fca5a5', // Pastel Red
-      '#c084fc', // Pastel Purple
-      '#fdba74', // Pastel Orange
-      '#f9a8d4'  // Pastel Pink
-    ];
+    // ─── CAN BUS UTILITIES & MEMOIZATION ────────────────────────────────────
+    function getDistinctIds() {
+      if (!currentRun || !currentRun.can_packets) return [];
+      if (!currentRun._distinctIds) {
+        currentRun._distinctIds = Array.from(new Set(currentRun.can_packets.map(p => p.id)));
+      }
+      return currentRun._distinctIds;
+    }
 
     function getColorForId(canId, distinctIds) {
       const idx = distinctIds.indexOf(canId);
       return idx >= 0 ? CAN_COLORS[idx % CAN_COLORS.length] : '#ffffff';
     }
 
-    function getDistinctIds() {
-      if (!currentRun || !currentRun.can_packets) return [];
-      const set = new Set();
-      currentRun.can_packets.forEach(p => set.add(p.id));
-      return Array.from(set);
-    }
-
     function populateIdFilter() {
-      const select = document.getElementById('idFilter');
+      const select = dom.idFilter;
       const distinct = getDistinctIds();
       if (distinct.length === 0) {
         select.innerHTML = '<option value="all">NO TRAFFIC (0 FRAMES)</option>';
@@ -813,7 +820,7 @@
     }
 
     function updateTimelineLegend() {
-      const legend = document.getElementById('timelineLegend');
+      const legend = dom.timelineLegend;
       const distinct = getDistinctIds();
       if (distinct.length === 0) {
         legend.innerHTML = '<span class="text-neutral-500 font-mono text-[10px]">[IN-MEMORY TEST • NO BUS BROADCASTS]</span>';
@@ -838,39 +845,42 @@
       updateUI();
     }
 
+    // ─── HIGH-SPEED O(N) PACKET TABLE RENDERER ──────────────────────────────
     function renderPacketsTable() {
-      const filter = document.getElementById('idFilter').value;
-      const tbody = document.getElementById('packetTableBody');
+      const filter = dom.idFilter.value;
+      const tbody = dom.packetTableBody;
       const packets = currentRun ? (currentRun.can_packets || []) : [];
 
       if (packets.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No physical bus frames captured for this run.</td></tr>`;
-        return;
-      }
-
-      const visible = packets.filter(p => {
-        return (filter === 'all' || p.id.toLowerCase() === filter.toLowerCase());
-      });
-
-      if (visible.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-neutral-600 uppercase tracking-wider font-mono">No packets matching filter ${filter}</td></tr>`;
+        tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No physical bus frames captured for this run.</td></tr>';
         return;
       }
 
       const distinct = getDistinctIds();
-      const arrived = packets.filter(p => p.t <= playbackTime);
-      const activePacket = arrived.length > 0 ? arrived[arrived.length - 1] : packets[0];
+      // Fast backward scan to locate active frame at current playhead
+      let activeIdx = -1;
+      for (let i = packets.length - 1; i >= 0; i--) {
+        if (packets[i].t <= playbackTime) {
+          activeIdx = i;
+          break;
+        }
+      }
+      const activePacket = activeIdx >= 0 ? packets[activeIdx] : packets[0];
 
-      tbody.innerHTML = visible.map(p => {
-        const origIdx = packets.indexOf(p);
-        const prevP = origIdx > 0 ? packets[origIdx - 1] : null;
+      let rows = '';
+      for (let i = 0; i < packets.length; i++) {
+        const p = packets[i];
+        if (filter !== 'all' && p.id.toLowerCase() !== filter.toLowerCase()) continue;
+
+        const prevP = i > 0 ? packets[i - 1] : null;
         const deltaMs = prevP ? '+' + ((p.t - prevP.t) * 1000).toFixed(1) + ' ms' : 'Initial';
         const color = getColorForId(p.id, distinct);
         const isLatest = (p === activePacket);
         const isPastPlayhead = p.t > playbackTime;
+        const rowClass = isLatest ? 'bg-neutral-800 border-l-2 border-white' : (isPastPlayhead ? 'opacity-40 hover:opacity-100 hover:bg-neutral-900' : 'hover:bg-neutral-900');
 
-        return `
-          <tr class="${isLatest ? 'bg-neutral-800 border-l-2 border-white' : (isPastPlayhead ? 'opacity-40 hover:opacity-100 hover:bg-neutral-900' : 'hover:bg-neutral-900')} transition font-mono text-[11px] cursor-pointer" onclick="seekToPacket(${p.t})" title="Click to inspect this frame on timeline">
+        rows += `
+          <tr class="${rowClass} transition font-mono text-[11px] cursor-pointer" onclick="seekToPacket(${p.t})" title="Click to inspect this frame on timeline">
             <td class="py-1.5 px-3 text-neutral-300 font-bold">+${p.t.toFixed(2)}s</td>
             <td class="py-1.5 px-3 text-neutral-500">${deltaMs}</td>
             <td class="py-1.5 px-3 font-bold" style="color: ${color}">${p.id}</td>
@@ -880,18 +890,30 @@
             <td class="py-1.5 px-3 text-pastel-green font-medium">${p.decoded}</td>
           </tr>
         `;
-      }).join('');
+      }
+
+      tbody.innerHTML = rows || `<tr><td colspan="7" class="py-4 text-center text-neutral-600 uppercase tracking-wider font-mono">No packets matching filter ${filter}</td></tr>`;
     }
 
-    // ─── DYNAMIC CAN BUS ACTIVITY & TIMING ANALYZER ─────────────────────────
-    function drawWaveform() {
-      const canvas = document.getElementById('waveformCanvas');
-      const ctx = canvas.getContext('2d');
+    // ─── HARDWARE-ACCELERATED WAVEFORM RENDERER ─────────────────────────────
+    function syncCanvasResolution(canvas, ctx) {
       const dpr = window.devicePixelRatio || 1;
+      const targetW = Math.round(canvas.clientWidth * dpr);
+      const targetH = Math.round(canvas.clientHeight * dpr);
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+        ctx.scale(dpr, dpr);
+        return true;
+      }
+      return false;
+    }
 
-      canvas.width = canvas.clientWidth * dpr;
-      canvas.height = canvas.clientHeight * dpr;
-      ctx.scale(dpr, dpr);
+    function drawWaveform() {
+      const canvas = dom.waveformCanvas;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      syncCanvasResolution(canvas, ctx);
 
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -992,9 +1014,12 @@
 
         // Packet Arrival Pulses
         const lanePackets = packets.filter(p => p.id === id);
+        let latestArrived = null;
+
         lanePackets.forEach(p => {
           const x = marginL + (p.t / maxPlaybackTime) * plotW;
           const isArrived = p.t <= playbackTime;
+          if (isArrived) latestArrived = p;
 
           // Pulse vertical line
           ctx.strokeStyle = isArrived ? color : '#333333';
@@ -1007,15 +1032,16 @@
           // Packet top square
           ctx.fillStyle = isArrived ? color : '#404040';
           ctx.fillRect(x - 2.5, laneY - 12.5, 5, 5);
-
-          // If arrived and latest in this lane, draw tiny payload tag
-          if (isArrived && p === lanePackets.filter(x => x.t <= playbackTime).slice(-1)[0]) {
-            ctx.fillStyle = color;
-            ctx.font = '8px monospace';
-            const tag = p.raw.length > 5 ? p.raw.substring(0, 5) : p.raw;
-            ctx.fillText(tag, x - 6, laneY - 15);
-          }
         });
+
+        // Tiny payload tag on latest arrived packet in lane
+        if (latestArrived) {
+          const x = marginL + (latestArrived.t / maxPlaybackTime) * plotW;
+          ctx.fillStyle = color;
+          ctx.font = '8px monospace';
+          const tag = latestArrived.raw.length > 5 ? latestArrived.raw.substring(0, 5) : latestArrived.raw;
+          ctx.fillText(tag, x - 6, laneY - 15);
+        }
       });
 
       // ── Aggregate Bus Activity Lane (Bottom Raster) ────────────────────────
@@ -1043,45 +1069,48 @@
       updateHUD();
     }
 
+    // ─── HUD TELEMETRY UPDATE ───────────────────────────────────────────────
     function updateHUD() {
-      document.getElementById('hudTime').innerText = `t = +${playbackTime.toFixed(2)}s`;
+      dom.hudTime.innerText = `t = +${playbackTime.toFixed(2)}s`;
 
       const packets = currentRun ? (currentRun.can_packets || []) : [];
       if (packets.length === 0) {
-        document.getElementById('hudMessage').innerText = 'NO BUS TRAFFIC';
-        document.getElementById('hudDelta').innerText = '—';
-        document.getElementById('hudPayload').innerText = '—';
-        document.getElementById('hudDecoded').innerText = 'In-memory unit assertions only';
+        dom.hudMessage.innerText = 'NO BUS TRAFFIC';
+        dom.hudDelta.innerText = '—';
+        dom.hudPayload.innerText = '—';
+        dom.hudDecoded.innerText = 'In-memory unit assertions only';
         return;
       }
 
-      // Find all packets arrived at or prior to playbackTime
-      const arrived = packets.filter(p => p.t <= playbackTime);
-      const active = arrived.slice(-1)[0] || packets[0];
+      let activeIdx = -1;
+      for (let i = packets.length - 1; i >= 0; i--) {
+        if (packets[i].t <= playbackTime) {
+          activeIdx = i;
+          break;
+        }
+      }
+      const active = activeIdx >= 0 ? packets[activeIdx] : packets[0];
 
       if (active) {
-        document.getElementById('hudMessage').innerText = `${active.id} • ${active.name}`;
-        
-        // Calculate delta t from immediately prior packet in full list
-        const activeIdx = packets.indexOf(active);
+        dom.hudMessage.innerText = `${active.id} • ${active.name}`;
         if (activeIdx > 0) {
           const prev = packets[activeIdx - 1];
           const dtMs = ((active.t - prev.t) * 1000).toFixed(1);
-          document.getElementById('hudDelta').innerText = `+${dtMs} ms`;
+          dom.hudDelta.innerText = `+${dtMs} ms`;
         } else {
-          document.getElementById('hudDelta').innerText = 'Initial Frame';
+          dom.hudDelta.innerText = 'Initial Frame';
         }
-
-        document.getElementById('hudPayload').innerText = `0x${active.raw} (${active.dlc}B)`;
-        document.getElementById('hudDecoded').innerText = active.decoded || 'Raw Frame';
+        dom.hudPayload.innerText = `0x${active.raw} (${active.dlc}B)`;
+        dom.hudDecoded.innerText = active.decoded || 'Raw Frame';
       } else {
-        document.getElementById('hudMessage').innerText = 'BUS STANDBY';
-        document.getElementById('hudDelta').innerText = '—';
-        document.getElementById('hudPayload').innerText = '—';
-        document.getElementById('hudDecoded').innerText = 'Awaiting packet';
+        dom.hudMessage.innerText = 'BUS STANDBY';
+        dom.hudDelta.innerText = '—';
+        dom.hudPayload.innerText = '—';
+        dom.hudDecoded.innerText = 'Awaiting packet';
       }
     }
 
+    // ─── PLAYHEAD & SCRUBBING ───────────────────────────────────────────────
     function scrub(val) {
       playbackTime = (val / 100) * maxPlaybackTime;
       updateUI();
@@ -1089,20 +1118,20 @@
 
     function updateUI() {
       const pct = maxPlaybackTime > 0 ? (playbackTime / maxPlaybackTime) * 100 : 100;
-      document.getElementById('timeScrubber').value = pct;
+      dom.timeScrubber.value = pct;
 
-      const canvas = document.getElementById('waveformCanvas');
+      const canvas = dom.waveformCanvas;
       const marginL = 75;
       const marginR = 15;
       const plotW = canvas.clientWidth - marginL - marginR;
       const xPixel = marginL + (maxPlaybackTime > 0 ? (playbackTime / maxPlaybackTime) * plotW : plotW);
 
-      document.getElementById('playhead').style.left = `${(xPixel / canvas.clientWidth) * 100}%`;
+      dom.playhead.style.left = `${(xPixel / canvas.clientWidth) * 100}%`;
       drawWaveform();
       renderPacketsTable();
     }
 
-    // Canvas Click & Hover Interactions
+    // ─── CANVAS INTERACTIVITY (CLICK & HOVER) ───────────────────────────────
     function handleCanvasClick(e) {
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
@@ -1118,53 +1147,58 @@
     }
 
     function handleCanvasHover(e) {
-      const container = document.getElementById('canvasContainer');
-      const rect = container.getBoundingClientRect();
-      const hoverX = e.clientX - rect.left;
-      const marginL = 75;
-      const marginR = 15;
-      const plotW = rect.width - marginL - marginR;
+      if (hoverRaf) return;
+      const clientX = e.clientX;
+      hoverRaf = requestAnimationFrame(() => {
+        hoverRaf = null;
+        const container = dom.canvasContainer;
+        const rect = container.getBoundingClientRect();
+        const hoverX = clientX - rect.left;
+        const marginL = 75;
+        const marginR = 15;
+        const plotW = rect.width - marginL - marginR;
 
-      const cursor = document.getElementById('hoverCursor');
-      const tooltip = document.getElementById('hoverTooltip');
+        const cursor = dom.hoverCursor;
+        const tooltip = dom.hoverTooltip;
 
-      if (hoverX >= marginL && hoverX <= marginL + plotW) {
-        cursor.classList.remove('hidden');
-        tooltip.classList.remove('hidden');
-        cursor.style.left = `${hoverX}px`;
+        if (hoverX >= marginL && hoverX <= marginL + plotW) {
+          cursor.classList.remove('hidden');
+          tooltip.classList.remove('hidden');
+          cursor.style.left = `${hoverX}px`;
 
-        const fraction = (hoverX - marginL) / plotW;
-        const hoverT = fraction * maxPlaybackTime;
+          const fraction = (hoverX - marginL) / plotW;
+          const hoverT = fraction * maxPlaybackTime;
 
-        // Find nearest packet to hover position
-        const packets = currentRun ? (currentRun.can_packets || []) : [];
-        let nearest = null;
-        let minDiff = 999;
-        packets.forEach(p => {
-          const diff = Math.abs(p.t - hoverT);
-          if (diff < minDiff && diff < 0.25) {
-            minDiff = diff;
-            nearest = p;
+          const packets = currentRun ? (currentRun.can_packets || []) : [];
+          let nearest = null;
+          let minDiff = 999;
+          for (let i = 0; i < packets.length; i++) {
+            const diff = Math.abs(packets[i].t - hoverT);
+            if (diff < minDiff && diff < 0.25) {
+              minDiff = diff;
+              nearest = packets[i];
+            }
           }
-        });
 
-        tooltip.style.left = `${Math.min(rect.width - 160, hoverX + 8)}px`;
-        if (nearest) {
-          tooltip.innerText = `t = +${nearest.t.toFixed(2)}s | ${nearest.id} ${nearest.name} | ${nearest.raw}`;
+          tooltip.style.left = `${Math.min(rect.width - 160, hoverX + 8)}px`;
+          if (nearest) {
+            tooltip.innerText = `t = +${nearest.t.toFixed(2)}s | ${nearest.id} ${nearest.name} | ${nearest.raw}`;
+          } else {
+            tooltip.innerText = `t = +${hoverT.toFixed(2)}s`;
+          }
         } else {
-          tooltip.innerText = `t = +${hoverT.toFixed(2)}s`;
+          handleCanvasLeave();
         }
-      } else {
-        handleCanvasLeave();
-      }
+      });
     }
 
     function handleCanvasLeave() {
-      document.getElementById('hoverCursor').classList.add('hidden');
-      document.getElementById('hoverTooltip').classList.add('hidden');
+      dom.hoverCursor.classList.add('hidden');
+      dom.hoverTooltip.classList.add('hidden');
     }
 
-    window.addEventListener('resize', drawWaveform);
+    // Window Events
+    window.addEventListener('resize', updateUI);
     window.addEventListener('DOMContentLoaded', initData);
   </script>
 </body>

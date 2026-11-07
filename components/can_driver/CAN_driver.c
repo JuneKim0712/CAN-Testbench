@@ -147,11 +147,14 @@ esp_err_t CAN_send(const CAN_message_t *frame, uint32_t timeout_ms)
         .buffer_len = len,
     };
 
-    // Telemetry log for automated testbench capture and tracing
+    // Fast inline hex formatting without snprintf overhead for high-throughput CAN telemetry
+    static const char hex_chars[] = "0123456789ABCDEF";
     char hex_buf[17] = {0};
     for (size_t i = 0; i < len; i++) {
-        snprintf(&hex_buf[i * 2], 3, "%02X", buf[i]);
+        hex_buf[i * 2]     = hex_chars[(buf[i] >> 4) & 0x0F];
+        hex_buf[i * 2 + 1] = hex_chars[buf[i] & 0x0F];
     }
+    hex_buf[len * 2] = '\0';
     ESP_LOGI("CAN", "[CAN_FRAME] ID:0x%03lX DLC:%zu DATA:%s", (unsigned long)frame->id, len, hex_buf);
 
     // Node API timeouts are in milliseconds 

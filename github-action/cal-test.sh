@@ -59,10 +59,10 @@ CONFIG_NAME=""
 
 if [ -n "$CONFIG_FILE" ]; then
     echo "[*] Found subsystem testbench configuration: ${CONFIG_FILE}"
-    CONFIG_PORT=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('port',''))" 2>/dev/null || true)
-    CONFIG_TIMEOUT=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('timeout',''))" 2>/dev/null || true)
-    CONFIG_BAUD=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('baud',''))" 2>/dev/null || true)
-    CONFIG_NAME=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('name',''))" 2>/dev/null || true)
+    eval "$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(f'CONFIG_PORT="{d.get("port","")}"
+CONFIG_TIMEOUT="{d.get("timeout","")}"
+CONFIG_BAUD="{d.get("baud","")}"
+CONFIG_NAME="{d.get("name","")}"')" 2>/dev/null || true)"
 fi
 
 PORT="${CLI_PORT:-$CONFIG_PORT}"
