@@ -1172,6 +1172,32 @@
         };
       }
 
+      // Defense-in-depth: Auto-sanitize any stale in_progress runs (> 30 minutes old)
+      const nowMs = Date.now();
+      if (historyState && Array.isArray(historyState.runs)) {
+        historyState.runs.forEach(r => {
+          if (r.status === 'in_progress') {
+            const runTs = r.timestamp ? new Date(r.timestamp).getTime() : 0;
+            const ageMinutes = (nowMs - runTs) / 60000;
+            if (ageMinutes > 30 || isNaN(ageMinutes)) {
+              r.status = 'failed';
+              r.failure_type = 'lock_timeout';
+              r.duration = 'Timed Out (>30m)';
+              if (!r.failure_details) {
+                r.failure_details = {
+                  title: 'Hardware Execution Lock Timeout',
+                  exit_code: '124 (Workflow Timeout)',
+                  location: r.subsystem || 'HIL',
+                  diff: 'Runner execution exceeded maximum time window. Job aborted.',
+                  repro: `./github-action/cal-test.sh ${r.subsystem || 'pedals_fw'}/test /dev/esp32_johnathan`,
+                  summary: 'Execution timed out while waiting for hardware mutex or serial assertions.'
+                };
+              }
+            }
+          }
+        });
+      }
+
       // Seed 24/7 continuous stream buffer with baseline frames
       let seedPackets = [];
       historyState.runs.forEach(r => {
