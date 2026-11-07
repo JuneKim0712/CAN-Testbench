@@ -85,25 +85,7 @@ def main():
         for err in critical_errors:
             print(f"    [FAIL] {err}")
 
-    # GitHub Actions Step Summary
-    gh_summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if gh_summary:
-        with open(gh_summary, "a", encoding="utf-8") as f:
-            f.write("### Pre-Hardware Code Quality & Static Analysis\n\n")
-            if cpp_err:
-                f.write(f"*Cppcheck skipped: {cpp_err}*\n\n")
-            elif critical_errors:
-                f.write(f"**Cppcheck Static Analysis:** Failed — {len(critical_errors)} critical defect(s) detected!\n\n")
-                f.write("```text\n")
-                f.write("\n".join(critical_errors) + "\n")
-                f.write("```\n\n")
-            else:
-                f.write(f"**Cppcheck Static Analysis:** Passed (0 critical bugs, {len(notices)} suggestions)\n\n")
-                if notices:
-                    f.write(f"<details><summary>View {len(notices)} static analysis suggestions (non-blocking)</summary>\n\n")
-                    f.write("```text\n")
-                    f.write("\n".join(notices) + "\n")
-                    f.write("```\n</details>\n\n")
+    # GitHub Actions Step Summary disabled to keep summary dedicated to unit tests
 
     if critical_errors:
         print("\n[-] Quality Gate FAILED: Critical defects detected. Aborting physical hardware runner.")
