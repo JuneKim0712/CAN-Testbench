@@ -7,7 +7,6 @@
 
 static const char *TAG = "PEDALS_TEST";
 
-
 // Subsystem Logic Under Test: Throttle Calculation from ADC
 static uint8_t calculate_throttle_percent(int raw_adc)
 {
