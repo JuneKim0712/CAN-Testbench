@@ -1,17 +1,4 @@
-# CalSol Gen 11 Hardware Testbench: Code & Architecture Reference Manual
-
-Continuous hardware integration, automated on-target silicon testing, software-defined vehicle simulation, and CAN bus telemetry analysis for the UC Berkeley Solar Vehicle Team (**CalSol**).
-
-This document is the technical reference for the codebase in [`CalSol/CAN_TestBench`](https://github.com/CalSol/CAN_TestBench). It provides an in-depth, code-level explanation of every module, driver, daemon, test suite, and CI automation script in the repository.
-
-> **Quick Links:**
-> - **Interactive Web Telemetry Dashboard:** [https://junekim0712.github.io/CAN-Testbench/](https://junekim0712.github.io/CAN-Testbench/)
-> - **Front-Page Setup, Test & Debugging Manual:** [`../README.md`](../README.md)
-> - **Stage-by-Stage Walkthrough:** [`CAN_TESTBENCH_STAGE_GUIDE.md`](CAN_TESTBENCH_STAGE_GUIDE.md)
-
----
-
-## Table of Contents
+# CalSol Gen 11 Hardware Testbench: Code & Architecture Reference Manual\n\n| [Overview](../README.md) | [Tutorial](TUTORIAL.md) | **[Architecture]** | [Bench Manual](CAN_TESTBENCH_STAGE_GUIDE.md) | [Hardware Setup](SETUP_GUIDE.md) | [Debugging](DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |\n| :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n\n---\n\n## Table of Contents
 1. [System Architecture & Dataflow](#1-system-architecture--dataflow)
 2. [CAN Driver Component (`components/can_driver`)](#2-can-driver-component-componentscan_driver)
    - [2.1 Header Interface (`CAN.h`)](#21-header-interface-canh)
