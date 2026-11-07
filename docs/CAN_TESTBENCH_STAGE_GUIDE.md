@@ -1,14 +1,4 @@
-# CalSol Hardware CAN Testbench: Stage-by-Stage Operational & Engineering Manual
-
-This manual is the definitive, beginner-accessible guide to the **CalSol Hardware-in-the-Loop (HIL) CAN Testbench**. It explains how the entire system works—from physical silicon and wiring to cloud continuous integration—broken down into clear, progressive stages. 
-
-Whether you are a new firmware developer writing your first driver or a test engineer evaluating vehicle safety, this guide provides the concepts, architectural diagrams, and step-by-step commands needed to operate the bench without prior knowledge of the codebase.
-
-> **Technical Reference:** For detailed function signatures, struct layouts, FreeRTOS queue mechanics, and script internals, refer to the [Code & Architecture Reference Manual](CODE_DOCUMENTATION.md).
-
----
-
-## Table of Contents
+# CalSol Hardware CAN Testbench: Stage-by-Stage Operational & Engineering Manual\n\n| [Overview](../README.md) | [Tutorial](TUTORIAL.md) | [Architecture](CODE_DOCUMENTATION.md) | **[Bench Manual]** | [Hardware Setup](SETUP_GUIDE.md) | [Debugging](DEBUGGING_GUIDE.md) | [Live Portal ↗](https://junekim0712.github.io/CAN-Testbench/) |\n| :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n\n---\n\n## Table of Contents
 1. [System Overview & Philosophy](#1-system-overview--philosophy)
 2. [Stage 1: Physical Hardware & Bench Architecture](#stage-1-physical-hardware--bench-architecture)
 3. [Stage 2: Remote Flashing & Interactive Serial Monitoring](#stage-2-remote-flashing--interactive-serial-monitoring)
