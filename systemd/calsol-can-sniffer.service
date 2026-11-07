@@ -1,0 +1,17 @@
+[Unit]
+Description=CalSol Dedicated CAN Bus Sniffer Daemon (/dev/esp32_ahmed)
+After=network.target local-fs.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/calsol/CAN_TestBench
+ExecStart=/usr/bin/python3 github-action/lib/can_bridge_daemon.py --port /dev/esp32_ahmed --baud 115200 --unix-socket /tmp/calsol_can.sock --tcp-port 5555 --ws-port 8765 --json-out web/data/live_stream.json
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
