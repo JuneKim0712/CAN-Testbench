@@ -200,22 +200,9 @@
           </p>
         </div>
 
-        <!-- Telemetry Controls -->
-        <div class="flex items-center gap-1 bg-black border border-neutral-800 p-1">
-          <button id="btnPlay" onclick="togglePlayback()" class="px-3 py-1 bg-white text-black font-bold uppercase tracking-wider text-[11px] hover:bg-neutral-200 transition">
-            <span id="playLabel">[PLAY]</span>
-          </button>
-          <button onclick="resetPlayback()" class="px-3 py-1 border border-neutral-800 text-neutral-300 font-bold uppercase tracking-wider text-[11px] hover:bg-neutral-900 transition">
-            [RESET]
-          </button>
-          <div class="flex items-center gap-1 border-l border-neutral-800 pl-2 ml-1 text-[11px]">
-            <span class="text-neutral-500 uppercase">Rate:</span>
-            <select id="playbackSpeed" class="bg-black border-0 text-white font-mono uppercase focus:outline-none">
-              <option value="1">1X</option>
-              <option value="2">2X</option>
-              <option value="5">5X</option>
-            </select>
-          </div>
+        <div class="flex items-center gap-2 text-[10px] font-mono text-neutral-400 bg-black border border-neutral-800 px-2.5 py-1 uppercase tracking-wider">
+          <span class="w-1.5 h-1.5 bg-pastel-green inline-block"></span>
+          <span>Timeline View • All Packets Displayed • Scrub via Slider</span>
         </div>
       </div>
 
@@ -261,8 +248,12 @@
           <div id="hoverTooltip" class="hidden absolute top-2 bg-neutral-900 border border-neutral-700 text-white text-[10px] px-2 py-1 pointer-events-none font-mono"></div>
         </div>
 
-        <!-- Scrubber -->
-        <input type="range" id="timeScrubber" min="0" max="100" value="0" oninput="scrub(this.value)" class="w-full accent-white bg-neutral-900 h-1 cursor-pointer">
+        <!-- Scrubber Slider with dynamic Time Labels -->
+        <div class="flex items-center gap-3 pt-1">
+          <span class="text-[10px] uppercase font-mono text-neutral-500 shrink-0">Scrubber (+0.00s)</span>
+          <input type="range" id="timeScrubber" min="0" max="100" value="100" oninput="scrub(this.value)" class="w-full accent-white bg-neutral-900 h-1 cursor-pointer" title="Scrub to inspect any point on timeline">
+          <span class="text-[10px] uppercase font-mono text-neutral-400 shrink-0" id="scrubberMaxLabel">+0.00s</span>
+        </div>
       </div>
 
       <!-- Filterable Real-Time Packet Stream -->
@@ -542,9 +533,13 @@
       document.getElementById('testRatioLabel').innerText = `${passCount} / ${totalCount} PASSED`;
       renderTestTable();
 
-      resetPlayback();
-      drawWaveform();
-      renderPacketsTable();
+      // Default: Display all packets immediately across timeline and table
+      playbackTime = maxPlaybackTime;
+      document.getElementById('timeScrubber').value = 100;
+      const maxLabel = document.getElementById('scrubberMaxLabel');
+      if (maxLabel) maxLabel.innerText = `+${maxPlaybackTime.toFixed(2)}s`;
+
+      updateUI();
     }
 
     function setTestFilter(mode) {
@@ -643,6 +638,11 @@
       }).join('');
     }
 
+    function seekToPacket(t) {
+      playbackTime = t;
+      updateUI();
+    }
+
     function renderPacketsTable() {
       const filter = document.getElementById('idFilter').value;
       const tbody = document.getElementById('packetTableBody');
@@ -654,34 +654,34 @@
       }
 
       const visible = packets.filter(p => {
-        const matchId = (filter === 'all' || p.id.toLowerCase() === filter.toLowerCase());
-        const matchTime = p.t <= playbackTime;
-        return matchId && matchTime;
+        return (filter === 'all' || p.id.toLowerCase() === filter.toLowerCase());
       });
 
       if (visible.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-neutral-600 uppercase tracking-wider font-mono">No bus frames logged prior to t = ${playbackTime.toFixed(2)}s</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-neutral-600 uppercase tracking-wider font-mono">No packets matching filter ${filter}</td></tr>`;
         return;
       }
 
       const distinct = getDistinctIds();
-      const activePacket = packets.filter(p => p.t <= playbackTime).slice(-1)[0];
+      const arrived = packets.filter(p => p.t <= playbackTime);
+      const activePacket = arrived.length > 0 ? arrived[arrived.length - 1] : packets[0];
 
-      tbody.innerHTML = visible.slice().reverse().map(p => {
+      tbody.innerHTML = visible.map(p => {
         const origIdx = packets.indexOf(p);
         const prevP = origIdx > 0 ? packets[origIdx - 1] : null;
         const deltaMs = prevP ? '+' + ((p.t - prevP.t) * 1000).toFixed(1) + ' ms' : 'Initial';
         const color = getColorForId(p.id, distinct);
         const isLatest = (p === activePacket);
+        const isPastPlayhead = p.t > playbackTime;
 
         return `
-          <tr class="${isLatest ? 'bg-neutral-900 border-l-2 border-white' : 'hover:bg-neutral-900'} transition font-mono text-[11px]">
-            <td class="py-1.5 px-3 text-neutral-400 font-bold">+${p.t.toFixed(2)}s</td>
+          <tr class="${isLatest ? 'bg-neutral-800 border-l-2 border-white' : (isPastPlayhead ? 'opacity-40 hover:opacity-100 hover:bg-neutral-900' : 'hover:bg-neutral-900')} transition font-mono text-[11px] cursor-pointer" onclick="seekToPacket(${p.t})" title="Click to inspect this frame on timeline">
+            <td class="py-1.5 px-3 text-neutral-300 font-bold">+${p.t.toFixed(2)}s</td>
             <td class="py-1.5 px-3 text-neutral-500">${deltaMs}</td>
             <td class="py-1.5 px-3 font-bold" style="color: ${color}">${p.id}</td>
             <td class="py-1.5 px-3 text-white uppercase">${p.name}</td>
-            <td class="py-1.5 px-3 text-neutral-500">${p.dlc}</td>
-            <td class="py-1.5 px-3 text-neutral-300 font-mono">${p.raw}</td>
+            <td class="py-1.5 px-3 text-neutral-400">${p.dlc}</td>
+            <td class="py-1.5 px-3 text-neutral-200 font-mono">${p.raw}</td>
             <td class="py-1.5 px-3 text-pastel-green font-medium">${p.decoded}</td>
           </tr>
         `;
@@ -845,7 +845,7 @@
 
       // Find all packets arrived at or prior to playbackTime
       const arrived = packets.filter(p => p.t <= playbackTime);
-      const active = arrived.slice(-1)[0];
+      const active = arrived.slice(-1)[0] || packets[0];
 
       if (active) {
         document.getElementById('hudMessage').innerText = `${active.id} • ${active.name}`;
@@ -860,43 +860,14 @@
           document.getElementById('hudDelta').innerText = 'Initial Frame';
         }
 
-        document.getElementById('hudPayload').innerText = `${active.raw} (${active.dlc}B)`;
+        document.getElementById('hudPayload').innerText = `0x${active.raw} (${active.dlc}B)`;
         document.getElementById('hudDecoded').innerText = active.decoded || 'Raw Frame';
       } else {
         document.getElementById('hudMessage').innerText = 'BUS STANDBY';
         document.getElementById('hudDelta').innerText = '—';
         document.getElementById('hudPayload').innerText = '—';
-        document.getElementById('hudDecoded').innerText = 'Awaiting first packet';
+        document.getElementById('hudDecoded').innerText = 'Awaiting packet';
       }
-    }
-
-    function togglePlayback() {
-      isPlaying = !isPlaying;
-      document.getElementById('playLabel').innerText = isPlaying ? '[PAUSE]' : '[PLAY]';
-
-      if (isPlaying) {
-        lastTime = performance.now();
-        if (playbackTime >= maxPlaybackTime) playbackTime = 0.0;
-        animId = requestAnimationFrame(tick);
-      } else {
-        cancelAnimationFrame(animId);
-      }
-    }
-
-    function tick(timestamp) {
-      if (!isPlaying) return;
-      const speed = parseFloat(document.getElementById('playbackSpeed').value) || 1;
-      const dt = ((timestamp - lastTime) / 1000) * speed;
-      lastTime = timestamp;
-
-      playbackTime += dt;
-      if (playbackTime >= maxPlaybackTime) {
-        playbackTime = maxPlaybackTime;
-        togglePlayback();
-      }
-
-      updateUI();
-      animId = requestAnimationFrame(tick);
     }
 
     function scrub(val) {
@@ -904,21 +875,15 @@
       updateUI();
     }
 
-    function resetPlayback() {
-      if (isPlaying) togglePlayback();
-      playbackTime = 0.0;
-      updateUI();
-    }
-
     function updateUI() {
-      const pct = (playbackTime / maxPlaybackTime) * 100;
+      const pct = maxPlaybackTime > 0 ? (playbackTime / maxPlaybackTime) * 100 : 100;
       document.getElementById('timeScrubber').value = pct;
 
       const canvas = document.getElementById('waveformCanvas');
       const marginL = 75;
       const marginR = 15;
       const plotW = canvas.clientWidth - marginL - marginR;
-      const xPixel = marginL + (playbackTime / maxPlaybackTime) * plotW;
+      const xPixel = marginL + (maxPlaybackTime > 0 ? (playbackTime / maxPlaybackTime) * plotW : plotW);
 
       document.getElementById('playhead').style.left = `${(xPixel / canvas.clientWidth) * 100}%`;
       drawWaveform();
