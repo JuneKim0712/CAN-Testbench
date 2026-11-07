@@ -58,7 +58,7 @@ The testbench operates on a dedicated physical host (`stolerpi` (Raspberry Pi 5)
                 │ USB CDC-ACM                            │ USB CDC-ACM
                 ▼ (/dev/esp32_johnathan)                 ▼ (/dev/esp32_ahmed)
  ┌─────────────────────────────────┐        ┌─────────────────────────────┐
- │  Node 2: Device Under Test     │        │  Node 1: CAN Bus Debugger   │
+ │  Node 2: Device Under Test      │        │  Node 1: CAN Bus Debugger   │
  │  ESP32-S3 Microcontroller       │        │  ESP32-S3 Microcontroller   │
  │  TI TCAN332 CAN Transceiver     │        │  TI TCAN332 CAN Transceiver │
  └────────────────┬────────────────┘        └──────────────┬──────────────┘
