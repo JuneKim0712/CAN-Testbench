@@ -49,7 +49,6 @@
     th, td { padding-top: .65rem !important; padding-bottom: .65rem !important; }
     .text-neutral-500 { color: #a3a3a3 !important; }
     .brand-logo { width: 136px; height: auto; object-fit: contain; }
-    .connection-panel p { max-width: 80ch; }
     :focus-visible { outline: 2px solid #7dd3fc; outline-offset: 3px; }
     .group:focus-within > .hidden { display: block; }
     @media(max-width: 640px) { header { position: static !important; } .brand-logo { width: 102px; } }
@@ -272,19 +271,8 @@
   <!-- ========================================================================= -->
   <main id="viewTelemetry" class="hidden max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
 
-    <details class="connection-panel border border-neutral-800 bg-neutral-950 p-4 space-y-3" aria-label="Debugger connection"><summary>Advanced: direct private connection</summary>
-      <h2>Connect to the CAN debugger</h2>
-      <p>The Raspberry Pi streams messages received by the debugger ESP32. A bridge connection alone does not confirm the CAN bus works.</p>
-      <form onsubmit="event.preventDefault(); setBridgeUrl(document.getElementById('bridgeEndpoint').value)">
-        <label for="bridgeEndpoint">Bridge endpoint (WebSocket or HTTP)</label>
-        <div class="flex flex-wrap gap-2 mt-2"><input id="bridgeEndpoint" type="url" placeholder="wss://your-private-host/ws" class="bg-black border border-neutral-700 p-2 flex-1 min-w-0" required>
-        <button type="submit">Connect</button><button type="button" onclick="disconnectBridge()">Disconnect</button></div>
-      </form>
-      <p id="bridgeStatusLabel" role="status" aria-live="polite">Not connected</p>
-      <p>GitHub Pages requires a secure wss:// or https:// endpoint. HTTP polling takes over if WebSocket fails. With the SSH tunnel running, use the <a class="text-pastel-cyan underline" href="http://127.0.0.1:18880/?bridge=ws%3A%2F%2F127.0.0.1%3A18765%2Fws#telemetry" target="_blank" rel="noopener">private live viewer</a>.</p>
-      <p id="deviceHealthDetail" class="text-neutral-400">Last checked: never. Last physical CAN reception: unknown.</p>
-    </details>
-    <span id="publicFeedStatus" class="hidden" aria-hidden="true"></span>
+<span id="publicFeedStatus" class="hidden" aria-hidden="true"></span>
+    <p id="bridgeStatusLabel" class="text-sm text-neutral-400" role="status" aria-live="polite">Connecting to live telemetry automatically…</p>
     <!-- SNIFFER CONSOLE HEADER -->
     <section class="border border-neutral-800 bg-neutral-950 p-4 space-y-3">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
@@ -305,9 +293,6 @@
           </button>
           <button onclick="clearStreamLog()" class="px-3 py-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-500 text-neutral-300 font-bold uppercase text-sm transition font-mono">
             [CLEAR BUFFER]
-          </button>
-          <button onclick="promptBridgeUrl()" class="px-2.5 py-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-400 text-pastel-cyan font-bold uppercase text-sm transition font-mono" title="Configure Raspberry Pi WebSocket Bridge URL">
-            [BRIDGE CONFIG]
           </button>
         </div>
       </div>
@@ -986,34 +971,6 @@
       });
     }
 
-    function promptBridgeUrl() {
-      document.querySelector('details.connection-panel').open = true;
-      document.getElementById('bridgeEndpoint').focus();
-    }
-
-    function setBridgeUrl(url) {
-      try {
-        const endpoint = new URL(url.trim());
-        if (!['ws:', 'wss:', 'http:', 'https:'].includes(endpoint.protocol)) throw new Error('Use ws://, wss://, http:// or https://');
-        if (isHttps && !['wss:', 'https:'].includes(endpoint.protocol)) throw new Error('GitHub Pages requires wss:// or https://. Use the private viewer for an SSH tunnel.');
-        disconnectBridge();
-        bridgeUrl = endpoint.href;
-        localStorage.setItem('calsol_bridge_url', bridgeUrl);
-        connectBridgeWebSocket();
-      } catch (error) { updateBridgeStatusUI(false, error.message); }
-    }
-
-    function disconnectBridge() {
-      bridgeUrl = '';
-      deviceHealth = null; healthCheckedAt = 0; healthRequest++; httpLiveAt = 0;
-      localStorage.removeItem('calsol_bridge_url');
-      clearTimeout(streamReconnectTimer);
-      const old = streamSocket;
-      streamSocket = null;
-      if (old) { old.onclose = null; old.onopen = null; old.onmessage = null; old.onerror = null; old.close(); }
-      updateBridgeStatusUI(false, 'Disconnected. Archived snapshots are not live traffic.');
-    }
-
     function updateBridgeStatusUI(connected, statusMsg) {
       bridgeConnected = connected;
       renderDeviceHealth();
@@ -1032,7 +989,6 @@
     }
 
     function connectBridgeWebSocket() {
-      document.getElementById("bridgeEndpoint").value = bridgeUrl;
       if (!bridgeUrl) {
         updateBridgeStatusUI(false, 'Deployed snapshot; not a live connection');
         return;
