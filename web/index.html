@@ -7,7 +7,7 @@
   <link rel="shortcut icon" href="favicon.ico">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0a0a'/%3E%3Cpath d='M8 16h16M16 8v16' stroke='%2386efac' stroke-width='3' stroke-linecap='square'/%3E%3C/svg%3E">
-  <script src="bridge-config.js"></script>
+  <script src="bridge-config.js?v=live-status-1"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -321,7 +321,7 @@
         </div>
 
         <div class="border border-neutral-800 bg-black p-3 space-y-1">
-          <div class="text-sm uppercase text-neutral-500">Captured Frames</div>
+          <div class="text-sm uppercase text-neutral-500">Displayed messages</div>
           <div class="text-sm font-bold text-white" id="consoleTotalCount">0 FRAMES</div>
           <div class="text-sm text-neutral-400">Continuous 24/7 Log</div>
         </div>
@@ -1213,7 +1213,7 @@
         return p.id.toLowerCase() === streamFilterId.toLowerCase();
       });
 
-      const totalMsg = `${streamPackets.length} FRAMES`;
+      const totalMsg = `${streamPackets.length} MESSAGES`;
       if (dom.streamTotalCount) dom.streamTotalCount.innerText = totalMsg;
       if (dom.consoleTotalCount) dom.consoleTotalCount.innerText = totalMsg;
 
