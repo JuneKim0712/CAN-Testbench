@@ -1,0 +1,14 @@
+[Unit]
+Description=CalSol read-only live status relay
+After=network.target can-bridge-daemon.service
+[Service]
+User=jkim
+ExecStart=/usr/bin/python3 /opt/calsol/public-status/public_status_server.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=no
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,2 @@
-// Set to your reachable HTTPS bridge base URL to provide a shared default.
-// Leave empty until a secure endpoint is available; no public CAN access is created.
-window.CALSOL_DEFAULT_BRIDGE = "";
+// Public read-only live relay. This Quick Tunnel hostname may change after restart.
+window.CALSOL_DEFAULT_BRIDGE = "https://robert-interviews-perth-commands.trycloudflare.com";
