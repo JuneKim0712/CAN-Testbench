@@ -242,6 +242,7 @@
             <tr>
               <th class="py-2 px-3">Result</th>
               <th class="py-2 px-3">Run ID</th>
+              <th class="py-2 px-3">Ran (Pacific time)</th>
               <th class="py-2 px-3">Target Subsystem</th>
               <th class="py-2 px-3">Commit</th>
               <th class="py-2 px-3">Assertions</th>
@@ -367,14 +368,6 @@
     <!-- RUN CONTROLLER BAR -->
     <section class="border border-neutral-800 bg-neutral-950 p-3 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
       <div class="flex flex-col gap-2">
-        <!-- Subsystem Quick Filter Pills -->
-        <div class="flex flex-wrap items-center gap-1">
-          <span class="text-sm uppercase text-neutral-500 tracking-wider mr-1">Target ECU:</span>
-          <button id="btnSubAll" onclick="setSubsystemFilter('all')" class="px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-sm border border-neutral-700">ALL RUNS</button>
-          <button id="btnSubPedals" onclick="setSubsystemFilter('pedals_fw')" class="px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-sm border border-transparent hover:border-neutral-700">PEDALS_FW (BRAKE)</button>
-          <button id="btnSubLights" onclick="setSubsystemFilter('lights_fw')" class="px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-sm border border-transparent hover:border-neutral-700">LIGHTS_FW (LIGHT)</button>
-        </div>
-
         <div class="flex flex-wrap items-center gap-3">
           <div>
             <label class="block text-sm uppercase text-neutral-500 mb-1 tracking-wider">Select Test Run</label>
@@ -396,6 +389,10 @@
           <a id="runCommitLink" href="#" target="_blank" rel="noopener noreferrer" class="font-bold text-white hover:underline uppercase tracking-wider block font-mono" title="Inspect Commit on GitHub">
             -
           </a>
+        </div>
+        <div class="border-l border-neutral-800 pl-4">
+          <span class="text-sm uppercase text-neutral-500 block tracking-wider">Ran (Pacific time)</span>
+          <span class="font-bold text-white" id="runStartedAt">-</span>
         </div>
         <div class="border-l border-neutral-800 pl-4">
           <span class="text-sm uppercase text-neutral-500 block tracking-wider">Duration</span>
@@ -730,6 +727,7 @@
             <tr>
               <th class="py-2 px-3">Status</th>
               <th class="py-2 px-3">Run ID</th>
+              <th class="py-2 px-3">Ran (Pacific time)</th>
               <th class="py-2 px-3">Target Subsystem</th>
               <th class="py-2 px-3">Commit</th>
               <th class="py-2 px-3">Author</th>
@@ -780,7 +778,6 @@
     let playbackTime = 0.0;
     let maxPlaybackTime = 6.0;
     let testFilterMode = 'all';        // 'all' | 'fail'
-    let currentSubsystemFilter = 'all';// 'all' | 'pedals_fw' | 'lights_fw'
     let historyStatusFilter = 'all';   // 'all' | 'passed' | 'failed'
     let overviewRunsFilter = 'all';    // 'all' | 'passed' | 'failed'
     let hoverRaf = null;
@@ -1256,11 +1253,6 @@
 
       // Check URL parameters
       const urlParams = new URLSearchParams(window.location.search);
-      const requestedSub = urlParams.get('subsystem');
-      if (requestedSub && ['pedals_fw', 'lights_fw'].includes(requestedSub)) {
-        currentSubsystemFilter = requestedSub;
-        updateSubsystemFilterButtons();
-      }
       populateRunSelector();
 
       const requestedRun = urlParams.get('run');
@@ -1307,6 +1299,18 @@
       renderOverviewRunsTable();
     }
 
+    const pacificRunTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles', year: 'numeric', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
+    });
+    function formatRunTime(run) {
+      const value = run.started_at ?? run.timestamp;
+      if (value === null || value === undefined || value === '') return 'Not recorded';
+      const date = new Date(typeof value === 'number' ? value * 1000 : value);
+      if (!Number.isFinite(date.getTime())) return 'Not recorded';
+      return (run.timestamp_basis === 'report_generated' ? 'Report: ' : '') + pacificRunTime.format(date);
+    }
+
     function renderOverviewRunsTable() {
       const tbody = dom.overviewRunsTable;
       if (!tbody) return;
@@ -1319,7 +1323,7 @@
       });
 
       if (runs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No past unit test runs matching filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No past unit test runs matching filter.</td></tr>';
         return;
       }
 
@@ -1344,6 +1348,7 @@
           <tr class="hover:bg-neutral-900 transition">
             <td class="py-2 px-3">${badge}</td>
             <td class="py-2 px-3 font-bold text-white font-mono">${r.id}</td>
+            <td class="py-2 px-3 text-neutral-300 whitespace-nowrap">${formatRunTime(r)}</td>
             <td class="py-2 px-3 text-neutral-300 uppercase">${sub}</td>
             <td class="py-2 px-3 text-neutral-400 font-mono">
               <a href="https://github.com/CalSol/CAN_TestBench/commit/${r.commit}" target="_blank" class="text-pastel-cyan hover:underline">${r.commit} ↗</a>
@@ -1362,38 +1367,8 @@
     }
 
     // ─── SUBSYSTEM FILTERING (FOR TEST RUNS TAB) ────────────────────────────
-    function updateSubsystemFilterButtons() {
-      const sub = currentSubsystemFilter;
-      const activeClass = 'px-2 py-0.5 bg-neutral-800 text-white font-bold uppercase text-sm border border-neutral-700';
-      const inactiveClass = 'px-2 py-0.5 text-neutral-400 hover:text-white font-bold uppercase text-sm border border-transparent hover:border-neutral-700';
-
-      if (dom.btnSubAll) dom.btnSubAll.className = (sub === 'all') ? activeClass : inactiveClass;
-      if (dom.btnSubPedals) dom.btnSubPedals.className = (sub === 'pedals_fw') ? activeClass : inactiveClass;
-      if (dom.btnSubLights) dom.btnSubLights.className = (sub === 'lights_fw') ? activeClass : inactiveClass;
-    }
-
-    function setSubsystemFilter(sub) {
-      currentSubsystemFilter = sub;
-      updateSubsystemFilterButtons();
-
-      const url = new URL(window.location);
-      if (sub === 'all') {
-        url.searchParams.delete('subsystem');
-      } else {
-        url.searchParams.set('subsystem', sub);
-      }
-      window.history.replaceState(null, '', url);
-
-      populateRunSelector();
-      const filtered = getFilteredRuns();
-      if (filtered.length > 0) {
-        switchRun(filtered[0].id);
-      }
-    }
-
     function getFilteredRuns() {
-      if (currentSubsystemFilter === 'all') return historyState.runs;
-      return historyState.runs.filter(r => (r.subsystem === currentSubsystemFilter || (r.subsystems && r.subsystems.includes(currentSubsystemFilter))));
+      return historyState.runs;
     }
 
     function populateRunSelector() {
@@ -1411,7 +1386,7 @@
         }
         const sub = r.subsystem || (r.subsystems ? r.subsystems[0] : 'ECU');
         const subLabel = sub === 'pedals_fw' ? 'pedals_fw (Brake)' : (sub === 'lights_fw' ? 'lights_fw (Light)' : sub);
-        return `<option value="${r.id}">RUN #${r.id} • ${subLabel} • ${r.commit} ${tag}</option>`;
+        return `<option value="${r.id}">RUN #${r.id} • ${subLabel} • ${formatRunTime(r)} • ${r.commit} ${tag}</option>`;
       }).join('');
     }
 
@@ -1439,6 +1414,7 @@
         dom.runActionLink.href = `https://github.com/CalSol/CAN_TestBench/actions/runs/${parentId}`;
       }
 
+      if (dom.runStartedAt) dom.runStartedAt.innerText = formatRunTime(currentRun);
       if (dom.runDuration) dom.runDuration.innerText = currentRun.duration || '0.0s';
       if (dom.runLockTime) dom.runLockTime.innerText = currentRun.lock_duration_sec == null ? 'Not recorded' : `${currentRun.lock_duration_sec}s`;
       if (dom.statLockScope) dom.statLockScope.innerText = currentRun.lock_duration_sec == null ? 'Not recorded' : `${currentRun.lock_duration_sec}s`;
@@ -2059,7 +2035,7 @@
       });
 
       if (runs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No test runs match selected filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="py-4 text-center text-neutral-500 uppercase tracking-wider font-mono">No test runs match selected filter.</td></tr>';
         return;
       }
 
@@ -2084,6 +2060,7 @@
           <tr class="hover:bg-neutral-900 transition">
             <td class="py-2.5 px-3">${badge}</td>
             <td class="py-2.5 px-3 font-bold text-white font-mono">${r.id}</td>
+            <td class="py-2 px-3 text-neutral-300 whitespace-nowrap">${formatRunTime(r)}</td>
             <td class="py-2.5 px-3 text-neutral-300 uppercase">${sub}</td>
             <td class="py-2.5 px-3 font-mono">
               <a href="https://github.com/CalSol/CAN_TestBench/commit/${r.commit}" target="_blank" class="text-pastel-cyan hover:underline">${r.commit} ↗</a>

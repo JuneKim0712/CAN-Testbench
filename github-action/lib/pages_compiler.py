@@ -48,11 +48,19 @@ def compile_run_record(repo_root, run_id=None, commit_sha=None, artifacts_dir=No
             packets.append({**event, 'raw': event.get('raw', event.get('data', '')),
                             't': event['timestamp'] - report.get('started_at', event['timestamp'])})
         failure = None if complete_status else report.get('summary', 'Incomplete verification')
+        started = report.get('started_at')
+        run_started = None
+        if isinstance(started, (int, float)):
+            try:
+                run_started = datetime.fromtimestamp(started, timezone.utc).isoformat()
+            except (ValueError, OverflowError, OSError):
+                pass
         new_runs.append(dict(
             id=f'{run_id}-{name}', parent_run_id=run_id, subsystem=name, subsystems=[name],
             commit=commit_sha or os.environ.get('GITHUB_SHA', ''),
             branch=os.environ.get('GITHUB_REF_NAME', ''), author=os.environ.get('GITHUB_ACTOR', ''),
-            timestamp=datetime.now(timezone.utc).isoformat(), message=report.get('summary', ''),
+            timestamp=run_started or datetime.now(timezone.utc).isoformat(),
+            started_at=run_started, timestamp_basis='test_started' if run_started else 'report_generated', message=report.get('summary', ''),
             status='passed' if complete_status else 'failed',
             failure_type=None if complete_status else ('verification_failure' if not completed else 'static_analysis_unavailable'),
             failure_details=None if complete_status else dict(title='Verification incomplete or failed',
