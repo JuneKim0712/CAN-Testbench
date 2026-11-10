@@ -17,13 +17,16 @@ class ReportTests(unittest.TestCase):
             artifacts.mkdir()
             frame = dict(source='physical_bus', direction='rx', session_id='fixture',
                          sequence=1, timestamp=100, id='0x001', dlc=1, data='00')
-            report = dict(run_id='1', subsystem='custom_fw', passed=True,
+            report = dict(run_id='1', subsystem='custom_fw', passed=True, started_at=100,
                           tests=[dict(status='PASS', name='example')], can_traffic=[frame, frame])
             (artifacts / 'custom_test_results.json').write_text(json.dumps(report))
             (artifacts / 'static_check.json').write_text(json.dumps(dict(run_id='1', status='passed')))
             (artifacts / 'custom_fw_can_trace.jsonl').write_text(json.dumps(frame))
             runs = compile_run_record(temp, '1', artifacts_dir=artifacts)
             self.assertEqual('passed', runs[0]['status'])
+            self.assertEqual('1970-01-01T00:01:40+00:00', runs[0]['started_at'])
+            self.assertEqual(runs[0]['started_at'], runs[0]['timestamp'])
+            self.assertEqual('test_started', runs[0]['timestamp_basis'])
             self.assertEqual('custom_fw', runs[0]['tests'][0]['subsystem'])
             self.assertEqual(1, len(runs[0]['can_packets']))
             self.assertEqual('fixture', runs[0]['can_packets'][0]['session_id'])
