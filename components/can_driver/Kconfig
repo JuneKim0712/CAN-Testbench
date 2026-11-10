@@ -1,0 +1,8 @@
+menu "CalSol CAN driver"
+config CAN_SELF_TEST
+    bool "Allow transmission without peer ACK (bench self-test only)"
+    default n
+    help
+        Successful transmission in this mode is not evidence of peer reception.
+        Physical verification must independently assert RX captures.
+endmenu

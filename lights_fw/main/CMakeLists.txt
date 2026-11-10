@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "main.c"
+        "lights_logic.c"
     INCLUDE_DIRS
         "."
     REQUIRES

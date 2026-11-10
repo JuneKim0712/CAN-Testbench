@@ -34,8 +34,8 @@ not include a complete production firmware project.
 
 Each test begins with fresh state. `tearDown()` releases CAN after physical-test
 assertion failures. Add tests using `RUN_TEST(your_test)` in `app_main()`.
-Use explicit `.dlc = 0` for an empty frame: the current shared packet builder
-treats zero as a request for eight bytes. Source buffers must contain at least
+Use explicit `.dlc = 0` for an empty frame: the legacy packet builder treats zero as a request for eight bytes;
+CAN_build_packet supports an explicit zero-length payload. Source buffers must contain at least
 the number of bytes the builder will copy.
 
 ## Spoof a peer over the physical bus

@@ -26,7 +26,7 @@ Follow this guide to commission a new engineering laptop or Raspberry Pi lab run
 3. Install a $120\,\Omega$, 1/4W resistor across CAN_H and CAN_L at both physical ends of the twisted pair.
 
 > [!CAUTION]
-> Always verify bus resistance with power disconnected before connecting microcontrollers. Measure resistance between CAN_H and CAN_L with a multimeter. The reading must be $60\,\Omega \pm 3\,\Omega$. Powering the bus without split termination can damage transceiver input stages.
+> Always verify bus resistance with power disconnected before connecting microcontrollers. Measure resistance between CAN_H and CAN_L with a multimeter. The reading must be $60\,\Omega \pm 3\,\Omega$. Missing or incorrect termination can cause unreliable communication. These are two end terminators, not split termination.
 
 ---
 

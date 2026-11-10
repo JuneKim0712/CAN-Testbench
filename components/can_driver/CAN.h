@@ -56,6 +56,8 @@ typedef struct {
  * Defaults to 500k bit rate
  */
 esp_err_t CAN_init(void);
+// Call init from one startup owner before launching users. Shutdown refuses
+// while a send/receive owns the API mutex. Counters are cumulative until reset.
 
 /**
  * @brief deactivates the TWAI controller within S3 SoC
@@ -86,5 +88,7 @@ uint32_t CAN_get_tx_error_count(void);
  * @brief Pass in id, data to build a packet with dlc default to 8
  */
 CAN_message_t build_packet_no_ext(uint32_t id, const uint8_t *data, uint8_t dlc);
+// Exact DLC, including zero. Validates a standard data frame without hardware.
+esp_err_t CAN_build_packet(uint32_t id, const uint8_t *data, uint8_t dlc, CAN_message_t *out);
 
 twai_node_handle_t CAN_get_node_handle(void);

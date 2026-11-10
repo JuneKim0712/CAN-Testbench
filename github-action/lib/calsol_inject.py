@@ -39,24 +39,49 @@ def main():
     parser.add_argument("--rate", type=float, default=0.0, help="Rate in Hz (0 = one-shot)")
     parser.add_argument("--count", type=int, default=1, help="Number of frames (0 = infinite if rate > 0)")
     args = parser.parse_args()
+    if not 0 <= args.id <= 0x7FF or args.rate < 0 or args.count < 0:
+        parser.error("Use standard ID 0..0x7FF and nonnegative rate/count")
 
-    s = connect(args.socket, args.tcp)
     clean_hex = args.data.replace(" ", "").replace("0x", "")
+    try:
+        if len(bytes.fromhex(clean_hex)) > 8:
+            raise ValueError("payload exceeds 8 bytes")
+    except ValueError as error:
+        parser.error(str(error))
     req = json.dumps({"cmd": "inject", "id": args.id, "data": clean_hex}) + "\n"
     payload = req.encode("utf-8")
 
+    s = connect(args.socket, args.tcp)
+    s.settimeout(2)
+    reader = s.makefile("rb")
     sent = 0
     interval = (1.0 / args.rate) if args.rate > 0 else 0
 
     try:
         while True:
             s.sendall(payload)
+            deadline = time.monotonic() + 2
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("Bridge acknowledgment deadline exceeded")
+                s.settimeout(remaining)
+                line = reader.readline(65537)
+                if not line or len(line) > 65536 or not line.endswith(b"\n"):
+                    raise RuntimeError("Missing or oversized bridge acknowledgment")
+                event = json.loads(line)
+                if "status" not in event:
+                    continue
+                if event["status"] != "ok":
+                    raise RuntimeError(f"Injection rejected: {event}")
+                break
             sent += 1
-            print(f"[+] Injected #{sent}: ID=0x{args.id:03X} Data={clean_hex.upper() or 'empty'}")
+            print(f"[+] Request accepted #{sent}: ID=0x{args.id:03X} Data={clean_hex.upper() or 'empty'} (DUT reception not confirmed)")
             if args.rate == 0 or (args.count > 0 and sent >= args.count):
                 break
             time.sleep(interval)
     finally:
+        reader.close()
         s.close()
         print(f"[*] Done. Sent {sent} frames.")
 

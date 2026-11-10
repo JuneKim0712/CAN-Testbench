@@ -1,22 +1,10 @@
 name: CalSol Hardware Unit Tests
 
-# Reusable workflow logic for CalSol hardware CI
-# NOTE: Automatic triggers (push / pull_request) are disabled on CalSol/CAN_TestBench
-# to prevent workflow execution here. Testing ground for workflows is JuneKim0712/CAN-Testbench.
-
 on:
-  workflow_call:
-    inputs:
-      target:
-        description: 'Target subsystem to test ("auto", "all", or specific path)'
-        required: false
-        default: 'all'
-        type: string
-      port:
-        description: 'Serial port override (optional)'
-        required: false
-        default: ''
-        type: string
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       target:
@@ -32,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pull-requests: write
 
 concurrency:
@@ -41,7 +30,6 @@ concurrency:
 jobs:
   static-analysis:
     name: Cloud Lint & Static Analysis
-    if: github.repository != 'CalSol/CAN_TestBench'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout Repository
@@ -50,16 +38,28 @@ jobs:
       - name: Install Analysis Tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq cppcheck
+          sudo apt-get install -y -qq cppcheck python3-serial
+
+      - name: Run Software Regression Tests
+        env:
+          CALSOL_NETWORK_TESTS: '1'
+        run: python3 -m unittest discover -s github-action/lib -p 'test_*.py'
 
       - name: Run Quality Gate Checks
         run: |
           chmod +x github-action/static-check.sh
           ./github-action/static-check.sh
 
+      - name: Upload Static Analysis Result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: static-analysis
+          path: static_check.json
+          if-no-files-found: error
+
   discover:
     name: Auto-Discover Subsystems & Settings
-    if: github.repository != 'CalSol/CAN_TestBench'
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.discovery.outputs.matrix }}
@@ -83,7 +83,7 @@ jobs:
   testbench:
     name: Test ${{ matrix.cfg.name }} (${{ matrix.cfg.port || 'auto' }})
     needs: [discover, static-analysis]
-    if: github.repository != 'CalSol/CAN_TestBench' && needs.discover.outputs.has_changes == 'true'
+    if: needs.discover.outputs.has_changes == 'true'
     runs-on: [ self-hosted, linux, ARM64 ]
     timeout-minutes: 8
     strategy:
@@ -107,14 +107,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.cfg.name }}-firmware-binaries
-          path: ${{ matrix.cfg.target }}/build/artifacts/
+          path: ${{ matrix.cfg.target }}/build/artifacts/${{ github.run_id }}/
           retention-days: 14
           if-no-files-found: ignore
 
   report:
     name: CalSol Testbench Status Dashboard
     needs: [static-analysis, discover, testbench]
-    if: github.repository != 'CalSol/CAN_TestBench' && always()
+    if: always()
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout Repository
@@ -137,6 +137,7 @@ jobs:
           python3 github-action/lib/pr_reporter.py --artifacts-dir pr_artifacts
 
       - name: Ingest Run Telemetry for Web Dashboard
+        if: always()
         env:
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -144,3 +145,11 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
         run: |
           python3 github-action/lib/pages_compiler.py
+
+      - name: Upload Telemetry Web Bundle
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: telemetry-web-bundle
+          path: web/
+          retention-days: 14

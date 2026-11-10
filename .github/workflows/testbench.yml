@@ -54,12 +54,25 @@ jobs:
       - name: Install Analysis Tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq cppcheck
+          sudo apt-get install -y -qq cppcheck python3-serial
+
+      - name: Run Software Regression Tests
+        env:
+          CALSOL_NETWORK_TESTS: '1'
+        run: python3 -m unittest discover -s .calsol_testbench/github-action/lib -p 'test_*.py'
 
       - name: Run Quality Gate Checks
         run: |
           chmod +x .calsol_testbench/github-action/static-check.sh
           .calsol_testbench/github-action/static-check.sh
+
+      - name: Upload Static Analysis Result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: static-analysis
+          path: static_check.json
+          if-no-files-found: error
 
   discover:
     name: Auto-Discover Subsystems & Settings
@@ -123,7 +136,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.cfg.name }}-firmware-binaries
-          path: ${{ matrix.cfg.target }}/build/artifacts/
+          path: ${{ matrix.cfg.target }}/build/artifacts/${{ github.run_id }}/
           retention-days: 14
           if-no-files-found: ignore
 

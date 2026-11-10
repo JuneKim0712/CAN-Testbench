@@ -1,0 +1,15 @@
+[Unit]
+Description=CalSol public read-only status HTTPS tunnel
+After=network-online.target calsol-public-status.service
+Wants=network-online.target
+[Service]
+DynamicUser=yes
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8767 --protocol http2
+Restart=always
+RestartSec=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+[Install]
+WantedBy=multi-user.target

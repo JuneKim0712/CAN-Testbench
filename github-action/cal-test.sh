@@ -28,8 +28,8 @@ gh_endgroup() {
 
 # 1. Resolve target directory or binary
 INPUT_TARGET="${1:-pedals_fw/test}"
-CLI_PORT="${2}"
-CLI_TIMEOUT="${3}"
+CLI_PORT="${2:-}"
+CLI_TIMEOUT="${3:-}"
 
 if [ -d "${REPO_ROOT}/${INPUT_TARGET}" ]; then
     TARGET="${REPO_ROOT}/${INPUT_TARGET}"
@@ -59,10 +59,12 @@ CONFIG_NAME=""
 
 if [ -n "$CONFIG_FILE" ]; then
     echo "[*] Found subsystem testbench configuration: ${CONFIG_FILE}"
-    CONFIG_PORT=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('port',''))" 2>/dev/null || true)
-    CONFIG_TIMEOUT=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('timeout',''))" 2>/dev/null || true)
-    CONFIG_BAUD=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('baud',''))" 2>/dev/null || true)
-    CONFIG_NAME=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('name',''))" 2>/dev/null || true)
+    CONFIG_VALUES=$(python3 "${SCRIPT_DIR}/lib/read_manifest.py" "$CONFIG_FILE")
+    mapfile -t CONFIG_FIELDS <<< "$CONFIG_VALUES"
+    CONFIG_PORT="${CONFIG_FIELDS[0]}"
+    CONFIG_TIMEOUT="${CONFIG_FIELDS[1]}"
+    CONFIG_BAUD="${CONFIG_FIELDS[2]}"
+    CONFIG_NAME="${CONFIG_FIELDS[3]}"
 fi
 
 PORT="${CLI_PORT:-$CONFIG_PORT}"
@@ -85,8 +87,8 @@ fi
 
 # 4. Validate or auto-detect serial port
 if [ -n "$PORT" ] && [ ! -e "$PORT" ]; then
-    echo "[-] Warning: Configured port '${PORT}' not currently connected. Falling back to auto-detection..."
-    PORT=""
+    echo "[-] Warning: Configured port '${PORT}' not currently connected. Refusing to select another board."
+    exit 1
 fi
 
 if [ -z "$PORT" ]; then
@@ -106,7 +108,12 @@ if [ -z "$PORT" ]; then
 fi
 
 BOARD_NAME="$(basename "$PORT")"
-LOG_DIR="${SCRIPT_DIR}/.logs"
+if [ "$(readlink -f "$PORT")" = "$(readlink -f "$CAN_DEBUGGER_PORT")" ]; then
+    echo "[-] Refusing to flash the reserved debugger as a DUT."
+    exit 1
+fi
+RUN_ID="${GITHUB_RUN_ID:-$(python3 -c 'import uuid; print(uuid.uuid4().hex)')}"
+LOG_DIR="${SCRIPT_DIR}/.logs/${RUN_ID}/${SUBSYSTEM_SLUG}"
 mkdir -p "$LOG_DIR"
 
 echo "=================================================="
@@ -124,7 +131,23 @@ if [[ "$TARGET" = /* ]]; then
 else
     TARGET_DIR="${REPO_ROOT}/${TARGET}"
 fi
-ARTIFACTS_DIR="${TARGET_DIR}/build/artifacts"
+ARTIFACTS_DIR="${TARGET_DIR}/build/artifacts/${RUN_ID}"
+RESULTS_JSON="${LOG_DIR}/${SUBSYSTEM_SLUG}_test_results.json"
+PHASE=build_failure
+finalize_run() {
+    code=$?
+    mkdir -p "$ARTIFACTS_DIR"
+    if [ "$code" -ne 0 ] && [ ! -f "$RESULTS_JSON" ]; then
+        python3 "${SCRIPT_DIR}/lib/failure_report.py" "$RESULTS_JSON" "$RUN_ID" "$SUBSYSTEM_SLUG" "$PHASE" "$code" || true
+    fi
+    for log in "$LOG_DIR"/*; do
+        [ ! -f "$log" ] || cp -f "$log" "$ARTIFACTS_DIR/"
+    done
+}
+trap finalize_run EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 
 # Build Firmware (Host compilation does not require hardware serial lock)
 if [ -d "$TARGET_DIR" ]; then
@@ -133,7 +156,6 @@ if [ -d "$TARGET_DIR" ]; then
     export CCACHE_DIR="${HOME}/.ccache"
     export CCACHE_BASEDIR="$REPO_ROOT"
     export CCACHE_NOHASHDIR=1
-    export CCACHE_SLOPPINESS="time_macros,file_macro,include_file_mtime"
 
     # Fast target resolution: skip redundant set-target if target is already configured
     if [ ! -f "${TARGET_DIR}/sdkconfig" ] && [ ! -f "${TARGET_DIR}/sdkconfig.defaults" ]; then
@@ -158,30 +180,14 @@ if [ -d "$TARGET_DIR" ]; then
     cp -f "${TARGET_DIR}/build/flasher_args.json" "$ARTIFACTS_DIR/" 2>/dev/null || true
 fi
 
-# 6. Ensure persistent CAN bridge daemon is listening BEFORE flashing DUT so boot traffic is never lost
-if [ -S "/tmp/calsol_can.sock" ]; then
-    if ! python3 -c "import socket; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect('/tmp/calsol_can.sock'); s.close()" 2>/dev/null; then
-        rm -f "/tmp/calsol_can.sock" 2>/dev/null || true
-    fi
+PHASE=capture_unavailable
+# 6. The systemd service owns the debugger; CI never kills listeners.
+if ! python3 -c "import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(2); s.connect('/tmp/calsol_can.sock'); s.close()"; then
+    echo "[-] CAN bridge unavailable; restore the systemd service before testing."
+    exit 1
 fi
 
-if [ ! -S "/tmp/calsol_can.sock" ] && [ -e "$CAN_DEBUGGER_PORT" ]; then
-    echo "[*] Launching permanent CAN Debugger daemon on ${CAN_DEBUGGER_PORT} before DUT boot..."
-    fuser -k 5555/tcp 8765/tcp 2>/dev/null || true
-    pkill -f can_bridge_daemon.py 2>/dev/null || true
-    rm -f "/tmp/calsol_can.sock" 2>/dev/null || true
-    sleep 0.5
-    python3 "${SCRIPT_DIR}/lib/can_bridge_daemon.py" \
-        --port "$CAN_DEBUGGER_PORT" \
-        --unix-socket "/tmp/calsol_can.sock" \
-        --tcp-port 5555 \
-        --ws-port 8765 \
-        --max-frames 2000 \
-        --log-file "/tmp/can_trace.jsonl" \
-        --json-out "${REPO_ROOT}/web/data/live_stream.json" > /tmp/calsol_can_daemon.log 2>&1 &
-    sleep 1.2
-fi
-
+PHASE=lock_unavailable
 # 7. Unified Hardware Mutex Lock (Derived from resolved canonical device path)
 REAL_PORT=$(readlink -f "$PORT" 2>/dev/null || realpath "$PORT" 2>/dev/null || echo "$PORT")
 PORT_TAG=$(echo "$REAL_PORT" | tr '/' '_')
@@ -195,36 +201,17 @@ if ! flock -w 30 200; then
     exit 1
 fi
 
-# 8. Flash Silicon
-if [ -d "$TARGET_DIR" ]; then
-    gh_group "Flashing Silicon (${BOARD_NAME} @ ${BAUD} baud)"
-    # Try high-speed app partition flashing first; fallback to full flash if needed
-    if idf.py -C "$TARGET_DIR" -p "$PORT" -b "$BAUD" app-flash > "$LOG_DIR/flash.log" 2>&1; then
-        echo "[+] Fast differential app-flash succeeded."
-    elif idf.py -C "$TARGET_DIR" -p "$PORT" -b "$BAUD" flash > "$LOG_DIR/flash.log" 2>&1; then
-        echo "[+] Full partition flash succeeded."
-    else
-        echo "[-] Flashing failed!"
-        cat "$LOG_DIR/flash.log"
-        gh_endgroup
-        exit 1
-    fi
-    gh_endgroup
-elif [ -f "$TARGET_DIR" ] || [ -f "$TARGET" ]; then
-    FLASH_BIN="$TARGET"
-    [ -f "$TARGET_DIR" ] && FLASH_BIN="$TARGET_DIR"
-    gh_group "Flashing Pre-built Binary (${BOARD_NAME})"
-    if esptool.py --port "$PORT" --baud "$BAUD" write_flash 0x10000 "$FLASH_BIN" > "$LOG_DIR/flash.log" 2>&1; then
-        echo "[+] Flash succeeded."
-    else
-        echo "[-] Flash failed!"
-        cat "$LOG_DIR/flash.log"
-        gh_endgroup
-        exit 1
-    fi
-    gh_endgroup
+# Serialize all physical testing on the shared bus.
+exec 201>"${LOCK_DIR}/bus.lock"
+flock -w 30 201 || exit 1
+
+# Flashing is coordinated by the parser after bridge subscription readiness.
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "[-] Prebuilt raw binaries require explicit flash metadata; use an ESP-IDF build directory."
+    exit 1
 fi
 
+PHASE=execution_failure
 # 9. Parse Unity test results over serial & live CAN stream
 PARSER="${SCRIPT_DIR}/lib/unity_parser.py"
 SERIAL_LOG="${LOG_DIR}/${SUBSYSTEM_SLUG}_serial.log"
@@ -233,6 +220,8 @@ CAN_TRACE_FILE="${LOG_DIR}/${SUBSYSTEM_SLUG}_can_trace.jsonl"
 
 gh_group "On-Target Silicon Execution & Live CAN Stream (${SUBSYSTEM_SLUG})"
 echo "[*] Monitoring DUT UART output & physical CAN bus traffic..."
+MANIFEST_ARGS=()
+[ -z "$CONFIG_FILE" ] || MANIFEST_ARGS=(--manifest "$CONFIG_FILE")
 set +e
 python3 "$PARSER" \
     --port "$PORT" \
@@ -241,7 +230,8 @@ python3 "$PARSER" \
     --log-file "$SERIAL_LOG" \
     --output-json "$RESULTS_JSON" \
     --can-port "$CAN_DEBUGGER_PORT" \
-    --can-trace-file "$CAN_TRACE_FILE"
+    --can-trace-file "$CAN_TRACE_FILE" \
+    --flash-build "${TARGET_DIR}/build" --flash-baud "$BAUD" --run-id "$RUN_ID" "${MANIFEST_ARGS[@]}"
 TEST_EXIT_CODE=$?
 set -e
 gh_endgroup
