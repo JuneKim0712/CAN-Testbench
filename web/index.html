@@ -815,7 +815,7 @@
     const isHttps = window.location.protocol === 'https:';
     const isLocalHost = ['localhost', '127.0.0.1', 'stolerpi', 'stolerpi.local'].includes(window.location.hostname);
     // On HTTPS (e.g. GitHub Pages), never auto-attempt unencrypted ws:// (Mixed Content block). Default to live_stream.json polling.
-    let bridgeUrl = new URLSearchParams(window.location.search).get('bridge') || localStorage.getItem('calsol_bridge_url') || window.CALSOL_DEFAULT_BRIDGE || (isLocalHost && !isHttps ? `ws://${window.location.hostname}:${window.location.port === '18880' ? '18765' : '8765'}/ws` : '');
+    let bridgeUrl = new URLSearchParams(window.location.search).get('bridge') || window.CALSOL_DEFAULT_BRIDGE || localStorage.getItem('calsol_bridge_url') || (isLocalHost && !isHttps ? `ws://${window.location.hostname}:${window.location.port === '18880' ? '18765' : '8765'}/ws` : '');
     if (isHttps && bridgeUrl && /^(ws|http):\/\//.test(bridgeUrl)) {
       bridgeUrl = '';
       try { localStorage.removeItem('calsol_bridge_url'); } catch (e) {}
@@ -843,13 +843,18 @@
       const set = (id, text) => { const el = document.getElementById(id); if (el) { el.textContent = text; el.className = 'text-neutral-200'; } };
       set('deviceBridgeState', fresh ? 'Bridge reachable' : healthCheckedAt ? 'Stale / unreachable' : 'Unknown');
       set('deviceDebuggerState', fresh ? deviceHealth.mode === 'software_test' ? 'Simulation — no physical debugger' : deviceHealth.serial_connected ? 'USB connected' : 'USB disconnected' : 'Unknown');
-      set('deviceDutState', 'Unknown — bench usage not checked');
+      const liveTarget = fresh ? deviceHealth.dut_status : null;
+      set('deviceDutState', fresh ? ({idle: 'Idle', in_use: 'In use', unavailable: 'Unavailable — USB not detected', unknown: 'Unknown'}[liveTarget] || 'Unknown — target not checked') : 'Unavailable — status feed disconnected');
       set('overviewHealthSummary', fresh ? 'Bridge health checked ' + new Date(healthCheckedAt).toLocaleTimeString() : 'Connect to the bridge for live status');
       if (!bridgeUrl) {
         set('deviceDutState', publicFresh ? ({in_use: 'In use (reserved by runner)', idle: 'Idle (available to runner)'}[publicSnapshot.dut_usage] || 'Unknown') : 'Unknown — snapshot stale');
         set('deviceBridgeState', publicFresh ? publicSnapshot.bridge_available ? 'Reachable at snapshot time' : 'Offline at snapshot time' : 'Snapshot stale / unavailable');
         set('deviceDebuggerState', publicFresh ? publicSnapshot.mode === 'software_test' ? 'Simulation' : publicSnapshot.serial_connected ? 'USB connected at snapshot time' : 'USB disconnected at snapshot time' : 'Unknown');
         set('overviewHealthSummary', publicFresh ? 'Public snapshot: ' + new Date(publicSnapshot.updated_at).toLocaleString() : 'Public snapshot stale / unavailable');
+      }
+      if (bridgeUrl) {
+        set('deviceBridgeState', fresh ? deviceHealth.bridge_available === false ? 'Unavailable — bridge offline' : 'Working — status reachable' : 'Unavailable — status feed disconnected');
+        set('overviewHealthSummary', fresh ? 'Live status • checked ' + new Date(healthCheckedAt).toLocaleTimeString() : 'Live status unavailable • reconnecting');
       }
       const last = fresh && deviceHealth.last_rx_at ? deviceHealth.last_rx_at : 'unknown';
       set('deviceHealthDetail', `Last checked: ${healthCheckedAt ? new Date(healthCheckedAt).toLocaleTimeString() : 'never'}. Last physical CAN reception: ${last}. DUT presence requires a verified heartbeat.`);
@@ -866,6 +871,7 @@
         if (endpoint !== bridgeUrl || request !== healthRequest) return;
         if (typeof health.serial_connected !== 'boolean' || !['hardware','software_test'].includes(health.mode)) throw new Error('Invalid bridge health');
         deviceHealth = health; healthCheckedAt = Date.now();
+        if (health.updated_at && Date.now() - Date.parse(health.updated_at) > 15000) { healthCheckedAt = 0; deviceHealth = null; }
       } catch (_) { /* Previous health becomes stale; never infer DUT status. */ }
       renderDeviceHealth();
     }
@@ -981,6 +987,7 @@
     }
 
     function promptBridgeUrl() {
+      document.querySelector('details.connection-panel').open = true;
       document.getElementById('bridgeEndpoint').focus();
     }
 
@@ -1011,7 +1018,7 @@
       bridgeConnected = connected;
       renderDeviceHealth();
       const badgeHtml = (connected || (bridgeUrl && Date.now() - httpLiveAt < 5000))
-        ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> LIVE BRIDGE CONNECTION'
+        ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> LIVE READ-ONLY FEED'
         : '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> HISTORICAL SNAPSHOT';
 
       if (dom.streamStatusText) {
@@ -1102,7 +1109,7 @@
                 const updatedAt = Date.parse(payload.updated_at);
                 if (!Number.isFinite(updatedAt) || Math.abs(Date.now() - updatedAt) > 15000) throw new Error('Bridge snapshot is stale or clocks differ');
                 httpLiveAt = Date.now();
-                updateBridgeStatusUI(false, 'Live HTTP polling • WebSocket alternative');
+                updateBridgeStatusUI(false, 'Live read-only feed • updates every few seconds');
               }
               const seen = new Set(streamPackets.map(p => p.eventKey));
               const incoming = [];
@@ -1180,7 +1187,7 @@
       const statusHtml = streamPaused
         ? '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> PAUSED'
         : (bridgeConnected
-            ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> LIVE BRIDGE CONNECTION'
+            ? '<span class="w-1.5 h-1.5 bg-pastel-green inline-block animate-pulse"></span> LIVE READ-ONLY FEED'
             : '<span class="w-1.5 h-1.5 bg-pastel-yellow inline-block"></span> HISTORICAL SNAPSHOT');
 
       if (dom.streamStatusText) dom.streamStatusText.innerHTML = statusHtml;
