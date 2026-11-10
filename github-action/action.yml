@@ -20,30 +20,26 @@ runs:
   steps:
     - name: Make Scripts Executable
       shell: bash
-      run: chmod +x ${{ github.action_path }}/*.sh ${{ github.action_path }}/lib/*.py
+      run: chmod +x "${{ github.action_path }}"/*.sh "${{ github.action_path }}"/lib/*.py
 
     - name: Execute On-Target Hardware Test
       shell: bash
+      env:
+        CALSOL_TARGET: ${{ inputs.target }}
+        CALSOL_PORT: ${{ inputs.port }}
+        CALSOL_TIMEOUT: ${{ inputs.timeout }}
       run: |
-        ${{ github.action_path }}/cal-test.sh "${{ inputs.target }}" "${{ inputs.port }}" "${{ inputs.timeout }}"
+        "${{ github.action_path }}/cal-test.sh" "$CALSOL_TARGET" "$CALSOL_PORT" "$CALSOL_TIMEOUT"
 
     - name: Dump Failure Logs
       if: failure()
       shell: bash
       run: |
-        echo "### Failure Diagnostics for ${{ inputs.target }}" >> $GITHUB_STEP_SUMMARY
+        echo "### Hardware Verification Failure Diagnostics" >> "$GITHUB_STEP_SUMMARY"
         echo "<details open><summary><b>Click to inspect step execution logs</b></summary>" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo '```text' >> $GITHUB_STEP_SUMMARY
-        if [ -f "${{ github.action_path }}/.logs/build.log" ]; then
-            echo "--- Build Output (last 30 lines) ---" >> $GITHUB_STEP_SUMMARY
-            tail -n 30 "${{ github.action_path }}/.logs/build.log" >> $GITHUB_STEP_SUMMARY
-        fi
-        if [ -f "${{ github.action_path }}/.logs/flash.log" ]; then
-            echo "--- Flash Output (last 30 lines) ---" >> $GITHUB_STEP_SUMMARY
-            tail -n 30 "${{ github.action_path }}/.logs/flash.log" >> $GITHUB_STEP_SUMMARY
-        fi
-        for f in "${{ github.action_path }}/.logs"/*_serial.log; do
+        for f in "${{ github.action_path }}/.logs/${{ github.run_id }}"/*/*.log; do
             if [ -f "$f" ]; then
                 echo "--- Serial Output: $(basename "$f") (last 30 lines) ---" >> $GITHUB_STEP_SUMMARY
                 tail -n 30 "$f" >> $GITHUB_STEP_SUMMARY

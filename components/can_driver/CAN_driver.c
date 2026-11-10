@@ -1,21 +1,52 @@
 #include "CAN.h"
 #include "esp_log.h"
 #include <stdio.h>
+#include "freertos/semphr.h"
 
 //private
 static twai_node_handle_t s_node = NULL;
 static QueueHandle_t s_rx_queue = NULL;
 static volatile uint32_t s_rx_queue_overflows = 0;
 static volatile uint32_t s_tx_errors = 0;
+static portMUX_TYPE s_stats_mux = portMUX_INITIALIZER_UNLOCKED;
+// Initialized during single-owner startup; retained across driver restarts.
+static SemaphoreHandle_t s_api_mutex;
+static SemaphoreHandle_t s_rx_mutex;
+static twai_frame_t s_tx_frame;
+static uint8_t s_tx_data[8];
+static bool s_tx_pending;
+static volatile bool s_tx_success;
+
+static bool IRAM_ATTR CAN_tx_cb(twai_node_handle_t handle,
+                               const twai_tx_done_event_data_t *event, void *context)
+{
+    (void)handle;
+    (void)context;
+    s_tx_success = event->is_tx_success;
+    return false;
+}
 
 uint32_t CAN_get_rx_overflow_count(void)
 {
-    return s_rx_queue_overflows;
+    portENTER_CRITICAL(&s_stats_mux);
+    uint32_t count = s_rx_queue_overflows;
+    portEXIT_CRITICAL(&s_stats_mux);
+    return count;
 }
 
 uint32_t CAN_get_tx_error_count(void)
 {
-    return s_tx_errors;
+    portENTER_CRITICAL(&s_stats_mux);
+    uint32_t count = s_tx_errors;
+    portEXIT_CRITICAL(&s_stats_mux);
+    return count;
+}
+
+static void count_tx_error(void)
+{
+    portENTER_CRITICAL(&s_stats_mux);
+    s_tx_errors++;
+    portEXIT_CRITICAL(&s_stats_mux);
 }
 
 //ISR-context RX callback
@@ -54,7 +85,9 @@ static bool IRAM_ATTR CAN_rx_cb(twai_node_handle_t handle,
     BaseType_t hp_task_woken = pdFALSE;
     BaseType_t send_res = xQueueSendFromISR(s_rx_queue, &msg, &hp_task_woken);
     if (send_res != pdPASS) {
+        portENTER_CRITICAL_ISR(&s_stats_mux);
         s_rx_queue_overflows++;
+        portEXIT_CRITICAL_ISR(&s_stats_mux);
     }
 
     if (hp_task_woken == pdTRUE) {
@@ -66,6 +99,14 @@ static bool IRAM_ATTR CAN_rx_cb(twai_node_handle_t handle,
 
 esp_err_t CAN_init(void)
 {
+    if (s_api_mutex == NULL) {
+        s_api_mutex = xSemaphoreCreateMutex();
+        if (s_api_mutex == NULL) return ESP_ERR_NO_MEM;
+    }
+    if (s_rx_mutex == NULL) {
+        s_rx_mutex = xSemaphoreCreateMutex();
+        if (s_rx_mutex == NULL) return ESP_ERR_NO_MEM;
+    }
     if (s_node != NULL) return ESP_ERR_INVALID_STATE;
 
     // RX queue used to bridge ISR callback, user blocking receive
@@ -81,7 +122,9 @@ esp_err_t CAN_init(void)
 
         .bit_timing.bitrate = 500000,
         .tx_queue_depth = 8,
+#ifdef CONFIG_CAN_SELF_TEST
         .flags.enable_self_test = 1,
+#endif
     };
 
     esp_err_t ret = twai_new_node_onchip(&node_config, &s_node);
@@ -95,6 +138,7 @@ esp_err_t CAN_init(void)
     // Register RX callback BEFORE enabling node
     twai_event_callbacks_t cbs = {
         .on_rx_done = CAN_rx_cb,
+        .on_tx_done = CAN_tx_cb,
     };
 
     ret = twai_node_register_event_callbacks(s_node, &cbs, NULL);
@@ -122,20 +166,36 @@ esp_err_t CAN_init(void)
 esp_err_t CAN_deinit(void)
 {
     if (s_node == NULL) return ESP_ERR_INVALID_STATE;
+    if (xSemaphoreTake(s_api_mutex, 0) != pdTRUE) return ESP_ERR_INVALID_STATE;
+    if (xSemaphoreTake(s_rx_mutex, 0) != pdTRUE) {
+        xSemaphoreGive(s_api_mutex);
+        return ESP_ERR_INVALID_STATE;
+    }
 
     esp_err_t ret = twai_node_disable(s_node);
-    if (ret != ESP_OK) return ret;
+    if (ret != ESP_OK) {
+        xSemaphoreGive(s_rx_mutex);
+        xSemaphoreGive(s_api_mutex);
+        return ret;
+    }
 
     ret = twai_node_delete(s_node);
-    if (ret != ESP_OK) return ret;
+    if (ret != ESP_OK) {
+        xSemaphoreGive(s_rx_mutex);
+        xSemaphoreGive(s_api_mutex);
+        return ret;
+    }
 
     s_node = NULL;
+    s_tx_pending = false;
 
     if (s_rx_queue) {
         vQueueDelete(s_rx_queue);
         s_rx_queue = NULL;
     }
 
+    xSemaphoreGive(s_rx_mutex);
+    xSemaphoreGive(s_api_mutex);
     return ESP_OK;
 }
 
@@ -155,7 +215,22 @@ esp_err_t CAN_send(const CAN_message_t *frame, uint32_t timeout_ms)
         return ESP_ERR_INVALID_ARG;
     }
 
-    uint8_t buf[8] = {0};
+    if (xSemaphoreTake(s_api_mutex, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) return ESP_ERR_TIMEOUT;
+    if (s_node == NULL) {
+        xSemaphoreGive(s_api_mutex);
+        return ESP_ERR_INVALID_STATE;
+    }
+    // A previous caller may have timed out while hardware still owns the frame.
+    if (s_tx_pending) {
+        esp_err_t pending = twai_node_transmit_wait_all_done(s_node, 0);
+        if (pending != ESP_OK) {
+            xSemaphoreGive(s_api_mutex);
+            return pending;
+        }
+        s_tx_pending = false;
+    }
+    uint8_t *buf = s_tx_data;
+    memset(buf, 0, sizeof(s_tx_data));
     size_t len = frame->dlc;
     if (len > 8) len = 8;
 
@@ -165,7 +240,7 @@ esp_err_t CAN_send(const CAN_message_t *frame, uint32_t timeout_ms)
         len = 0;
     }
 
-    twai_frame_t tx = {
+    s_tx_frame = (twai_frame_t){
         .header.id  = frame->id,
         .header.ide = frame->extended,
         .header.rtr = frame->rtr,
@@ -185,16 +260,26 @@ esp_err_t CAN_send(const CAN_message_t *frame, uint32_t timeout_ms)
     ESP_LOGD("CAN", "[CAN_FRAME] ID:0x%03lX DLC:%zu DATA:%s", (unsigned long)frame->id, len, hex_buf);
 
     // Node API timeouts are in milliseconds 
-    esp_err_t ret = twai_node_transmit(s_node, &tx, (int)timeout_ms);
+    s_tx_success = false;
+    esp_err_t ret = twai_node_transmit(s_node, &s_tx_frame, (int)timeout_ms);
     if (ret != ESP_OK) {
-        s_tx_errors++;
+        count_tx_error();
+        xSemaphoreGive(s_api_mutex);
         return ret;
     }
+    s_tx_pending = true;
     //Ensure local buffer is no longer needed before returning 
     ret = twai_node_transmit_wait_all_done(s_node, (int)timeout_ms);
-    if (ret != ESP_OK) {
-        s_tx_errors++;
+    if (ret == ESP_OK) {
+        s_tx_pending = false;
+        if (!s_tx_success) ret = ESP_FAIL;
     }
+    if (ret != ESP_OK) {
+        count_tx_error();
+    } else {
+        s_tx_pending = false;
+    }
+    xSemaphoreGive(s_api_mutex);
     return ret;
 }
 
@@ -202,13 +287,28 @@ esp_err_t CAN_receive(CAN_message_t *frame, uint32_t timeout_ms)
 {
     if (s_rx_queue == NULL) return ESP_ERR_INVALID_STATE;
     if (frame == NULL)      return ESP_ERR_INVALID_ARG;
+    if (xSemaphoreTake(s_rx_mutex, 0) != pdTRUE) return ESP_ERR_TIMEOUT;
+    if (s_rx_queue == NULL) {
+        xSemaphoreGive(s_rx_mutex);
+        return ESP_ERR_INVALID_STATE;
+    }
 
     //0xFFFFFFFF for no timeout
     TickType_t to = (timeout_ms == 0xFFFFFFFF) ? portMAX_DELAY
                                                : pdMS_TO_TICKS(timeout_ms);
 
-    return (xQueueReceive(s_rx_queue, frame, to) == pdTRUE) ? ESP_OK
-                                                            : ESP_ERR_TIMEOUT;
+    esp_err_t ret = xQueueReceive(s_rx_queue, frame, to) == pdTRUE ? ESP_OK : ESP_ERR_TIMEOUT;
+    xSemaphoreGive(s_rx_mutex);
+    return ret;
+}
+
+esp_err_t CAN_build_packet(uint32_t id, const uint8_t *data, uint8_t dlc, CAN_message_t *out)
+{
+    if (out == NULL || id > 0x7FF || dlc > 8 || (dlc && data == NULL)) return ESP_ERR_INVALID_ARG;
+    CAN_message_t message = {.id = id, .dlc = dlc};
+    if (dlc) memcpy(message.data, data, dlc);
+    *out = message;
+    return ESP_OK;
 }
 
 CAN_message_t build_packet_no_ext(uint32_t id, const uint8_t *data, uint8_t dlc)

@@ -49,6 +49,10 @@ clang-format -i main/*.c main/*.h test/main/*.c test/main/*.h
 
 ## 3. Adding a New ECU Subsystem to CI
 
+See [capture/result contracts](docs/EVENT_CONTRACT.md), the
+[implementation and verification plan](docs/IMPLEMENTATION_AND_VERIFICATION_PLAN.md),
+and [private SSH viewer setup](docs/PRIVATE_VIEWER.md) for current runner behavior.
+
 Start with the [CAN unit test and peer-spoofing template](templates/can-unit-test/README.md)
 for direct C message injection, malformed-frame tests, and an optional physical
 request/reply test with a Python peer responder.

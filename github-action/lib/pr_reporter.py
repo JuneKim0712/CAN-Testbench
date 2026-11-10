@@ -58,6 +58,8 @@ def find_reports(artifacts_dir):
                 try:
                     with open(path, "r", encoding="utf-8") as jf:
                         data = json.load(jf)
+                        if os.environ.get('GITHUB_RUN_ID') and str(data.get('run_id')) != os.environ['GITHUB_RUN_ID']:
+                            continue
                         if "subsystem" not in data or not data["subsystem"]:
                             data["subsystem"] = f.replace("_test_results.json", "").replace("test_results.json", "hardware")
                         test_reports.append(data)
@@ -82,10 +84,10 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
 
     # Determine overall status
     static_job = next((j for j in jobs if "static-analysis" in j.get("name", "").lower() or "lint" in j.get("name", "").lower()), None)
-    static_ok = (static_job.get("conclusion") == "success") if static_job else True
+    static_ok = (static_job.get("conclusion") == "success") if static_job else False
     
     hw_jobs = [j for j in jobs if j.get("name", "").startswith("Test ")]
-    hw_all_passed = not any(j.get("conclusion") == "failure" for j in hw_jobs)
+    hw_all_passed = all(j.get("conclusion") == "success" for j in hw_jobs)
 
     total_tests_run = 0
     total_tests_passed = 0
@@ -154,9 +156,12 @@ def build_dashboard(repo, run_id, commit_sha, jobs, test_reports, crash_reports)
             md.append(f"> **Local Bench Reproduction Command:**\n> ```bash\n> ./github-action/cal-test.sh {first_sub}/test /dev/esp32_johnathan\n> ```\n")
 
         if failed_build_jobs:
-            md.append("#### Build & Silicon Flashing Errors\n")
+            md.append("#### Hardware Verification Errors\n")
             for jn in failed_build_jobs:
-                md.append(f"> **`{jn}`** failed prior to test completion (compilation or flashing failure). Check step logs.\n")
+                md.append(f"> **`{jn}`** did not complete verification successfully. Check its result summary and capture evidence.\n")
+            for report in test_reports:
+                if not report.get('passed'):
+                    md.append(f"> **`{report.get('subsystem', '')}`**: {report.get('summary', 'No completed suite')}\n")
             md.append("")
 
         if crashed_reports:

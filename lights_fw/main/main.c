@@ -33,10 +33,7 @@ static const char *TAG = "Brakelights_ESP32";
 #define LTC4151_SENSOR_ADDR     0x69 
 
 // --- GLOBALS & HANDLES ---
-typedef enum {
-    STATE_IDLE = 0,
-    STATE_ACTIVE
-} system_state_t;
+#include "lights_logic.h"
 
 volatile system_state_t current_state = STATE_IDLE;
 volatile bool hazards_enabled = false;
@@ -114,7 +111,7 @@ void power_monitor_task(void *arg)
 
         if (ret == ESP_OK) {
             uint16_t raw_adc = (data[0] << 4) | (data[1] >> 4);
-            float voltage = raw_adc * 0.025f;
+            float voltage = calculate_sensor_voltage(raw_adc);
             
             global_power_payload = (uint8_t)(voltage * 10.0f);
             ESP_LOGI(TAG, "I2C Read SUCCESS! Local Voltage: %.2f V | Payload Byte: %d", voltage, global_power_payload);
@@ -290,13 +287,13 @@ void startup_btn_task(void *arg)
             if (gpio_get_level(PIN_BUTTON) == false) { 
                 
                 if (current_state == STATE_IDLE) {
-                    current_state = STATE_ACTIVE;
+                    current_state = transition_state(current_state);
                     ESP_LOGI(TAG, "=== STATE CHANGE: Brakelights Transitioning to ACTIVE ===");
                     
                     led_strip_set_pixel(led_strip, 0, 0, 255, 0); 
                     led_strip_refresh(led_strip);
                 } else {
-                    current_state = STATE_IDLE;
+                    current_state = transition_state(current_state);
                     ESP_LOGW(TAG, "=== STATE CHANGE: Brakelights Transitioning to IDLE ===");
                     
                     gpio_set_level(PIN_HAZARDS_LED, 0);

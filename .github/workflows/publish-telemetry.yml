@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   snapshot:
-    if: github.repository == 'JuneKim0712/CAN-Testbench' && github.ref == 'refs/heads/main'
+    if: (github.repository == 'CalSol/CAN_TestBench' || github.repository == 'JuneKim0712/CAN-Testbench') && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux, ARM64]
     timeout-minutes: 2
     steps:
